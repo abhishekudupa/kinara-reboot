@@ -41,8 +41,11 @@
 #define KINARA_MEMORY_MANAGED_POINTER_HPP_
 
 #include <type_traits>
+#include <utility>
 
 #include "../common/KinaraBase.hpp"
+
+#include "RefCountable.hpp"
 
 namespace kinara {
 namespace memory {
@@ -51,72 +54,88 @@ namespace detail {
 
 namespace kmd = kinara::memory::detail;
 
-template <typename T, bool ISCONSTPTR>
+template <typename T, bool CONSTPOINTER>
 class ManagedPointerBase final
 {
 private:
-    typedef typename std::conditional<ISCONSTREF, const T*, T*>::type RawPointerType;
-    typedef typename std::conditional<ISCONSTREF, const T&, T&>::type ReferenceType;
+    // We can only make managed pointers out of RefCountable objects
+    static_assert(!(std::is_base_of<RefCountable, T>::value),
+                  "ManagedPointers can only be instantiated with objects "
+                  "of type RefCountable");
+
+    typedef typename std::conditional<CONSTPOINTER, const T*, T*>::type RawPointerType;
+    typedef typename std::conditional<CONSTPOINTER, const T&, T&>::type ReferenceType;
 
     RawPointerType m_ptr;
 
-    template <typename U, bool OTHERISCONSTREF>
-    inline i64 compare_(const kmd::ManagedPointerBase<U, OTHERISCONSTREF>& other_managed_ptr);
+    template <typename U, bool OTHERCONSTPOINTER>
+    inline i64 compare_(const kmd::ManagedPointerBase<U, OTHERCONSTPOINTER>&
+                        other_managed_ptr) const;
 
     template <typename U>
-    inline i64 compare_(const U* other_ptr) const;
+    inline i64 compare_(const U* other_raw_ptr) const;
 
 public:
     static const ManagedPointerBase null_pointer;
 
+    // Default constructor
     inline ManagedPointerBase();
 
     // Copy constructor
-    template <bool OTHERISCONSTREF>
-    inline ManagedPointerBase(const kmd::ManagedPointerBase<T, OTHERISCONSTREF>& other);
+    template <bool OTHERCONSTPOINTER>
+    inline ManagedPointerBase(const kmd::ManagedPointerBase<T, OTHERCONSTPOINTER>&
+                              other_managed_ptr);
 
     // Move constructor
-    template <bool OTHERISCONSTREF>
-    inline ManagedPointerBase(kmd::ManagedPointerBase<T, OTHERISCONSTREF>&& other);
+    template <bool OTHERCONSTPOINTER>
+    inline ManagedPointerBase(kmd::ManagedPointerBase<T, OTHERCONSTPOINTER>&&
+                              other_managed_ptr);
 
     // From raw pointer
-    inline ManagedPointerBase(RawPointerType* raw_pointer);
+    inline ManagedPointerBase(RawPointerType raw_pointer);
 
     // Destructor
-    inline ~ManagedPointer();
+    inline ~ManagedPointerBase();
 
-    // Accessor
-    inline RawPointerType* get_raw_pointer() const;
+    // get the raw pointer
+    inline RawPointerType get_raw_pointer() const;
 
     // cast to raw pointer
-    inline operator RawPointerType* () const;
+    inline operator RawPointerType () const;
 
     // Assignment operator
-    template <bool OTHERISCONSTREF>
-    inline ManagedPointer& operator = (const kmd::ManagedPointerBase<T, OTHERISCONSTREF>& other);
+    template <bool OTHERCONSTPOINTER>
+    inline ManagedPointerBase& operator = (const kmd::ManagedPointerBase<T, OTHERCONSTPOINTER>&
+                                           other_managed_ptr);
 
     // Move assignment operator
-    template <bool OTHERISCONSTREF>
-    inline ManagedPointer& operator = (kmd::ManagedPointerBase<T, OTHERISCONSTREF>&& other);
+    template <bool OTHERCONSTPOINTER>
+    inline ManagedPointerBase& operator = (kmd::ManagedPointerBase<T, OTHERCONSTPOINTER>&& other);
 
     // Assignment to raw pointer
-    inline ManagedPointer& operator = (RawPointerType* raw_pointer);
+    inline ManagedPointerBase& operator = (RawPointerType raw_pointer);
 
-    inline RawPointerType* operator -> () const;
+    inline RawPointerType operator -> () const;
     inline ReferenceType operator * () const;
 
-    template <typename U>
-    inline bool operator == (const U& other) const;
-    template <typename U>
-    inline bool operator != (const U& other) const;
-    template<typename U>
-    inline bool operator < (const U& other) const;
-    template <typename U>
-    inline bool operator <= (const U& other) const;
-    template <typename U>
-    inline bool operator > (const U& other) const;
-    template <typename U>
-    inline bool operator >= (const U& other) const;
+    template <typename U, bool OTHERCONSTPOINTER>
+    inline bool operator == (const ManagedPointerBase<U, OTHERCONSTPOINTER>& other_managed_ptr) const;
+
+    template <typename U, bool OTHERCONSTPOINTER>
+    inline bool operator != (const ManagedPointerBase<U, OTHERCONSTPOINTER>& other_managed_ptr) const;
+
+    template <typename U, bool OTHERCONSTPOINTER>
+    inline bool operator < (const ManagedPointerBase<U, OTHERCONSTPOINTER>& other_managed_ptr) const;
+
+    template <typename U, bool OTHERCONSTPOINTER>
+    inline bool operator <= (const ManagedPointerBase<U, OTHERCONSTPOINTER>& other_managed_ptr) const;
+
+    template <typename U, bool OTHERCONSTPOINTER>
+    inline bool operator > (const ManagedPointerBase<U, OTHERCONSTPOINTER>& other_managed_ptr) const;
+
+    template <typename U, bool OTHERCONSTPOINTER>
+    inline bool operator >= (const ManagedPointerBase<U, OTHERCONSTPOINTER>& other_managed_ptr) const;
+
 
     inline bool operator == (const T* other_pointer) const;
     inline bool operator != (const T* other_pointer) const;
@@ -126,466 +145,340 @@ public:
     inline bool operator >= (const T* other_pointer) const;
 
     inline bool operator ! () const;
-    inline bool is_null_() const;
+    inline bool is_null() const;
+    inline operator bool () const;
 };
 
 // Implementation of ManagedPointerBase
-template <typename T, bool ISCONSTREF>
-const ManagedPointerBase<T, ISCONSTREF> ManagedPointerBase<T, ISCONSTREF>::null_pointer;
+template <typename T, bool CONSTPOINTER>
+const ManagedPointerBase<T, CONSTPOINTER> ManagedPointerBase<T, CONSTPOINTER>::null_pointer;
 
-template <typename T, bool ISCONSTREF>
-template <typename U, bool OTHERISCONSTREF>
+template <typename T, bool CONSTPOINTER>
+template <typename U, bool OTHERCONSTPOINTER>
 inline i64
-ManagedPointerBase<T, ISCONSTREF>::compare_(const kmd::ManagedPointerBase<U, OTHERISCONSTREF>&
-                                            other_managed_ptr)
+ManagedPointerBase<T, CONSTPOINTER>::compare_
+(const kmd::ManagedPointerBase<U, OTHERCONSTPOINTER>& other_managed_ptr) const
 {
-    return (i64)((char*)m_ptr - (char*)other_managed_ptr.m_ptr);
+    return (i64)(reinterpret_cast<char*>(m_ptr) -
+                 reinterpret_cast<char*>(other_managed_ptr.m_ptr));
 }
 
-template <typename T, bool ISCONSTREF>
+template <typename T, bool CONSTPOINTER>
 template <typename U>
-inline i64 ManagedPointerBase<T, ISCONSTREF>::compare_(const U* other_ptr) const
+inline i64 ManagedPointerBase<T, CONSTPOINTER>::compare_(const U* other_raw_ptr) const
 {
-    return (i64)((char*)m_ptr - (char*)other_ptr);
+    return (i64)(reinterpret_cast<char*>(m_ptr) - reinterpret_cast<char*>(other_raw_ptr));
 }
 
-template <typename T, bool ISCONSTREF>
-inline ManagedPointerBase<T, ISCONSTREF>::ManagedPointer()
-    : Ptr_(nullptr)
+template <typename T, bool CONSTPOINTER>
+inline ManagedPointerBase<T, CONSTPOINTER>::ManagedPointerBase()
+    : m_ptr(nullptr)
 {
     // Nothing here
 }
 
-template <typename T>
-inline ManagedPointer<T>::ManagedPointer(const ManagedPointer<T>& Other)
-    : Ptr_(nullptr)
+template <typename T, bool CONSTPOINTER>
+template <bool OTHERCONSTPOINTER>
+inline
+ManagedPointerBase<T, CONSTPOINTER>::ManagedPointerBase
+(const kmd::ManagedPointerBase<T, OTHERCONSTPOINTER>& other_managed_ptr)
+    : m_ptr(nullptr)
 {
-    Ptr_ = Other.Ptr_;
-    if (Ptr_ != nullptr) {
-        Ptr_->IncRef_();
+    static_assert((OTHERCONSTPOINTER && !CONSTPOINTER),
+                  "Cannot convert a const managed pointer into a non-const "
+                  "managed pointer");
+
+    m_ptr = other_managed_ptr.m_ptr;
+    if (m_ptr != nullptr) {
+        m_ptr->inc_ref_();
     }
 }
 
-template <typename T>
-inline ManagedPointer<T>::ManagedPointer(ManagedPointer<T>&& Other)
-    : ManagedPointer<T>()
+template <typename T, bool CONSTPOINTER>
+template <bool OTHERCONSTPOINTER>
+inline
+ManagedPointerBase<T, CONSTPOINTER>::ManagedPointerBase
+(kmd::ManagedPointerBase<T, OTHERCONSTPOINTER>&& other_managed_ptr)
+    : ManagedPointerBase<T, CONSTPOINTER>()
 {
-    swap(Ptr_, Other.Ptr_);
+    static_assert((OTHERCONSTPOINTER && !CONSTPOINTER),
+                  "Cannot convert a const managed pointer into a non-const "
+                  "managed pointer");
+
+    std::swap(m_ptr, other_managed_ptr.m_ptr);
 }
 
-template <typename T>
-inline ManagedPointer<T>::ManagedPointer(T* OtherPtr)
-    : Ptr_(OtherPtr)
+template <typename T, bool CONSTPOINTER>
+inline ManagedPointerBase<T, CONSTPOINTER>::ManagedPointerBase(RawPointerType raw_pointer)
+    : m_ptr(raw_pointer)
 {
-    if (Ptr_ != nullptr) {
-        Ptr_->IncRef_();
+    if (m_ptr != nullptr) {
+        m_ptr->inc_ref_();
     }
 }
 
-template <typename T>
-inline ManagedPointer<T>::~ManagedPointer()
+template <typename T, bool CONSTPOINTER>
+inline ManagedPointerBase<T, CONSTPOINTER>::~ManagedPointerBase()
 {
-    if (Ptr_ != nullptr) {
-        Ptr_->DecRef_();
+    if (m_ptr != nullptr) {
+        m_ptr->dec_ref_();
     }
-    Ptr_ = nullptr;
+    m_ptr = nullptr;
 }
 
-template <typename T>
-inline T* ManagedPointer<T>::GetPtr_() const
+template <typename T, bool CONSTPOINTER>
+inline typename ManagedPointerBase<T, CONSTPOINTER>::RawPointerType
+ManagedPointerBase<T, CONSTPOINTER>::get_raw_pointer() const
 {
-    return Ptr_;
+    return m_ptr;
 }
 
-template <typename T>
-inline ManagedPointer<T>::operator T* () const
+template <typename T, bool CONSTPOINTER>
+inline ManagedPointerBase<T, CONSTPOINTER>::operator RawPointerType () const
 {
-    return (GetPtr_());
+    return m_ptr;
 }
 
-template <typename T>
-inline ManagedPointer<T>& ManagedPointer<T>::operator = (ManagedPointer<T> Other)
+template <typename T, bool CONSTPOINTER>
+template <bool OTHERCONSTPOINTER>
+inline ManagedPointerBase<T, CONSTPOINTER>&
+ManagedPointerBase<T, CONSTPOINTER>::operator =
+(const ManagedPointerBase<T, OTHERCONSTPOINTER>& other_managed_ptr)
 {
-    swap(Ptr_, Other.Ptr_);
+    static_assert((OTHERCONSTPOINTER && !CONSTPOINTER),
+                  "Cannot convert a const managed pointer into a non-const "
+                  "managed pointer");
+
+    if (&other_managed_ptr == this) {
+        return *this;
+    }
+    if (m_ptr != nullptr) {
+        m_ptr->dec_ref_();
+        m_ptr = nullptr;
+    }
+    m_ptr = other_managed_ptr.m_ptr;
+    m_ptr->inc_ref_();
+    return *this;
+}
+
+template <typename T, bool CONSTPOINTER>
+template <bool OTHERCONSTPOINTER>
+inline ManagedPointerBase<T, CONSTPOINTER>&
+ManagedPointerBase<T, CONSTPOINTER>::operator =
+(ManagedPointerBase<T, OTHERCONSTPOINTER>&& other_managed_ptr)
+{
+    static_assert((OTHERCONSTPOINTER && !CONSTPOINTER),
+                  "Cannot convert a const managed pointer into a non-const "
+                  "managed pointer");
+
+    if (&other_managed_ptr == this) {
+        return *this;
+    }
+    std::swap(m_ptr, other_managed_ptr.m_ptr);
+    return *this;
+}
+
+template <typename T, bool CONSTPOINTER>
+inline ManagedPointerBase<T, CONSTPOINTER>&
+ManagedPointerBase<T, CONSTPOINTER>::operator =
+(RawPointerType raw_pointer)
+{
+    if (m_ptr != nullptr) {
+        m_ptr->dec_ref_();
+    }
+    m_ptr = raw_pointer;
+    if (m_ptr != nullptr) {
+        m_ptr->inc_ref_();
+    }
     return (*this);
 }
 
-template <typename T>
-inline ManagedPointer<T>& ManagedPointer<T>::operator = (T* OtherPtr)
+template <typename T, bool CONSTPOINTER>
+inline typename ManagedPointerBase<T, CONSTPOINTER>::RawPointerType
+ManagedPointerBase<T, CONSTPOINTER>::operator -> () const
 {
-    ManagedPointer<T> Dummy(OtherPtr);
-    swap(Ptr_, Dummy.Ptr_);
-    return (*this);
+    return m_ptr;
 }
 
-template <typename T>
-inline T* ManagedPointer<T>::operator -> () const
+template <typename T, bool CONSTPOINTER>
+inline typename ManagedPointerBase<T, CONSTPOINTER>::ReferenceType
+ManagedPointerBase<T, CONSTPOINTER>::operator * () const
 {
-    return (GetPtr_());
+    return (*m_ptr);
 }
 
-template <typename T>
-inline T& ManagedPointer<T>::operator * () const
+template <typename T, bool CONSTPOINTER>
+template <typename U, bool OTHERCONSTPOINTER>
+inline bool
+ManagedPointerBase<T, CONSTPOINTER>::operator ==
+(const ManagedPointerBase<U, OTHERCONSTPOINTER>& other_managed_ptr) const
 {
-    return (*Ptr_);
+    return (compare_(other_managed_ptr) == 0);
 }
 
-template <typename T>
-template <typename U>
-inline bool ManagedPointer<T>::operator == (const U& Other) const
+template <typename T, bool CONSTPOINTER>
+template <typename U, bool OTHERCONSTPOINTER>
+inline bool
+ManagedPointerBase<T, CONSTPOINTER>::operator !=
+(const ManagedPointerBase<U, OTHERCONSTPOINTER>& other_managed_ptr) const
 {
-    return (Compare_(Other) == 0);
+    return (compare_(other_managed_ptr) != 0);
 }
 
-template <typename T>
-template <typename U>
-inline bool ManagedPointer<T>::operator != (const U& Other) const
+template <typename T, bool CONSTPOINTER>
+template <typename U, bool OTHERCONSTPOINTER>
+inline bool
+ManagedPointerBase<T, CONSTPOINTER>::operator <
+(const ManagedPointerBase<U, OTHERCONSTPOINTER>& other_managed_ptr) const
 {
-    return (Compare_(Other) != 0);
+    return (compare_(other_managed_ptr) < 0);
 }
 
-template <typename T>
-template <typename U>
-inline bool ManagedPointer<T>::operator < (const U& Other) const
+template <typename T, bool CONSTPOINTER>
+template <typename U, bool OTHERCONSTPOINTER>
+inline bool
+ManagedPointerBase<T, CONSTPOINTER>::operator <=
+(const ManagedPointerBase<U, OTHERCONSTPOINTER>& other_managed_ptr) const
 {
-    return (Compare_(Other) < 0);
+    return (compare_(other_managed_ptr) <= 0);
 }
 
-template <typename T>
-template <typename U>
-inline bool ManagedPointer<T>::operator <= (const U& Other) const
+template <typename T, bool CONSTPOINTER>
+template <typename U, bool OTHERCONSTPOINTER>
+inline bool
+ManagedPointerBase<T, CONSTPOINTER>::operator >
+(const ManagedPointerBase<U, OTHERCONSTPOINTER>& other_managed_ptr) const
 {
-    return (Compare_(Other) <= 0);
+    return (compare_(other_managed_ptr) > 0);
 }
 
-template <typename T>
-template <typename U>
-inline bool ManagedPointer<T>::operator > (const U& Other) const
+template <typename T, bool CONSTPOINTER>
+template <typename U, bool OTHERCONSTPOINTER>
+inline bool
+ManagedPointerBase<T, CONSTPOINTER>::operator >=
+(const ManagedPointerBase<U, OTHERCONSTPOINTER>& other_managed_ptr) const
 {
-    return (Compare_(Other) > 0);
+    return (compare_(other_managed_ptr) >= 0);
 }
 
-template <typename T>
-template <typename U>
-inline bool ManagedPointer<T>::operator >= (const U& Other) const
+template <typename T, bool CONSTPOINTER>
+inline bool ManagedPointerBase<T, CONSTPOINTER>::operator ==
+(const T* other_pointer) const
 {
-    return (Compare_(Other) >= 0);
+    return (compare_(other_pointer) == 0);
 }
 
-template <typename T>
-inline bool ManagedPointer<T>::operator == (const T* OtherPtr) const
+template <typename T, bool CONSTPOINTER>
+inline bool ManagedPointerBase<T, CONSTPOINTER>::operator !=
+(const T* other_pointer) const
 {
-    return (Compare_(OtherPtr) == 0);
+    return (compare_(other_pointer) != 0);
 }
 
-template <typename T>
-inline bool ManagedPointer<T>::operator != (const T* OtherPtr) const
+template <typename T, bool CONSTPOINTER>
+inline bool ManagedPointerBase<T, CONSTPOINTER>::operator <
+(const T* other_pointer) const
 {
-    return (Compare_(OtherPtr) != 0);
+    return (compare_(other_pointer) < 0);
 }
 
-template <typename T>
-inline bool ManagedPointer<T>::operator < (const T* OtherPtr) const
+template <typename T, bool CONSTPOINTER>
+inline bool ManagedPointerBase<T, CONSTPOINTER>::operator <=
+(const T* other_pointer) const
 {
-    return (Compare_(OtherPtr) < 0);
+    return (compare_(other_pointer) <= 0);
 }
 
-template <typename T>
-inline bool ManagedPointer<T>::operator <= (const T* OtherPtr) const
+template <typename T, bool CONSTPOINTER>
+inline bool ManagedPointerBase<T, CONSTPOINTER>::operator >
+(const T* other_pointer) const
 {
-    return (Compare_(OtherPtr) <= 0);
+    return (compare_(other_pointer) > 0);
 }
 
-template <typename T>
-inline bool ManagedPointer<T>::operator > (const T* OtherPtr) const
+template <typename T, bool CONSTPOINTER>
+inline bool ManagedPointerBase<T, CONSTPOINTER>::operator >=
+(const T* other_pointer) const
 {
-    return (Compare_(OtherPtr) > 0);
+    return (compare_(other_pointer) >= 0);
 }
 
-template <typename T>
-inline bool ManagedPointer<T>::operator >= (const T* OtherPtr) const
+template <typename T, bool CONSTPOINTER>
+inline bool ManagedPointerBase<T, CONSTPOINTER>::is_null() const
 {
-    return (Compare_(OtherPtr) >= 0);
+    return (m_ptr == nullptr);
 }
 
-template <typename T>
-inline bool ManagedPointer<T>::IsNull_() const
+template <typename T, bool CONSTPOINTER>
+inline bool ManagedPointerBase<T, CONSTPOINTER>::operator !() const
 {
-    return (Ptr_ == nullptr);
+    return (is_null());
 }
 
-template <typename T>
-inline bool ManagedPointer<T>::operator ! () const
+template <typename T, bool CONSTPOINTER>
+inline ManagedPointerBase<T, CONSTPOINTER>::operator bool () const
 {
-    return (IsNull_());
+    return (m_ptr != nullptr);
 }
 
-// implementation of ManagedConstPointer
+} /* end namespace detail */
 
-template<typename T>
-const ManagedConstPointer<T> ManagedConstPointer<T>::NullPtr;
-
-template <typename T>
-template <typename U>
-inline i64 ManagedConstPointer<T>::Compare_(const U &Other) const
+template <typename T, bool CONSTPOINTER>
+static inline detail::ManagedPointerBase<T, false>
+discard_const(const detail::ManagedPointerBase<T, CONSTPOINTER>& managed_pointer)
 {
-    return (i64)((char*)Ptr_ - (char*)Other.Ptr_);
-}
-
-template <typename T>
-inline i64 ManagedConstPointer<T>::Compare_(const T *OtherPtr) const
-{
-    return (i64)((char*)Ptr_ - (char*)OtherPtr);
-}
-
-template <typename T>
-inline ManagedConstPointer<T>::ManagedConstPointer()
-    : Ptr_(nullptr)
-{
-    // Nothing here
-}
-
-template <typename T>
-inline ManagedConstPointer<T>::ManagedConstPointer(const ManagedConstPointer<T>& Other)
-    : Ptr_(nullptr)
-{
-    Ptr_ = Other.Ptr_;
-    if (Ptr_ != nullptr) {
-        Ptr_->IncRef_();
+    if (!CONSTPOINTER) {
+        return managed_pointer;
+    } else {
+        auto non_const_raw_ptr = const_cast<T*>(managed_pointer->get_raw_pointer());
+        return detail::ManagedPointerBase<T, false>(non_const_raw_ptr);
     }
 }
 
-template <typename T>
-inline ManagedConstPointer<T>::ManagedConstPointer(ManagedConstPointer<T>&& Other)
-    : ManagedConstPointer<T>()
-{
-    swap(Ptr_, Other.Ptr_);
-}
+// template <typename T>
+// static inline void PrintManagedPointer_(ostream& Out, const ManagedPointer<T>& Ptr,
+//                                         const false_type& Ununsed)
+// {
+//     Out << Ptr->GetPtr_();
+// }
 
-template <typename T>
-inline ManagedConstPointer<T>::ManagedConstPointer(const ManagedPointer<T>& Other)
-    : Ptr_(nullptr)
-{
-    Ptr_ = Other.Ptr_;
-    if (Ptr_ != nullptr) {
-        Ptr_->IncRef_();
-    }
-}
+// template <typename T>
+// static inline void PrintManagedPointer_(ostream& Out, const ManagedPointer<T>& Ptr,
+//                                   const true_type& Unused)
+// {
+//     Out << Ptr->ToString();
+// }
 
-template <typename T>
-inline ManagedConstPointer<T>::ManagedConstPointer(ManagedPointer<T>&& Other)
-    : ManagedConstPointer()
-{
-    swap(const_cast<T*>(Ptr_), Other.Ptr_);
-}
+// template <typename T>
+// static inline void PrintManagedPointer_(ostream& Out, const ManagedConstPointer<T>& Ptr,
+//                                   const false_type& Ununsed)
+// {
+//     Out << Ptr->GetPtr_();
+// }
 
-template <typename T>
-inline ManagedConstPointer<T>::ManagedConstPointer(const T* OtherPtr)
-    : Ptr_(nullptr)
-{
-    Ptr_ = OtherPtr;
-    if (Ptr_ != nullptr) {
-        Ptr_->IncRef_();
-    }
-}
-
-template <typename T>
-inline ManagedConstPointer<T>::~ManagedConstPointer()
-{
-    if (Ptr_ != nullptr) {
-        Ptr_->DecRef_();
-    }
-    Ptr_ = nullptr;
-}
-
-template <typename T>
-inline ManagedConstPointer<T>& ManagedConstPointer<T>::operator = (ManagedConstPointer<T> Other)
-{
-    swap(Ptr_, Other.Ptr_);
-    return (*this);
-}
-
-template <typename T>
-inline ManagedConstPointer<T>& ManagedConstPointer<T>::operator = (ManagedPointer<T> Other)
-{
-    T* TempPtr = const_cast<T*>(Ptr_);
-    swap(TempPtr, Other.Ptr_);
-    Ptr_ = TempPtr;
-    return (*this);
-}
-
-template <typename T>
-inline ManagedConstPointer<T>& ManagedConstPointer<T>::operator = (const T* OtherPtr)
-{
-    ManagedConstPointer<T> Dummy(OtherPtr);
-    swap(Ptr_, Dummy.Ptr_);
-    return (*this);
-}
-
-template <typename T>
-inline const T* ManagedConstPointer<T>::GetPtr_() const
-{
-    return Ptr_;
-}
-
-template <typename T>
-inline ManagedConstPointer<T>::operator const T* () const
-{
-    return (GetPtr_());
-}
-
-template <typename T>
-inline const T* ManagedConstPointer<T>::operator -> () const
-{
-    return (GetPtr_());
-}
-
-template <typename T>
-inline const T& ManagedConstPointer<T>::operator * () const
-{
-    return (*Ptr_);
-}
-
-template <typename T>
-template <typename U>
-inline bool ManagedConstPointer<T>::operator == (const U& Other) const
-{
-    return (Compare_(Other) == 0);
-}
-
-template <typename T>
-template <typename U>
-inline bool ManagedConstPointer<T>::operator != (const U& Other) const
-{
-    return (Compare_(Other) != 0);
-}
-
-template <typename T>
-template <typename U>
-inline bool ManagedConstPointer<T>::operator < (const U& Other) const
-{
-    return (Compare_(Other) < 0);
-}
-
-template <typename T>
-template <typename U>
-inline bool ManagedConstPointer<T>::operator <= (const U& Other) const
-{
-    return (Compare_(Other) <= 0);
-}
-
-template <typename T>
-template <typename U>
-inline bool ManagedConstPointer<T>::operator > (const U& Other) const
-{
-    return (Compare_(Other) > 0);
-}
-
-template <typename T>
-template <typename U>
-inline bool ManagedConstPointer<T>::operator >= (const U& Other) const
-{
-    return (Compare_(Other) >= 0);
-}
-
-template <typename T>
-inline bool ManagedConstPointer<T>::operator == (const T* OtherPtr) const
-{
-    return (Compare_(OtherPtr) == 0);
-}
-
-template <typename T>
-inline bool ManagedConstPointer<T>::operator != (const T* OtherPtr) const
-{
-    return (Compare_(OtherPtr) != 0);
-}
-
-template <typename T>
-inline bool ManagedConstPointer<T>::operator < (const T* OtherPtr) const
-{
-    return (Compare_(OtherPtr) < 0);
-}
-
-template <typename T>
-inline bool ManagedConstPointer<T>::operator <= (const T* OtherPtr) const
-{
-    return (Compare_(OtherPtr) <= 0);
-}
-
-template <typename T>
-inline bool ManagedConstPointer<T>::operator > (const T* OtherPtr) const
-{
-    return (Compare_(OtherPtr) > 0);
-}
-
-template <typename T>
-inline bool ManagedConstPointer<T>::operator >= (const T* OtherPtr) const
-{
-    return (Compare_(OtherPtr) >= 0);
-}
-
-template <typename T>
-inline bool ManagedConstPointer<T>::IsNull_() const
-{
-    return (Ptr_ == nullptr);
-}
-
-template <typename T>
-inline bool ManagedConstPointer<T>::operator ! () const
-{
-    return (IsNull_());
-}
-
-template <typename T>
-static inline ManagedPointer<T> ConstCast(const ManagedConstPointer<T>& CPtr)
-{
-    return ManagedPointer<T>(const_cast<T*>(CPtr->GetPtr_()));
-}
-
-template <typename T>
-static inline void PrintManagedPointer_(ostream& Out, const ManagedPointer<T>& Ptr,
-                                  const false_type& Ununsed)
-{
-    Out << Ptr->GetPtr_();
-}
-
-template <typename T>
-static inline void PrintManagedPointer_(ostream& Out, const ManagedPointer<T>& Ptr,
-                                  const true_type& Unused)
-{
-    Out << Ptr->ToString();
-}
-
-template <typename T>
-static inline void PrintManagedPointer_(ostream& Out, const ManagedConstPointer<T>& Ptr,
-                                  const false_type& Ununsed)
-{
-    Out << Ptr->GetPtr_();
-}
-
-template <typename T>
-static inline void PrintManagedPointer_(ostream& Out, const ManagedConstPointer<T>& Ptr,
-                                  const true_type& Unused)
-{
-    Out << Ptr->ToString();
-}
+// template <typename T>
+// static inline void PrintManagedPointer_(ostream& Out, const ManagedConstPointer<T>& Ptr,
+//                                   const true_type& Unused)
+// {
+//     Out << Ptr->ToString();
+// }
 
 
-template <typename T>
-static inline ostream& operator << (ostream& Out, const ManagedPointer<T>& Ptr)
-{
-    typedef typename is_base_of<ESMC::Stringifiable, T>::type StringifiableType;
-    PrintManagedPointer_(Out, Ptr, StringifiableType());
-    return Out;
-}
+// template <typename T>
+// static inline ostream& operator << (ostream& Out, const ManagedPointer<T>& Ptr)
+// {
+//     typedef typename is_base_of<ESMC::Stringifiable, T>::type StringifiableType;
+//     PrintManagedPointer_(Out, Ptr, StringifiableType());
+//     return Out;
+// }
 
-template <typename T>
-static inline ostream& operator << (ostream& Out, const ManagedConstPointer<T>& Ptr)
-{
-    typedef typename is_base_of<ESMC::Stringifiable, T>::type StringifiableType;
-    PrintManagedPointer_(Out, Ptr, StringifiableType());
-    return Out;
-}
+// template <typename T>
+// static inline ostream& operator << (ostream& Out, const ManagedConstPointer<T>& Ptr)
+// {
+//     typedef typename is_base_of<ESMC::Stringifiable, T>::type StringifiableType;
+//     PrintManagedPointer_(Out, Ptr, StringifiableType());
+//     return Out;
+// }
 
 } /* end namespace memory */
 } /* end namespace kinara */
