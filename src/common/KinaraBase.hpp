@@ -40,7 +40,15 @@
 #if !defined KINARA_COMMON_KINARA_BASE_HPP_
 #define KINARA_COMMON_KINARA_BASE_HPP_
 
+// check that we're on a 64 bit machine
+#if (__SIZEOF_POINTER__ < 8)
+#error "KINARA currently only supports 64-bit architectures"
+#endif /* __SIZEOF_POINTER__ < 8 */
+
 #include <inttypes.h>
+#include <ostream>
+#include <string>
+#include <type_traits>
 
 namespace kinara {
 
@@ -53,6 +61,111 @@ typedef int8_t   i08;
 typedef int16_t  i16;
 typedef int32_t  i32;
 typedef int64_t  i64;
+
+// a base class for stringifiable objects
+class Stringifiable
+{
+public:
+    Stringifiable();
+    virtual ~Stringifiable();
+
+    virtual std::string to_string(u32 verbosity) const = 0;
+    inline std::string to_string() const
+    {
+        return to_string(0);
+    }
+};
+
+// A base class for Hashable objects
+class Hashable
+{
+private:
+    class HashValue
+    {
+    private:
+        mutable bool m_hash_valid : 1;
+        mutable u64 m_hash_value : 63;
+
+    public:
+        inline HashValue()
+            : m_hash_valid(false), m_hash_value(0)
+        {
+            // Nothing here
+        }
+
+        inline HashValue(u64 hash_value)
+            : m_hash_valid(true), m_hash_value(hash_value)
+        {
+            // Nothing here
+        }
+
+        inline bool is_valid() const
+        {
+            return m_hash_valid;
+        }
+
+        inline u64 get_hash_value() const
+        {
+            return m_hash_value;
+        }
+
+        inline void set_hash_value(u64 hash_value) const
+        {
+            m_hash_valid = true;
+            m_hash_value = false;
+        }
+
+        inline void clear_hash_value() const
+        {
+            m_hash_valid = false;
+            m_hash_value = (u64)0;
+        }
+    };
+
+    HashValue m_hash_value;
+
+public:
+    Hashable();
+    virtual ~Hashable();
+
+    u64 hash() const
+    {
+        if (m_hash_value.is_valid()) {
+            return m_hash_value.get_hash_value();
+        } else {
+            m_hash_value.set_hash_value(compute_hash_value());
+            return m_hash_value.get_hash_value();
+        }
+    }
+
+    virtual u64 compute_hash_value() const = 0
+};
+
+
+template <typename T>
+static inline void print_stringifiable_(std::ostream& out_stream,
+                                        const T& object,
+                                        const std::true_type& is_stringifiable)
+{
+    out_stream << object.to_string();
+}
+
+template <typename T>
+static inline void print_stringifiable_(std::ostream& out_stream,
+                                        const T& object,
+                                        const std::false_type& is_stringifiable)
+{
+    out_stream << object;
+}
+
+// redirect operators for stringifiable objects
+template <typename T>
+static inline std::ostream& operator << (std::ostream& out_stream, const T& object)
+{
+    typename std::is_base_of<Stringifiable, T>::type is_stringifiable_type_val;
+    print_stringifiable_(out_stream, object, is_stringifiable_type_val);
+    return out_stream;
+}
 
 } /* end namespace kinara */
 

@@ -435,52 +435,25 @@ discard_const(const detail::ManagedPointerBase<T, CONSTPOINTER>& managed_pointer
     }
 }
 
-// template <typename T>
-// static inline void PrintManagedPointer_(ostream& Out, const ManagedPointer<T>& Ptr,
-//                                         const false_type& Ununsed)
-// {
-//     Out << Ptr->GetPtr_();
-// }
+// typedefs for commonly used managed pointer types
+template <typename T>
+using ManagedPointer = detail::ManagedPointerBase<T, false>;
 
-// template <typename T>
-// static inline void PrintManagedPointer_(ostream& Out, const ManagedPointer<T>& Ptr,
-//                                   const true_type& Unused)
-// {
-//     Out << Ptr->ToString();
-// }
+template <typename T>
+using ManagedConstPointer = detail::ManagedPointerBase<T, true>;
 
-// template <typename T>
-// static inline void PrintManagedPointer_(ostream& Out, const ManagedConstPointer<T>& Ptr,
-//                                   const false_type& Ununsed)
-// {
-//     Out << Ptr->GetPtr_();
-// }
-
-// template <typename T>
-// static inline void PrintManagedPointer_(ostream& Out, const ManagedConstPointer<T>& Ptr,
-//                                   const true_type& Unused)
-// {
-//     Out << Ptr->ToString();
-// }
-
-
-// template <typename T>
-// static inline ostream& operator << (ostream& Out, const ManagedPointer<T>& Ptr)
-// {
-//     typedef typename is_base_of<ESMC::Stringifiable, T>::type StringifiableType;
-//     PrintManagedPointer_(Out, Ptr, StringifiableType());
-//     return Out;
-// }
-
-// template <typename T>
-// static inline ostream& operator << (ostream& Out, const ManagedConstPointer<T>& Ptr)
-// {
-//     typedef typename is_base_of<ESMC::Stringifiable, T>::type StringifiableType;
-//     PrintManagedPointer_(Out, Ptr, StringifiableType());
-//     return Out;
-// }
 
 } /* end namespace memory */
+
+template <typename T, bool CONSTPOINTER>
+static inline std::ostream& operator << (std::ostream& out_stream,
+                                         const detail::ManagedPointerBase<T, CONSTPOINTER>&
+                                         managed_ptr)
+{
+    out_stream << *(managed_ptr);
+    return out_stream;
+}
+
 } /* end namespace kinara */
 
 #endif /* KINARA_MEMORY_MANAGED_POINTER_HPP_ */
