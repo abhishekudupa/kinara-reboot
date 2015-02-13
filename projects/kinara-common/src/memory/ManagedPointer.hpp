@@ -43,7 +43,7 @@
 #include <type_traits>
 #include <utility>
 
-#include "../common/KinaraBase.hpp"
+#include "../../common/KinaraBase.hpp"
 
 #include "RefCountable.hpp"
 

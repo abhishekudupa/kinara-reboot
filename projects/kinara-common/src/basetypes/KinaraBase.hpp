@@ -46,6 +46,7 @@
 #endif /* __SIZEOF_POINTER__ < 8 */
 
 #include <inttypes.h>
+#include <istream>
 #include <ostream>
 #include <string>
 #include <type_traits>
@@ -139,6 +140,15 @@ public:
     }
 
     virtual u64 compute_hash_value() const = 0;
+};
+
+// Base class for "Constructible" objects
+// these are essentially objects which can
+// generate code that constructs a "semantically
+// "equivalent" copy of themselves
+class Constructible
+{
+
 };
 
 
