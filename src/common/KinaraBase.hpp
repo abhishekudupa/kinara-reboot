@@ -138,7 +138,7 @@ public:
         }
     }
 
-    virtual u64 compute_hash_value() const = 0
+    virtual u64 compute_hash_value() const = 0;
 };
 
 

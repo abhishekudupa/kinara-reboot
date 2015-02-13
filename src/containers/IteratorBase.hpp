@@ -42,46 +42,62 @@
 
 #include <exception>
 #include <string>
+#include <utility>
 
 #include "../common/KinaraBase.hpp"
 
 namespace kinara {
 namespace containers {
 
+template <typename Kind,
+          typename T,
+          typename PointerType = T*,
+          typename ReferenceType = T&,
+          typename DistType = u64>
+class IteratorBase
+{
+public:
+    typedef T ValueType;
+    typedef PointerType PtrType;
+    typedef ReferenceType RefType;
+    typedef DistType DistanceType;
+    typedef Kind IteratorKind;
+};
+
 // abstract base classes for various kinds of iterators
-class InputIteratorBase
+class InputIteratorKind
 {
 
 };
 
-class OutputIteratorBase
+class OutputIteratorKind
 {
 
 };
 
-class ForwardIteratorBase
+class ForwardIteratorKind
 {
 
 };
 
-class BidirectionalIteratorBase
+class BidirectionalIteratorKind
 {
 
 };
 
-class RandomAccessIteratorBase
+class RandomAccessIteratorKind
 {
 
 };
 
-class IteratorError : public exception
+class IteratorError : public std::exception
 {
 private:
-    string m_exception_info;
+    std::string m_exception_info;
 
 public:
     IteratorError();
-    IteratorError(const string& exception_info) noexcept;
+    IteratorError(const std::string& exception_info) noexcept;
     IteratorError(const IteratorError& other) noexcept;
     IteratorError(IteratorError&& other) noexcept;
     IteratorError& operator = (const IteratorError& other) noexcept;
@@ -94,28 +110,28 @@ public:
 // Some utility functions common to all containers
 // which implement some form of iterable
 template <typename IterableContainerType>
-static inline IteratableContainerType::iterator
+static inline typename IterableContainerType::iterator
 begin(IterableContainerType& the_container)
 {
     return the_container.begin();
 }
 
 template <typename IterableContainerType>
-static inline IterableContainerType::const_iterator
+static inline typename IterableContainerType::const_iterator
 begin(const IterableContainerType& the_container)
 {
     return the_container.begin();
 }
 
 template <typename IterableContainerType>
-static inline IteratableContainerType::iterator
+static inline typename IterableContainerType::iterator
 end(IterableContainerType& the_container)
 {
     return the_container.end();
 }
 
 template <typename IterableContainerType>
-static inline IterableContainerType::const_iterator
+static inline typename IterableContainerType::const_iterator
 end(const IterableContainerType& the_container)
 {
     return the_container.end();
@@ -163,8 +179,11 @@ template <typename RandomOrForwardIterator>
 static inline u64 distance(const RandomOrForwardIterator& from,
                            const RandomOrForwardIterator& to)
 {
-    typename std::is_base_of<RandomAccessIteratorBase, RandomOrForwardIterator>::type
+    typename
+        std::is_same<RandomAccessIteratorKind,
+                     typename RandomOrForwardIterator::IteratorKind>::type
         is_random_access_iterator_value;
+
     return distance(from, to, is_random_access_iterator_value);
 }
 
@@ -200,7 +219,7 @@ template <typename ForwardIterator>
 static inline void advance_negative(ForwardIterator& current_iterator, i64 n,
                                     const std::false_type& is_bidirectional_iterator_value)
 {
-    throw IteratorError((string)"Cannot advance() with negative value on forward iterator");
+    throw IteratorError((std::string)"Cannot advance() with negative value on forward iterator");
 }
 
 template <typename BidirectionalIterator>
@@ -238,54 +257,194 @@ static inline void advance(BidirectionalIterator& current_iterator, i64 n,
 template <typename InputIterator>
 static inline void advance(InputIterator& current_iterator, i64 n)
 {
-    typename std::is_base_of<RandomAccessIteratorBase, InputIterator>::type
+    typename std::is_same<RandomAccessIteratorKind,
+                          typename InputIterator::IteratorKind>::type
         is_random_access_iterator_value;
-    typename std::is_base_of<BidirectionalIteratorBase, InputIterator>::type
+    typename std::is_same<BidirectionalIteratorKind,
+                          typename InputIterator::IteratorKind>::type
         is_bidirectional_iterator_value;
     advance(current_iterator, n, is_random_access_iterator_value,
             is_bidirectional_iterator_value);
 }
 
 template <typename ContainerType>
-struct insert_iterator : public OutputIteratorBase
+class InsertIterator
+    : public IteratorBase<OutputIteratorKind, void, void, void, void>
 {
-    // TODO
+private:
+    ContainerType& m_the_container;
+    typename ContainerType::iterator m_the_iterator;
+
+public:
+    inline InsertIterator(ContainerType& the_container)
+        : m_the_container(the_container),
+          m_the_iterator(begin(the_container))
+    {
+        // Nothing here
+    }
+
+    inline InsertIterator(ContainerType& the_container,
+                          const typename ContainerType::iterator& it)
+        : m_the_container(the_container),
+          m_the_iterator(it)
+    {
+        // Nothing here
+    }
+
+    inline ~InsertIterator()
+    {
+        // Nothing here
+    }
+
+    inline InsertIterator& operator = (const typename ContainerType::ValueType& the_value)
+    {
+        m_the_container.insert(m_the_iterator, the_value);
+        return *this;
+    }
+
+    inline InsertIterator& operator = (typename ContainerType::ValueType&& the_value)
+    {
+        m_the_container.insert(m_the_iterator, std::move(the_value));
+        return *this;
+    }
+
+    inline InsertIterator& operator * ()
+    {
+        return *this;
+    }
+
+    inline InsertIterator& operator ++ ()
+    {
+        return *this;
+    }
+
+    inline InsertIterator& operator ++ (int unused)
+    {
+        return *this;
+    }
 };
 
 template <typename ContainerType>
-struct back_insert_iterator : public OutputIteratorBase
+class BackInsertIterator
+    : public IteratorBase<OutputIteratorKind, void, void, void, void>
 {
-    // TODO
+private:
+    ContainerType& m_the_container;
+
+public:
+    inline BackInsertIterator(ContainerType& the_container)
+        : m_the_container(the_container)
+    {
+        // Nothing here
+    }
+
+    inline ~BackInsertIterator()
+    {
+        // Nothing here
+    }
+
+    inline BackInsertIterator& operator = (const typename ContainerType::ValueType& the_value)
+    {
+        m_the_container.push_back(the_value);
+        return *this;
+    }
+
+    inline BackInsertIterator& operator = (typename ContainerType::ValueType&& the_value)
+    {
+        m_the_container.push_back(std::move(the_value));
+        return *this;
+    }
+
+    inline BackInsertIterator& operator * ()
+    {
+        return *this;
+    }
+
+    inline BackInsertIterator& operator ++ ()
+    {
+        return *this;
+    }
+
+    inline BackInsertIterator& operator ++ (int unused)
+    {
+        return *this;
+    }
 };
 
 template <typename ContainerType>
-struct front_insert_iterator : public OutputIteratorBase
+class FrontInsertIterator
+    : public IteratorBase<OutputIteratorKind, void, void, void, void>
 {
-    // TODO
+private:
+    ContainerType& m_the_container;
+
+public:
+    inline FrontInsertIterator(ContainerType& the_container)
+        : m_the_container(the_container)
+    {
+        // Nothing here
+    }
+
+    inline ~FrontInsertIterator()
+    {
+        // Nothing here
+    }
+
+    inline FrontInsertIterator& operator = (const typename ContainerType::ValueType& the_value)
+    {
+        m_the_container.push_front(the_value);
+        return *this;
+    }
+
+    inline FrontInsertIterator& operator = (typename ContainerType::ValueType&& the_value)
+    {
+        m_the_container.push_front(std::move(the_value));
+        return *this;
+    }
+
+    inline FrontInsertIterator& operator * ()
+    {
+        return *this;
+    }
+
+    inline FrontInsertIterator& operator ++ ()
+    {
+        return *this;
+    }
+
+    inline FrontInsertIterator& operator ++ (int unused)
+    {
+        return *this;
+    }
 };
 
 template <typename ContainerType>
-static inline insert_iterator<ContainerType>
+static inline InsertIterator<ContainerType>
 inserter(ContainerType& the_container,
-         const typename ContainerType::iterator it)
+         const typename ContainerType::iterator& it)
 {
-    // TODO
+    return InsertIterator<ContainerType>(the_container, it);
 }
 
 template <typename ContainerType>
-static inline back_insert_iterator<ContainerType>
-back_inserter(ContainerType& the_container,
-              const typename ContainerType::iterator it)
+static inline InsertIterator<ContainerType>
+inserter(ContainerType& the_container)
 {
-    // TODO
+    return InsertIterator<ContainerType>(the_container);
 }
 
 template <typename ContainerType>
-static inline front_insert_iterator<ContainerType>
-front_inserter(ContainerType& the_container,
-               const typename ContainerType::iterator it)
+static inline BackInsertIterator<ContainerType>
+back_inserter(ContainerType& the_container)
 {
-    // TODO
+    return BackInsertIterator<ContainerType>(the_container);
+}
+
+template <typename ContainerType>
+static inline FrontInsertIterator<ContainerType>
+front_inserter(ContainerType& the_container)
+{
+    return FrontInsertIterator<ContainerType>(the_container);
 }
 
 } /* end namespace containers */
