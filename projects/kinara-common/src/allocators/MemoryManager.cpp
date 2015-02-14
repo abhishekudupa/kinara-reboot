@@ -85,6 +85,7 @@ void* MemoryManager::allocate_cleared(u64 size)
     if (s_total_bytes_allocated + actual_size > s_memory_allocation_limit) {
         throw OutOfMemoryError();
     }
+
     s_total_bytes_allocated += actual_size;
     s_peak_bytes_allocated = (s_total_bytes_allocated > s_peak_bytes_allocated ?
                               s_total_bytes_allocated : s_peak_bytes_allocated);
@@ -92,6 +93,29 @@ void* MemoryManager::allocate_cleared(u64 size)
     u64* block_ptr = reinterpret_cast<u64*>(calloc(size, 1));
     *block_ptr = size;
     return (block_ptr + 1);
+}
+
+// Raw allocation, we are guaranteed that the
+// caller will deallocate_raw on this block.
+// So we don't need to remember the size!
+void* MemoryManager::allocate_raw(u64 size)
+{
+    if (s_total_bytes_allocated + size > s_memory_allocation_limit) {
+        throw OutOfMemoryError();
+    }
+
+    s_total_bytes_allocated += size;
+    s_peak_bytes_allocated = (s_total_bytes_allocated > s_peak_bytes_allocated ?
+                              s_total_bytes_allocated : s_peak_bytes_allocated);
+    return (malloc(size));
+}
+
+void* MemoryManager::allocate_raw_cleared(u64 size)
+{
+    s_total_bytes_allocated += size;
+    s_peak_bytes_allocated = (s_total_bytes_allocated > s_peak_bytes_allocated ?
+                              s_total_bytes_allocated : s_peak_bytes_allocated);
+    return (calloc(size, 1));
 }
 
 void MemoryManager::deallocate(void* block_ptr)

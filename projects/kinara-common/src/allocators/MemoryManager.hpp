@@ -66,7 +66,12 @@ private:
 public:
     static void* allocate(u64 size);
     static void* allocate_cleared(u64 size);
+
+    static void* allocate_raw(u64 size);
+    static void* allocate_raw_cleared(u64 size);
+
     static void deallocate(void* block_ptr);
+    static void deallocate_raw(void* block_ptr, u64 size);
 
     static void set_allocation_limit(u64 allocation_limit);
     static void set_warn_watermark(u64 warn_watermark);
@@ -85,6 +90,24 @@ static inline T* casted_alloc(u64 size)
     return reinterpret_cast<T*>(MemoryManager::allocate(size));
 }
 
+template <typename T>
+static inline T* casted_alloc_raw(u64 size)
+{
+    return reinterpret_cast<T*>(MemoryManager::allocate_raw(size));
+}
+
+template <typename T>
+static inline T* casted_alloc_cleared(u64 size)
+{
+    return reinterpret_cast<T*>(MemoryManager::allocate_cleared(size));
+}
+
+template <typename T>
+static inline T* casted_alloc_raw_cleared(u64 size)
+{
+    return reinterpret_cast<T*>(MemoryManager::allocate_raw_cleared(size));
+}
+
 template <typename T, typename... ArgTypes>
 static inline T* allocate_array(u64 num_elements, ArgTypes&&... args)
 {
@@ -92,21 +115,18 @@ static inline T* allocate_array(u64 num_elements, ArgTypes&&... args)
     for (u64 i = 0; i < num_elements; ++i) {
         new (retval[i]) T(std::forward<ArgTypes>(args)...);
     }
-    return;
+    return retval;
 }
 
 template <typename T>
-static inline void deallocate_array(T* array_ptr, i64 num_elements = -1)
+static inline void deallocate_array(T* array_ptr)
 {
-    i64 actual_num_elements = num_elements;
     if (array_ptr == nullptr) {
         return;
     }
-    if (actual_num_elements == -1) {
-        // we need to compute the actual size of this array
-        actual_num_elements = (reinterpret_cast<u64*>(array_ptr))[-1];
-        actual_num_elements = actual_num_elements / sizeof(T*);
-    }
+    // we need to compute the actual size of this array
+    u64 actual_num_elements = (reinterpret_cast<u64*>(array_ptr))[-1];
+    actual_num_elements = actual_num_elements / sizeof(T*);
 
     auto cur_ptr = array_ptr;
     for (i64 i = 0; i < actual_num_elements; ++i) {
@@ -116,11 +136,33 @@ static inline void deallocate_array(T* array_ptr, i64 num_elements = -1)
     MemoryManager::deallocate(array_ptr);
 }
 
+template <typename T, typename... ArgTypes>
+static inline T* allocate_raw_array(u64 num_elements, ArgTypes&&... args)
+{
+    auto retval = casted_raw_alloc<T>(sizeof(T) * num_elements);
+    for (u64 i = 0; i < num_elements; ++i) {
+        new (retval[i]) T(std::forward<ArgTypes>(args)...);
+    }
+    return retval;
+}
+
+template <typename T>
+static inline void deallocate_raw_array(T* array_ptr, u64 num_elements)
+{
+    MemoryManager::deallocate_raw(array_ptr, num_elements * sizeof(T));
+}
+
 // allocates an uninitialized array
 template <typename T>
 static inline T* allocate_uarray(u64 num_elements)
 {
     return casted_alloc<T>(sizeof(T) * num_elements);
+}
+
+template <typename T>
+static inline T* allocate_raw_uarray(u64 num_elements)
+{
+    return casted_alloc_raw<T>(sizeof(T) * num_elements);
 }
 
 // deallocates array without calling destructors
@@ -130,6 +172,11 @@ static inline void deallocate_uarray(T* array_ptr)
     MemoryManager::deallocate(array_ptr);
 }
 
+template <typename T>
+static inline void deallocate_raw_uarray(T* array_ptr, u64 num_elements)
+{
+    MemoryManager::deallocate_raw(array_ptr, sizeof(T) * num_elements);
+}
 
 } /* end namespace allocators */
 } /* end namespace kinara */

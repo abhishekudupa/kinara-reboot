@@ -44,7 +44,7 @@
 #include <string>
 #include <utility>
 
-#include "../common/KinaraBase.hpp"
+#include "../basetypes/KinaraBase.hpp"
 
 namespace kinara {
 namespace containers {
@@ -53,7 +53,7 @@ template <typename Kind,
           typename T,
           typename PointerType = T*,
           typename ReferenceType = T&,
-          typename DistType = u64>
+          typename DistType = i64>
 class IteratorBase
 {
 public:
