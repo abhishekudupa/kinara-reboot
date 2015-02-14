@@ -35,7 +35,106 @@
 
 // Code:
 
+#if !defined KINARA_KINARA_COMMON_ALLOCATORS_MEMORY_MANAGER_HPP_
+#define KINARA_KINARA_COMMON_ALLOCATORS_MEMORY_MANAGER_HPP_
 
+#include <exception>
+#include <utility>
+
+#include "../basetypes/KinaraBase.hpp"
+
+namespace kinara {
+namespace allocators {
+
+class OutOfMemoryError : public std::exception
+{
+public:
+    OutOfMemoryError() noexcept;
+    virtual ~OutOfMemoryError() noexcept;
+    const char* what() const noexcept override;
+};
+
+
+class MemoryManager final
+{
+private:
+    static u64 s_total_bytes_allocated;
+    static u64 s_memory_allocation_limit;
+    static u64 s_warn_watermark;
+    static u64 s_peak_bytes_allocated;
+
+public:
+    static void* allocate(u64 size);
+    static void* allocate_cleared(u64 size);
+    static void deallocate(void* block_ptr);
+
+    static void set_allocation_limit(u64 allocation_limit);
+    static void set_warn_watermark(u64 warn_watermark);
+    static u64 get_bytes_allocated();
+    static u64 get_peak_bytes_allocated();
+    static u64 get_allocation_limit();
+    static u64 get_warn_watermark();
+
+    bool is_warn_watermark_reached();
+    bool is_out_of_memory();
+};
+
+template <typename T>
+static inline T* casted_alloc(u64 size)
+{
+    return reinterpret_cast<T*>(MemoryManager::allocate(size));
+}
+
+template <typename T, typename... ArgTypes>
+static inline T* allocate_array(u64 num_elements, ArgTypes&&... args)
+{
+    auto retval = casted_alloc<T>(sizeof(T) * num_elements);
+    for (u64 i = 0; i < num_elements; ++i) {
+        new (retval[i]) T(std::forward<ArgTypes>(args)...);
+    }
+    return;
+}
+
+template <typename T>
+static inline void deallocate_array(T* array_ptr, i64 num_elements = -1)
+{
+    i64 actual_num_elements = num_elements;
+    if (array_ptr == nullptr) {
+        return;
+    }
+    if (actual_num_elements == -1) {
+        // we need to compute the actual size of this array
+        actual_num_elements = (reinterpret_cast<u64*>(array_ptr))[-1];
+        actual_num_elements = actual_num_elements / sizeof(T*);
+    }
+
+    auto cur_ptr = array_ptr;
+    for (i64 i = 0; i < actual_num_elements; ++i) {
+        cur_ptr->~T();
+        ++cur_ptr;
+    }
+    MemoryManager::deallocate(array_ptr);
+}
+
+// allocates an uninitialized array
+template <typename T>
+static inline T* allocate_uarray(u64 num_elements)
+{
+    return casted_alloc<T>(sizeof(T) * num_elements);
+}
+
+// deallocates array without calling destructors
+template <typename T>
+static inline void deallocate_uarray(T* array_ptr)
+{
+    MemoryManager::deallocate(array_ptr);
+}
+
+
+} /* end namespace allocators */
+} /* end namespace kinara */
+
+#endif /* KINARA_KINARA_COMMON_ALLOCATORS_MEMORY_MANAGER_HPP_ */
 
 //
 // MemoryManager.hpp ends here
