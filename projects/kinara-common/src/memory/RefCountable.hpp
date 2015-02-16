@@ -44,25 +44,28 @@
 
 #include <type_traits>
 
-#include "../common/KinaraBase.hpp"
+#include "../basetypes/KinaraBase.hpp"
 
 namespace kinara {
 namespace memory {
+
+class RefCountable;
+
+class RefCountableDeleterBase
+{
+public:
+    virtual void delete_ptr(const RefCountable* ref_countable_ptr) const = 0;
+};
 
 class RefCountable
 {
 private:
     mutable i64 m_ref_count_;
+    const RefCountableDeleterBase* m_the_deleter;
 
 public:
-    inline RefCountable()
-        : m_ref_count_((i64)0)
-    {
-        // Nothing here
-    }
-
-    inline RefCountable(const RefCountable& other)
-        : m_ref_count_((i64)0)
+    inline RefCountable(const RefCountableDeleterBase* the_deleter = nullptr)
+        : m_ref_count_((i64)0), m_the_deleter(the_deleter)
     {
         // Nothing here
     }
@@ -80,8 +83,12 @@ public:
     inline void dec_ref_() const
     {
         m_ref_count_--;
-        if (m_ref_count_ <= (i64)0) {
-            delete this;
+        if (m_ref_count_ <= 0) {
+            if (m_the_deleter == nullptr) {
+                delete this;
+            } else {
+                m_the_deleter->delete_ptr(this);
+            }
         }
     }
 

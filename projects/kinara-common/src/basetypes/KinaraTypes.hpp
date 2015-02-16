@@ -41,6 +41,8 @@
 #include <ostream>
 #include <type_traits>
 
+#include "../memory/RefCountable.hpp"
+
 namespace kinara {
 
 // a base class for stringifiable objects
@@ -120,6 +122,48 @@ public:
     }
 
     virtual u64 compute_hash_value() const = 0;
+    virtual u64 recompute_hash_value() const = 0;
+
+    virtual bool equals(const Hashable& other) const = 0;
+};
+
+// Base class for comparable objects
+class Comparable
+{
+public:
+    Comparable();
+    virtual ~Comparable();
+
+    virtual i64 compare(const Comparable& other) const = 0;
+    inline bool operator == (const Comparable& other) const
+    {
+        return (compare(other) == 0);
+    }
+
+    inline bool operator != (const Comparable& other) const
+    {
+        return (compare(other) != 0);
+    }
+
+    inline bool operator < (const Comparable& other) const
+    {
+        return (compare(other) < 0);
+    }
+
+    inline bool operator <= (const Comparable& other) const
+    {
+        return (compare(other) <= 0);
+    }
+
+    inline bool operator > (const Comparable& other) const
+    {
+        return (compare(other) > 0);
+    }
+
+    inline bool operator >= (const Comparable& other) const
+    {
+        return (compare(other) >= 0);
+    }
 };
 
 // Base class for "Constructible" objects
@@ -129,6 +173,142 @@ public:
 class Constructible
 {
 
+};
+
+// A function to be called to construct an object
+template <typename T>
+class ConstructFuncBase
+{
+public:
+    template <typename... ArgTypes>
+    inline void operator () (void* mem_ptr, ArgTypes&&... args) const
+    {
+        new (mem_ptr) T(std::forward<ArgTypes>(args)...);
+    }
+};
+
+template <typename T>
+class ConstructFuncBase<T*>
+{
+private:
+    inline void construct(void* mem_ptr, const T* initializer,
+                          const std::true_type& is_ref_counted) const
+    {
+        auto as_T = reinterpret_cast<const T**>(mem_ptr);
+        *as_T = initializer;
+        memory::inc_ref(**as_T);
+    }
+
+    inline void construct(void* mem_ptr, const T* initializer,
+                          const std::false_type& is_ref_counted) const
+    {
+        auto as_T = reinterpret_cast<const T**>(mem_ptr);
+        *as_T = initializer;
+    }
+
+public:
+    inline void operator () (void* mem_ptr, const T* initializer) const
+    {
+        typename std::is_base_of<memory::RefCountable, T>::type is_ref_counted;
+        construct(mem_ptr, initializer, is_ref_counted);
+    }
+};
+
+template <typename T>
+class ConstructFuncBase<const T*>
+{
+private:
+    inline void construct(void* mem_ptr, const T* initializer,
+                          const std::true_type& is_ref_counted) const
+    {
+        auto as_T = reinterpret_cast<const T**>(mem_ptr);
+        *as_T = initializer;
+        memory::inc_ref(**as_T);
+    }
+
+    inline void construct(void* mem_ptr, const T* initializer,
+                          const std::false_type& is_ref_counted) const
+    {
+        auto as_T = reinterpret_cast<const T**>(mem_ptr);
+        *as_T = initializer;
+    }
+
+public:
+    inline void operator () (void* mem_ptr, const T* initializer) const
+    {
+        typename std::is_base_of<memory::RefCountable, T>::type is_ref_counted;
+        construct(mem_ptr, initializer, is_ref_counted);
+    }
+};
+
+
+// A destructor for various classes
+template <typename T>
+class DestructFuncBase
+{
+public:
+    inline void operator () (const T& object) const
+    {
+        (&object)->~T();
+    }
+};
+
+template <typename T>
+class DestructFuncBase<T*>
+{
+private:
+    inline void destruct (const T* object_ptr,
+                          const std::true_type& is_ref_counted) const
+    {
+        memory::dec_ref(*object_ptr);
+    }
+
+    inline void destruct (const T* object_ptr,
+                          const std::false_type& is_ref_counted) const
+    {
+        return;
+    }
+
+public:
+    inline void operator () (const T* object_ptr) const
+    {
+        typename std::is_base_of<memory::RefCountable, T>::type is_ref_counted;
+        destruct(object_ptr, is_ref_counted);
+    }
+};
+
+template <typename T>
+class DestructFuncBase<const T*>
+{
+private:
+    inline void destruct (const T* object_ptr,
+                          const std::true_type& is_ref_counted) const
+    {
+        memory::dec_ref(*object_ptr);
+    }
+
+    inline void destruct (const T* object_ptr,
+                          const std::false_type& is_ref_counted) const
+    {
+        return;
+    }
+
+public:
+    inline void operator () (const T* object_ptr) const
+    {
+        typename std::is_base_of<memory::RefCountable, T>::type is_ref_counted;
+        destruct(object_ptr, is_ref_counted);
+    }
+};
+
+template <typename T>
+class NullDestructFunc
+{
+public:
+    inline void operator () (const T& object) const
+    {
+        return;
+    }
 };
 
 
@@ -158,6 +338,8 @@ static inline std::ostream& operator << (std::ostream& out_stream, const T& obje
 }
 
 } /* end namespace kinara */
+
+#endif /* KINARA_KINARA_COMMON_KINARA_TYPES_HPP_ */
 
 //
 // KinaraTypes.hpp ends here

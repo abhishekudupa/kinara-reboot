@@ -1,11 +1,9 @@
-// ContainersBase.hpp ---
-//
-// Filename: ContainersBase.hpp
+// DList.hpp ---
+// Filename: DList.hpp
 // Author: Abhishek Udupa
-// Created: Thu Feb 12 17:38:57 2015 (-0500)
+// Created: Mon Feb 16 02:08:46 2015 (-0500)
 //
-//
-// Copyright (c) 2015, Abhishek Udupa, University of Pennsylvania
+// Copyright (c) 2013, Abhishek Udupa, University of Pennsylvania
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -37,60 +35,7 @@
 
 // Code:
 
-#if !defined KINARA_CONTAINERS_CONTAINERS_BASE_HPP_
-#define KINARA_CONTAINERS_CONTAINERS_BASE_HPP_
 
-#include <ostream>
-
-#include "../basetypes/KinaraBase.hpp"
-
-namespace kinara {
-namespace containers {
-
-
-template <typename ForwardIterator>
-static inline void print_iterable(std::ostream& out_stream,
-                                  const ForwardIterator& begin_iterator,
-                                  const ForwardIterator& end_iterator)
-{
-    for (auto it = begin_iterator; it != end_iterator; ++it) {
-        out_stream << *it;
-        if (next(it) != end_iterator) {
-            std::operator<<(out_stream, ", ");
-        }
-    }
-    return;
-}
-
-namespace detail {
-
-template <u64 INCREMENT=8>
-struct AdditiveIncrementer
-{
-    inline u64 operator () (u64 current_size) const
-    {
-        return current_size + INCREMENT;
-    }
-};
-
-template <u32 NUMERATOR=3, u32 DENOMINATOR=2, u32 INITIALSIZE=8>
-struct MultiplicativeIncrementer
-{
-    inline u64 operator () (u64 current_size) const
-    {
-        if (current_size == 0) {
-            return INITIALSIZE;
-        }
-        float factor = (float)NUMERATOR / (float)DENOMINATOR;
-        return (u64)(ceil((float)current_size * factor));
-    }
-};
-
-} /* end namespace detail */
-} /* end namespace containers */
-} /* end namespace kinara */
-
-#endif /* KINARA_CONTAINERS_CONTAINERS_BASE_HPP_ */
 
 //
-// ContainersBase.hpp ends here
+// DList.hpp ends here
