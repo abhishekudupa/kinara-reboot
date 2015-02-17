@@ -1,11 +1,9 @@
-// KinaraBase.hpp ---
-//
-// Filename: KinaraBase.hpp
+// OpenAddressingHashTable.hpp ---
+// Filename: OpenAddressingHashTable.hpp
 // Author: Abhishek Udupa
-// Created: Wed Feb 11 16:48:21 2015 (-0500)
+// Created: Mon Feb 16 13:25:29 2015 (-0500)
 //
-//
-// Copyright (c) 2015, Abhishek Udupa, University of Pennsylvania
+// Copyright (c) 2013, Abhishek Udupa, University of Pennsylvania
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -37,44 +35,28 @@
 
 // Code:
 
-#if !defined KINARA_COMMON_KINARA_BASE_HPP_
-#define KINARA_COMMON_KINARA_BASE_HPP_
+// A hash table implementation that uses open addressing
 
-// check that we're on a 64 bit machine
-#if (__SIZEOF_POINTER__ < 8)
-#error "KINARA currently only supports 64-bit architectures"
-#endif /* __SIZEOF_POINTER__ < 8 */
+#if !defined KINARA_KINARA_COMMON_CONTAINERS_OPEN_ADDRESSING_HASH_TABLE_HPP_
+#define KINARA_KINARA_COMMON_CONTAINERS_OPEN_ADDRESSING_HASH_TABLE_HPP_
 
-#include <cstdint>
-#include <exception>
-#include <utility>
+#include <cmath>
+#include <cstring>
+#include <initializer_list>
+
+#include "../basetypes/KinaraBase.hpp"
+#include "../basetypes/KinaraTypes.hpp"
+#include "../allocators/MemoryManager.hpp"
+
+#include "ContainersBase.hpp"
 
 namespace kinara {
+namespace containers {
 
-typedef std::uint8_t  u08;
-typedef std::uint16_t u16;
-typedef std::uint32_t u32;
-typedef std::uint64_t u64;
-
-typedef std::pair<u64, u64> u128;
-
-typedef std::int8_t   i08;
-typedef std::int16_t  i16;
-typedef std::int32_t  i32;
-typedef std::int64_t  i64;
-
-class KinaraException
-{
-private:
-
-
-public:
-
-};
-
+} /* end namespace containers */
 } /* end namespace kinara */
 
-#endif /* KINARA_COMMON_KINARA_BASE_HPP_ */
+#endif /* KINARA_KINARA_COMMON_CONTAINERS_OPEN_ADDRESSING_HASH_TABLE_HPP_ */
 
 //
-// KinaraBase.hpp ends here
+// OpenAddressingHashTable.hpp ends here

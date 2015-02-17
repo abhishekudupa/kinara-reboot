@@ -1,11 +1,9 @@
-// KinaraBase.hpp ---
-//
-// Filename: KinaraBase.hpp
+// PrimeGenerator.hpp ---
+// Filename: PrimeGenerator.hpp
 // Author: Abhishek Udupa
-// Created: Wed Feb 11 16:48:21 2015 (-0500)
+// Created: Mon Feb 16 13:57:53 2015 (-0500)
 //
-//
-// Copyright (c) 2015, Abhishek Udupa, University of Pennsylvania
+// Copyright (c) 2013, Abhishek Udupa, University of Pennsylvania
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -37,44 +35,6 @@
 
 // Code:
 
-#if !defined KINARA_COMMON_KINARA_BASE_HPP_
-#define KINARA_COMMON_KINARA_BASE_HPP_
-
-// check that we're on a 64 bit machine
-#if (__SIZEOF_POINTER__ < 8)
-#error "KINARA currently only supports 64-bit architectures"
-#endif /* __SIZEOF_POINTER__ < 8 */
-
-#include <cstdint>
-#include <exception>
-#include <utility>
-
-namespace kinara {
-
-typedef std::uint8_t  u08;
-typedef std::uint16_t u16;
-typedef std::uint32_t u32;
-typedef std::uint64_t u64;
-
-typedef std::pair<u64, u64> u128;
-
-typedef std::int8_t   i08;
-typedef std::int16_t  i16;
-typedef std::int32_t  i32;
-typedef std::int64_t  i64;
-
-class KinaraException
-{
-private:
-
-
-public:
-
-};
-
-} /* end namespace kinara */
-
-#endif /* KINARA_COMMON_KINARA_BASE_HPP_ */
 
 //
-// KinaraBase.hpp ends here
+// PrimeGenerator.hpp ends here

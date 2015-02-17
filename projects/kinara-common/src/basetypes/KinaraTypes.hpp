@@ -312,28 +312,30 @@ public:
 };
 
 
+namespace kinara_print_detail_ {
 template <typename T>
-static inline void print_stringifiable_(std::ostream& out_stream,
-                                        const T& object,
-                                        const std::true_type& is_stringifiable)
+static inline void print_stringifiable(std::ostream& out_stream,
+                                       const T& object,
+                                       const std::true_type& is_stringifiable)
 {
     out_stream << object.to_string();
 }
 
 template <typename T>
-static inline void print_stringifiable_(std::ostream& out_stream,
-                                        const T& object,
-                                        const std::false_type& is_stringifiable)
+static inline void print_stringifiable(std::ostream& out_stream,
+                                       const T& object,
+                                       const std::false_type& is_stringifiable)
 {
     out_stream << object;
 }
+} /* end namespace kinara_print_detail_ */
 
 // redirect operators for stringifiable objects
 template <typename T>
 static inline std::ostream& operator << (std::ostream& out_stream, const T& object)
 {
     typename std::is_base_of<Stringifiable, T>::type is_stringifiable_type_val;
-    print_stringifiable_(out_stream, object, is_stringifiable_type_val);
+    kinara_print_detail_::print_stringifiable_(out_stream, object, is_stringifiable_type_val);
     return out_stream;
 }
 
