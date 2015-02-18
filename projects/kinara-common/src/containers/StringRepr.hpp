@@ -1,7 +1,7 @@
-// PrimeGenerator.hpp ---
-// Filename: PrimeGenerator.hpp
+// String.hpp ---
+// Filename: String.hpp
 // Author: Abhishek Udupa
-// Created: Mon Feb 16 13:59:20 2015 (-0500)
+// Created: Mon Feb 16 02:08:35 2015 (-0500)
 //
 // Copyright (c) 2013, Abhishek Udupa, University of Pennsylvania
 // All rights reserved.
@@ -35,42 +35,82 @@
 
 // Code:
 
-#if !defined KINARA_KINARA_COMMON_PRIMEUTILS_PRIME_GENERATOR_HPP_
-#define KINARA_KINARA_COMMON_PRIMEUTILS_PRIME_GENERATOR_HPP_
+#if !defined KINARA_KINARA_COMMON_CONTAINERS_STRING_HPP_
+#define KINARA_KINARA_COMMON_CONTAINERS_STRING_HPP_
+
+#include <array>
 
 #include "../basetypes/KinaraBase.hpp"
-#include "../containers/Vector.hpp"
+#include "../primeutils/PrimeGenerator.hpp"
 
 namespace kinara {
-namespace utils {
+namespace containers {
 
-namespace kc = kinara::containers;
+namespace string_detail_ {
 
-class PrimeGenerator
+namespace ka = kinara::allocators;
+
+// sizeof(StringRepr) = 40 bytes on all 64 bit platforms
+class StringRepr
 {
 private:
-    static constexpr u64 MaxPrimeListSize = ((u64)1 << 26);
+    static constexpr u32 s_max_short = 24;
+    static constexpr float s_hash_table_resize_factor = 1.618;
+    static constexpr float s_hash_table_max_load_factor = 0.7;
+    static constexpr StringRepr* s_hash_table_deleted_value =
+        reinterpret_cast<StringRepr*>(0x1);
+    static constexpr StringRepr* s_hash_table_empty_value =
+        reinterpret_cast<StringRepr*>(nullptr);
 
-    kc::u32Vector m_primes;
-    bool m_is_stateless;
+    static StringRepr* s_repr_hash_table;
+    static u64 s_repr_hash_table_size;
+    static u64 s_repr_hash_table_used;
+    static kinara::utils PrimeGenerator s_prime_generator;
 
-    inline void process_next_k(u32 k);
-    inline u32 find_smallest_prime(u32 lower_bound);
-    inline u32 find_next_prime(u32 lower_bound);
-    bool is_prime(u32 candidate);
+    u64 m_size;
+    i64 m_ref_count;
+    union ReprUnion {
+        std::array<char, m_max_compact> m_short_repr;
+        char* m_long_repr;
+    };
+    ReprUnion m_repr;
+
+    static inline void expand_hash_table();
+    static inline void garbage_collect();
 
 public:
-    PrimeGenerator(bool stateless);
-    ~PrimeGenerator();
-
-    // gets the next prime greater than or equal to lower_bound
-    u32 get_next_prime(u32 lower_bound);
+    static StringRepr* make_repr(const char* contents);
 };
 
-} /* end namespace utils */
+} /* end namespace string_detail_ */
+
+class String
+{
+private:
+    StringRepr* m_the_repr;
+
+public:
+    String(const char* contents);
+    ~String();
+
+    const char* c_str() const;
+};
+
+inline operator String () (const char* char_data)
+{
+    return String(char_data);
+}
+
+inline std::ostream& operator << (std::ostream& out_stream,
+                                  const String& the_string)
+{
+    out << the_string.c_str() << endl;
+}
+
+} /* end namespace containers */
 } /* end namespace kinara */
 
-#endif /* KINARA_KINARA_COMMON_PRIMEUTILS_PRIME_GENERATOR_HPP_ */
+#endif /* KINARA_KINARA_COMMON_CONTAINERS_STRING_HPP_ */
 
 //
-// PrimeGenerator.hpp ends here
+// String.hpp ends here

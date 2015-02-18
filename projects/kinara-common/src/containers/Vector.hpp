@@ -903,23 +903,23 @@ static inline bool operator >= (const VectorBase<T, Inc1, MS1, CF1, DF1>& vector
 
 // some useful typedefs
 template <typename T,
-          typename ConstructFunc = ConstructFuncBase,
-          typename DestructFunc = DestructFuncBase>
-using CompactVector = VectorBase<T, detail::AdditiveIncrementer,
+          typename ConstructFunc = ConstructFuncBase<T>,
+          typename DestructFunc = DestructFuncBase<T>>
+using CompactVector = VectorBase<T, detail::AdditiveIncrementer<16>,
                                  1, ConstructFunc, DestructFunc>;
 
 template <typename T,
-          typename ConstructFunc = ConstructFuncBase,
-          typename DestructFunc = DestructFuncBase>
-using Vector = VectorBase<T, detail::MultiplicativeIncrementer,
+          typename ConstructFunc = ConstructFuncBase<T>,
+          typename DestructFunc = DestructFuncBase<T>>
+using Vector = VectorBase<T, detail::MultiplicativeIncrementer<3, 2, 8>,
                           2, ConstructFunc, DestructFunc>;
 
 template <typename T>
-using PtrVector = VectorBase<T*, detail::MultiplicativeIncrementer,
+using PtrVector = VectorBase<T*, detail::MultiplicativeIncrementer<3, 2, 8>,
                              2, ConstructFuncBase<T*>, DestructFuncBase<T*>>;
 
 template <typename T>
-using CompactPtrVector = VectorBase<T*, detail::AdditiveIncrementer,
+using CompactPtrVector = VectorBase<T*, detail::AdditiveIncrementer<16>,
                                     1, ConstructFuncBase<T*>, DestructFuncBase<T*>>;
 
 class String;

@@ -47,79 +47,37 @@
 #include "../basetypes/KinaraBase.hpp"
 #include "../basetypes/KinaraTypes.hpp"
 
+#include "HashFunctions.hpp"
+
 namespace kinara {
 namespace utils {
-namespace hash_detail_ {
 
 template <typename T>
-static inline u64 get_hash_value_ref(const T& object_ref,
-                                     const std::true_type& is_convertible_to_ref)
-{
-    const Hashable& hashable_ref = object_ref;
-    return hashable_ref.hash();
-}
-
-template <typename T>
-static inline u64 get_hash_value_ref(const T& object_ref,
-                                     const std::false_type& is_convertible_to_ref)
-{
-    // Not convertible to a hashable ref, just try to return std::hash
-    std::hash<T> the_hasher;
-    return the_hasher(object_ref);
-}
-
-// can convert to a hashable pointer
-template <typename T>
-static inline u64 get_hash_value(const T& object_ref,
-                                 const std::true_type& is_convertible_to_ptr)
-{
-    const Hashable* hashable_ptr = object_ref;
-    return hashable_ptr->hash();
-}
-
-// cannot convert to a hashable pointer
-// but can we convert to a hashable ref?
-template <typename T>
-static inline u64 get_hash_value(const T& object_ref,
-                                 const std::false_type& is_convertible_to_ptr)
-{
-    typename std::is_convertible<T, const Hashable&>::type is_convertible_to_ref;
-    get_hash_value_ref(object_ref, is_convertible_to_ref);
-}
-
-template <typename T>
-static inline u64 get_hash_value(const T& object)
-{
-    typename std::is_convertible<T, const Hashable*>::type is_pointer_value;
-    hash_detail_::get_hash_value(object, is_pointer_value);
-}
-
-} /* end namespace hash_detail_ */
-
-template <typename T, typename... RestOfTypes>
 class Hasher
 {
+private:
+    inline u64 get_hash(const Hashable& hashable_ref) const
+    {
+        return hashable_ref.hash();
+    }
 
+    inline u64 get_hash(const Hashable* hashable_ptr) const
+    {
+        return hashable_ptr->hash();
+    }
+
+    inline u64 get_hash(const Stringifiable& stringifiable_ref) const
+    {
+        return
+    }
+
+public:
+    inline u64 operator () (const T& object) const
+    {
+    }
 };
 
-template<typename T>
-class Hasher<T>
-{
-
-};
-
-template <typename T1, typename T2>
-class Hasher<std::pair<T1, T2>>
-{
-
-};
-
-template <typename... ArgTypes>
-class Hasher<std::tuple<ArgTypes>>
-{
-
-};
-
+// Specializations for basic types
 
 } /* end namespace utils */
 } /* end namespace kinara */

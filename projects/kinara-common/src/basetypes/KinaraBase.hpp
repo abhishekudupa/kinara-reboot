@@ -63,15 +63,6 @@ typedef std::int16_t  i16;
 typedef std::int32_t  i32;
 typedef std::int64_t  i64;
 
-class KinaraException
-{
-private:
-
-
-public:
-
-};
-
 } /* end namespace kinara */
 
 #endif /* KINARA_COMMON_KINARA_BASE_HPP_ */

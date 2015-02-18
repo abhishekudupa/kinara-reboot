@@ -1,7 +1,7 @@
-// String.hpp ---
-// Filename: String.hpp
+// String.cpp ---
+// Filename: String.cpp
 // Author: Abhishek Udupa
-// Created: Mon Feb 16 02:08:35 2015 (-0500)
+// Created: Tue Feb 17 18:11:56 2015 (-0500)
 //
 // Copyright (c) 2013, Abhishek Udupa, University of Pennsylvania
 // All rights reserved.
@@ -35,7 +35,60 @@
 
 // Code:
 
+#include <cmath>
 
+#include "../hashfuncs/HashFunctions.hpp"
+#include "../allocators/MemoryManager.hpp"
+
+#include "String.hpp"
+
+namespace kinara {
+namespace containers {
+
+namespace string_detail_ {
+
+StringRepr* StringRepr::s_repr_hash_table = nullptr;
+u64 StringRepr::s_repr_hash_table_size = (u64)0;
+u64 StringRepr::s_repr_hash_table_used = (u64)0;
+kinara::utils::PrimeGenerator StringRepr::s_prime_generator(true);
+
+namespace ka = kinara::allocators;
+
+void StringRepr::expand_hash_table()
+{
+    if (s_repr_hash_table_size > 0) {
+        if (((float)s_repr_hash_table_size /
+             (float)s_repr_hash_table_used) <
+            s_hash_table_max_load_factor) {
+            return;
+        }
+
+        // try a garbage collection first
+        garbage_collect();
+        if (((float)s_repr_hash_table_size /
+             (float)s_repr_hash_table_used) <
+            s_hash_table_max_load_factor) {
+            return;
+        }
+    }
+
+    // we need to resize the table
+    u32 new_table_size = (u32)ceil(s_repr_hash_table_size * s_hash_table_resize_factor);
+    new_table_size =
+    auto new_hash_table = ka::casted_allocate_raw_cleared<StringRepr*>(new_table_size *
+                                                                       sizeof(StringRepr*));
+    for (u32 i = 0; i < s_repr_hash_table_size; ++i) {
+        if (s_repr_hash_table[i] != s_hash_table_empty_value &&
+            s_repr_hash_table[i] != s_hash_table_deleted_value) {
+
+        }
+    }
+}
+
+} /* end namespace string_detail_ */
+
+} /* end namespace containers */
+} /* end namespace kinara */
 
 //
-// String.hpp ends here
+// String.cpp ends here

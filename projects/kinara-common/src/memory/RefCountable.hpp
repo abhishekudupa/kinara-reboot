@@ -99,63 +99,53 @@ public:
 };
 
 // manage ref count of a RefCountable pointer or reference
-static inline void inc_ref_(const RefCountable* ptr,
-                            std::true_type& unused)
+static inline void inc_ref(const RefCountable* ptr)
 {
     ptr->inc_ref_();
 }
 
-static inline void inc_ref_(const RefCountable& ref,
-                            std::false_type& unused)
+static inline void inc_ref(const RefCountable& ref)
 {
     ref.inc_ref_();
 }
 
-static inline void dec_ref_(const RefCountable* ptr,
-                            std::true_type& unused)
+static inline void dec_ref(const RefCountable* ptr)
 {
     ptr->dec_ref_();
 }
 
-static inline void dec_ref_(const RefCountable& ref,
-                            std::false_type& unused)
+static inline void dec_ref(const RefCountable& ref)
 {
     ref.dec_ref_();
 }
 
-static inline i64 get_ref_count_(const RefCountable* ptr,
-                                 std::true_type& unused)
+static inline i64 get_ref_count(const RefCountable* ptr)
 {
     return ptr->get_ref_count_();
 }
 
-static inline i64 get_ref_count_(const RefCountable& ref,
-                                 std::false_type& unused)
+static inline i64 get_ref_count(const RefCountable& ref)
 {
     return ref.get_ref_count_();
 }
 
 template <typename T>
-static inline void inc_ref(const T& ref_countable_thing)
+static inline void inc_ref(const T& object)
 {
-    typename std::is_pointer<T>::type is_pointer_type_val;
-    inc_ref_(ref_countable_thing, is_pointer_type_val);
+    return;
 }
 
 template <typename T>
-static inline void dec_ref(const T& ref_countable_thing)
+static inline void dec_ref(const T& object)
 {
-    typename std::is_pointer<T>::type is_pointer_type_val;
-    dec_ref_(ref_countable_thing, is_pointer_type_val);
+    return;
 }
 
 template <typename T>
-static inline i64 get_ref_count(const T& ref_countable_thing)
+static inline i64 get_ref_count(const T& object)
 {
-    typename std::is_pointer<T>::type is_pointer_type_val;
-    return get_ref_count_(ref_countable_thing, is_pointer_type_val);
+    return 0;
 }
-
 
 } /* end namespace memory */
 } /* end namespace kinara */

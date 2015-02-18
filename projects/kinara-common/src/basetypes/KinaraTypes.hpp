@@ -42,6 +42,7 @@
 #include <type_traits>
 
 #include "../memory/RefCountable.hpp"
+#include "../containers/String.hpp"
 
 namespace kinara {
 
@@ -52,8 +53,8 @@ public:
     Stringifiable();
     virtual ~Stringifiable();
 
-    virtual std::string to_string(u32 verbosity) const = 0;
-    inline std::string to_string() const
+    virtual kinara::containers::String to_string(u32 verbosity) const = 0;
+    inline kinara::containers::String to_string() const
     {
         return to_string(0);
     }
@@ -175,6 +176,44 @@ class Constructible
 
 };
 
+class KinaraException : public std::exception
+{
+private:
+    kinara::containers::String m_exception_info;
+
+public:
+    KinaraException()
+        : m_exception_info("No information about exception")
+    {
+        // Nothing here
+    }
+
+    KinaraException(const kinara::containers::String& exception_info) noexcept
+        : m_exception_info(exception_info)
+    {
+        // Nothing here
+    }
+
+    virtual ~KinaraException() noexcept
+    {
+        // Nothing here
+    }
+
+    inline KinaraException& operator = (const KinaraException& other) noexcept
+    {
+        if (&other == this) {
+            return *this;
+        }
+        m_exception_info = other.m_exception_info;
+        return *this;
+    }
+
+    virtual const char* what() const noexcept override
+    {
+        return m_exception_info.c_str();
+    }
+};
+
 // A function to be called to construct an object
 template <typename T>
 class ConstructFuncBase
@@ -184,63 +223,9 @@ public:
     inline void operator () (void* mem_ptr, ArgTypes&&... args) const
     {
         new (mem_ptr) T(std::forward<ArgTypes>(args)...);
+        memory::inc_ref(static_cast<const T*>(mem_ptr));
     }
 };
-
-template <typename T>
-class ConstructFuncBase<T*>
-{
-private:
-    inline void construct(void* mem_ptr, const T* initializer,
-                          const std::true_type& is_ref_counted) const
-    {
-        auto as_T = reinterpret_cast<const T**>(mem_ptr);
-        *as_T = initializer;
-        memory::inc_ref(**as_T);
-    }
-
-    inline void construct(void* mem_ptr, const T* initializer,
-                          const std::false_type& is_ref_counted) const
-    {
-        auto as_T = reinterpret_cast<const T**>(mem_ptr);
-        *as_T = initializer;
-    }
-
-public:
-    inline void operator () (void* mem_ptr, const T* initializer) const
-    {
-        typename std::is_base_of<memory::RefCountable, T>::type is_ref_counted;
-        construct(mem_ptr, initializer, is_ref_counted);
-    }
-};
-
-template <typename T>
-class ConstructFuncBase<const T*>
-{
-private:
-    inline void construct(void* mem_ptr, const T* initializer,
-                          const std::true_type& is_ref_counted) const
-    {
-        auto as_T = reinterpret_cast<const T**>(mem_ptr);
-        *as_T = initializer;
-        memory::inc_ref(**as_T);
-    }
-
-    inline void construct(void* mem_ptr, const T* initializer,
-                          const std::false_type& is_ref_counted) const
-    {
-        auto as_T = reinterpret_cast<const T**>(mem_ptr);
-        *as_T = initializer;
-    }
-
-public:
-    inline void operator () (void* mem_ptr, const T* initializer) const
-    {
-        typename std::is_base_of<memory::RefCountable, T>::type is_ref_counted;
-        construct(mem_ptr, initializer, is_ref_counted);
-    }
-};
-
 
 // A destructor for various classes
 template <typename T>
@@ -250,54 +235,7 @@ public:
     inline void operator () (const T& object) const
     {
         (&object)->~T();
-    }
-};
-
-template <typename T>
-class DestructFuncBase<T*>
-{
-private:
-    inline void destruct (const T* object_ptr,
-                          const std::true_type& is_ref_counted) const
-    {
-        memory::dec_ref(*object_ptr);
-    }
-
-    inline void destruct (const T* object_ptr,
-                          const std::false_type& is_ref_counted) const
-    {
-        return;
-    }
-
-public:
-    inline void operator () (const T* object_ptr) const
-    {
-        typename std::is_base_of<memory::RefCountable, T>::type is_ref_counted;
-        destruct(object_ptr, is_ref_counted);
-    }
-};
-
-template <typename T>
-class DestructFuncBase<const T*>
-{
-private:
-    inline void destruct (const T* object_ptr,
-                          const std::true_type& is_ref_counted) const
-    {
-        memory::dec_ref(*object_ptr);
-    }
-
-    inline void destruct (const T* object_ptr,
-                          const std::false_type& is_ref_counted) const
-    {
-        return;
-    }
-
-public:
-    inline void operator () (const T* object_ptr) const
-    {
-        typename std::is_base_of<memory::RefCountable, T>::type is_ref_counted;
-        destruct(object_ptr, is_ref_counted);
+        memory::dec_ref(&object);
     }
 };
 
@@ -311,32 +249,28 @@ public:
     }
 };
 
-
-namespace kinara_print_detail_ {
-template <typename T>
-static inline void print_stringifiable(std::ostream& out_stream,
-                                       const T& object,
-                                       const std::true_type& is_stringifiable)
+static inline std::ostream& operator << (std::ostream& out_stream,
+                                         const Stringifiable& object)
 {
     out_stream << object.to_string();
-}
-
-template <typename T>
-static inline void print_stringifiable(std::ostream& out_stream,
-                                       const T& object,
-                                       const std::false_type& is_stringifiable)
-{
-    out_stream << object;
-}
-} /* end namespace kinara_print_detail_ */
-
-// redirect operators for stringifiable objects
-template <typename T>
-static inline std::ostream& operator << (std::ostream& out_stream, const T& object)
-{
-    typename std::is_base_of<Stringifiable, T>::type is_stringifiable_type_val;
-    kinara_print_detail_::print_stringifiable_(out_stream, object, is_stringifiable_type_val);
     return out_stream;
+}
+
+static inline std::ostream& operator << (std::ostream& out_stream,
+                                         const Stringifiable* object)
+{
+    out_stream << object->to_string();
+    return out_stream;
+}
+
+static inline u64 get_hash_value(const Hashable& object_ref)
+{
+    return object_ref.hash();
+}
+
+static inline u64 get_hash_value(const Hashable* object_ptr)
+{
+    return object_ptr->hash();
 }
 
 } /* end namespace kinara */

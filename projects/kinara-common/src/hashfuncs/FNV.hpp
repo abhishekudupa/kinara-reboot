@@ -144,9 +144,19 @@ static inline u32 fnv_hash_32(const void* data, u64 length)
     return fnv_hash_detail_::fnv_32_buf(data, length, fnv_hash_detail_::FNV1_32_INIT);
 }
 
+static inline u32 fnv_hash_32(const void* data, u64 length, u32 seed)
+{
+    return fnv_hash_detail_::fnv_32_buf(data, length, seed);
+}
+
 static inline u32 fnv_hash_32a(const void* data, u64 length)
 {
     return fnv_hash_detail_::fnv_32a_buf(data, length, fnv_hash_detail_::FNV1_32A_INIT);
+}
+
+static inline u32 fnv_hash_32a(const void* data, u64 length, u32 seed)
+{
+    return fnv_hash_detail_::fnv_32a_buf(data, length, seed);
 }
 
 static inline u64 fnv_hash_64(const void* data, u64 length)
@@ -154,9 +164,19 @@ static inline u64 fnv_hash_64(const void* data, u64 length)
     return fnv_hash_detail_::fnv_64_buf(data, length, fnv_hash_detail_::FNV1_64_INIT);
 }
 
+static inline u64 fnv_hash_64(const void* data, u64 length, u64 seed)
+{
+    return fnv_hash_detail_::fnv_64_buf(data, length, seed);
+}
+
 static inline u64 fnv_hash_64a(const void* data, u64 length)
 {
     return fnv_hash_detail_::fnv_64a_buf(data, length, fnv_hash_detail_::FNV1_64A_INIT);
+}
+
+static inline u64 fnv_hash_64a(const void* data, u64 length, u64 seed)
+{
+    return fnv_hash_detail_::fnv_64a_buf(data, length, seed);
 }
 
 } /* end namespace utils */

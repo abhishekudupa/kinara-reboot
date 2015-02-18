@@ -118,37 +118,37 @@ inline uint64 Hash128to64(const uint128& x) {
 
 } /* end namespace cityhash_detail_ */
 
-static inline u64 city_hash_64(const char* data, u64 length)
+static inline u64 city_hash_64(const void* data, u64 length)
 {
-    return cityhash_detail_::CityHash64(data, length);
+    return cityhash_detail_::CityHash64(static_cast<const char*>(data), length);
 }
 
-static inline u64 city_hash_64_with_seed(const char* data, u64 length, u64 seed)
+static inline u64 city_hash_64_with_seed(const void* data, u64 length, u64 seed)
 {
-    return cityhash_detail_::CityHash64WithSeed(data, length, seed);
+    return cityhash_detail_::CityHash64WithSeed(static_cast<const char*>(data), length, seed);
 }
 
-static inline u64 city_hash_64_with_seeds(const char* data, u64 length,
+static inline u64 city_hash_64_with_seeds(const void* data, u64 length,
                                           u64 seed1, u64 seed2)
 {
-    return cityhash_detail_::CityHash64WithSeeds(data, length, seed1, seed2);
+    return cityhash_detail_::CityHash64WithSeeds(static_cast<const char*>(data), length, seed1, seed2);
 }
 
-static inline u32 city_hash_32(const char* data, u64 length)
+static inline u32 city_hash_32(const void* data, u64 length)
 {
-    return cityhash_detail_::CityHash32(data, length);
+    return cityhash_detail_::CityHash32(static_cast<const char*>(data), length);
 }
 
-static inline u128 city_hash_128(const char* data, u64 length)
+static inline u128 city_hash_128(const void* data, u64 length)
 {
-    return cityhash_detail_::CityHash128(data, length);
+    return cityhash_detail_::CityHash128(static_cast<const char*>(data), length);
 }
 
-static inline u128 city_hash_128_with_seed(const char* data,
+static inline u128 city_hash_128_with_seed(const void* data,
                                            u64 length,
                                            u64 seed1, u64 seed2)
 {
-    return cityhash_detail_::CityHash128WithSeed(data, length,
+    return cityhash_detail_::CityHash128WithSeed(static_cast<const char*>(data), length,
                                                  std::make_pair(seed1, seed2));
 }
 

@@ -146,6 +146,8 @@ fnv_64a_str(const char *str, Fnv64_t hval)
     return hval;
 }
 
+
+
 } /* end namespace fnv_hash_detail_ */
 } /* end namespace utils */
 } /* end namespace kinara */

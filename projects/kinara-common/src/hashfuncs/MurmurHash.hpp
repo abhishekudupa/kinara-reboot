@@ -28,6 +28,13 @@ static inline u32 murmur_hash_32(const void* key, u64 length, u32 seed)
     return retval;
 }
 
+static inline u32 murmur_hash_32(const void* key, u64 length)
+{
+    // a large prime
+    constexpr u32 seed = 2147480009;
+    return murmur_hash_32(key, length, seed);
+}
+
 static inline u128 murmur_hash_128(const void* key, u64 length, u32 seed)
 {
     u64 retval[2];
@@ -39,6 +46,12 @@ static inline u64 murmur_hash_64(const void* key, u64 length, u32 seed)
 {
     auto&& retval = murmur_hash_128(key, length, seed);
     return (retval.first ^ retval.second);
+}
+
+static inline u64 murmur_hash_64(const void* key, u64 length)
+{
+    constexpr u32 seed = 2147480837;
+    return murmur_hash_64(key, length, seed);
 }
 
 } /* end namespace utils */
