@@ -226,6 +226,14 @@ static inline T* allocate_object(ArgTypes&&... args)
     return static_cast<T*>(retval);
 }
 
+template <typename T, typename... ArgTypes>
+static inline T* allocate_object_raw(ArgTypes&&... args)
+{
+    auto retval = allocate_raw(sizeof(T));
+    new (retval) T(std::forward<ArgTypes>(args)...);
+    return static_cast<T*>(retval);
+}
+
 template <typename T>
 static inline void deallocate_object(const T* object_ptr,
                                      const std::true_type& is_polymorphic_value)
@@ -245,6 +253,29 @@ static inline void deallocate_object(const T* object_ptr)
 {
     typename std::is_polymorphic<T>::type is_polymorphic_value;
     deallocate_object(object_ptr, is_polymorphic_value);
+}
+
+template <typename T>
+static inline void deallocate_object_raw(const T* object_ptr,
+                                         u64 size,
+                                         const std::true_type& is_polymorphic_value)
+{
+    deallocate_raw(dynamic_cast<void*>(const_cast<T*>(object_ptr)), size);
+}
+
+template <typename T>
+static inline void deallocate_object_raw(const T* object_ptr,
+                                         u64 size,
+                                         const std::false_type& is_polymorphic_value)
+{
+    deallocate_raw(object_ptr, size);
+}
+
+template <typename T>
+static inline void deallocate_object_raw(const T* object_ptr, u64 size)
+{
+    typename std::is_polymorphic<T>::type is_polymorphic_value;
+    deallocate_object_raw(object_ptr, size, is_polymorphic_value);
 }
 
 

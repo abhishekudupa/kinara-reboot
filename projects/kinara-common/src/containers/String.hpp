@@ -1,7 +1,7 @@
-// PrimeGenerator.hpp ---
-// Filename: PrimeGenerator.hpp
+// String.hpp ---
+// Filename: String.hpp
 // Author: Abhishek Udupa
-// Created: Mon Feb 16 13:59:20 2015 (-0500)
+// Created: Tue Feb 17 23:39:46 2015 (-0500)
 //
 // Copyright (c) 2013, Abhishek Udupa, University of Pennsylvania
 // All rights reserved.
@@ -35,42 +35,42 @@
 
 // Code:
 
-#if !defined KINARA_KINARA_COMMON_PRIMEUTILS_PRIME_GENERATOR_HPP_
-#define KINARA_KINARA_COMMON_PRIMEUTILS_PRIME_GENERATOR_HPP_
-
-#include "../basetypes/KinaraBase.hpp"
-#include "../containers/Vector.hpp"
+#if !defined KINARA_KINARA_COMMON_CONTAINERS_STRING_HPP_
+#define KINARA_KINARA_COMMON_CONTAINERS_STRING_HPP_
 
 namespace kinara {
-namespace utils {
+namespace containers {
 
-namespace kc = kinara::containers;
+namespace string_detail_ {
 
-class PrimeGenerator
+// forward declaration
+class StringRepr;
+
+} /* end namespace string_detail_ */
+
+class String
 {
 private:
-    static constexpr u64 MaxPrimeListSize = ((u64)1 << 26);
-
-    kc::u64Vector m_primes;
-    bool m_is_stateless;
-
-    inline void process_next_k(u64 k);
-    inline u64 find_smallest_prime(u64 lower_bound);
-    inline u64 find_next_prime(u64 lower_bound);
-    bool is_prime(u64 candidate);
+    string_detail_::StringRepr* m_the_repr;
 
 public:
-    PrimeGenerator(bool stateless);
-    ~PrimeGenerator();
+    String(const char* contents);
+    ~String();
 
-    // gets the next prime greater than or equal to lower_bound
-    u64 get_next_prime(u64 lower_bound);
+    const char* c_str() const;
 };
 
-} /* end namespace utils */
+inline std::ostream& operator << (std::ostream& out_stream,
+                                  const String& the_string)
+{
+    out_stream << the_string.c_str();
+    return out_stream;
+}
+
+} /* end namespace containers */
 } /* end namespace kinara */
 
-#endif /* KINARA_KINARA_COMMON_PRIMEUTILS_PRIME_GENERATOR_HPP_ */
+#endif /* KINARA_KINARA_COMMON_CONTAINERS_STRING_HPP_ */
 
 //
-// PrimeGenerator.hpp ends here
+// String.hpp ends here

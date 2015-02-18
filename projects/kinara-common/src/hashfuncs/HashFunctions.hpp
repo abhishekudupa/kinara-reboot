@@ -52,7 +52,7 @@ namespace utils {
 namespace hash_combine_detail_ {
 
 template <typename T, u32 ARRAYSIZE, u32 INDEX>
-static inline void populate_array(std::arraysize<T, ARRAYSIZE>& the_array)
+static inline void populate_array(std::array<T, ARRAYSIZE>& the_array)
 {
     return;
 }
@@ -78,7 +78,8 @@ enum class HashFunctionType {
 
 // we default to spooky hash, but you can change this by simply redefining the
 // constexpr below
-static constexpr default_hash_function_to_use = HashFunctionType::SpookyHash;
+static constexpr HashFunctionType
+default_hash_function_to_use = HashFunctionType::SpookyHash;
 
 static inline u64 default_hash_function(const void* data, u64 length)
 {
@@ -88,7 +89,7 @@ static inline u64 default_hash_function(const void* data, u64 length)
     case HashFunctionType::CityHash:
         return city_hash_64(data, length);
     case HashFunctionType::FNVHash:
-        return fnv_hash_64(data, length)
+        return fnv_hash_64(data, length);
     case HashFunctionType::FNVHashA:
         return fnv_hash_64a(data, length);
     case HashFunctionType::MurmurHash:
@@ -100,7 +101,7 @@ static inline u64 default_hash_function(const void* data, u64 length, u64 seed)
 {
     switch (default_hash_function_to_use) {
     case HashFunctionType::SpookyHash:
-        return spooky_hash_64(data, length, seed)
+        return spooky_hash_64(data, length, seed);
     case HashFunctionType::CityHash:
         return city_hash_64_with_seed(data, length, seed);
     case HashFunctionType::FNVHash:

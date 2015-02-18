@@ -40,49 +40,209 @@
 #include "../hashfuncs/HashFunctions.hpp"
 #include "../allocators/MemoryManager.hpp"
 
-#include "String.hpp"
+#include "StringRepr.hpp"
 
 namespace kinara {
 namespace containers {
 
 namespace string_detail_ {
 
-StringRepr* StringRepr::s_repr_hash_table = nullptr;
-u64 StringRepr::s_repr_hash_table_size = (u64)0;
-u64 StringRepr::s_repr_hash_table_used = (u64)0;
-kinara::utils::PrimeGenerator StringRepr::s_prime_generator(true);
-
-namespace ka = kinara::allocators;
-
-void StringRepr::expand_hash_table()
+StringRepr::StringRepr()
+    : m_fixed_repr(true), m_repr(nullptr)
 {
-    if (s_repr_hash_table_size > 0) {
-        if (((float)s_repr_hash_table_size /
-             (float)s_repr_hash_table_used) <
-            s_hash_table_max_load_factor) {
-            return;
-        }
+    // Nothing here
+}
 
-        // try a garbage collection first
-        garbage_collect();
-        if (((float)s_repr_hash_table_size /
-             (float)s_repr_hash_table_used) <
-            s_hash_table_max_load_factor) {
-            return;
+StringRepr::StringRepr(const char* contents)
+{
+    auto length = strlen(contents);
+    m_fixed_repr.m_short_repr = (length < s_max_compact);
+    m_repr.initialize(contents, length);
+}
+
+StringRepr::StringRepr(const char* contents, u64 length)
+{
+    m_fixed_repr.m_short_repr = (length < s_max_compact);
+    m_repr.initialize(contents, length);
+}
+
+i32 StringRepr::compare(const char* other, u64 length)
+{
+    if (m_fixed_repr.m_short_repr) {
+        auto length_mine = strlen(m_repr.m_short_repr);
+        auto diff = length_mine - length;
+        if (diff != 0) {
+            return diff;
         }
+        return memcmp(m_repr.m_short_repr, other, length);
+    } else {
+        auto length_mine = m_repr.m_long_repr.m_length;
+        auto diff = length_mine - length;
+        if (diff != 0) {
+            return diff;
+        }
+        return memcmp(m_repr.m_long_repr.m_data, other, length);
     }
+}
 
-    // we need to resize the table
-    u32 new_table_size = (u32)ceil(s_repr_hash_table_size * s_hash_table_resize_factor);
-    new_table_size =
-    auto new_hash_table = ka::casted_allocate_raw_cleared<StringRepr*>(new_table_size *
-                                                                       sizeof(StringRepr*));
-    for (u32 i = 0; i < s_repr_hash_table_size; ++i) {
-        if (s_repr_hash_table[i] != s_hash_table_empty_value &&
-            s_repr_hash_table[i] != s_hash_table_deleted_value) {
-
-        }
+i32 StringRepr::compare(const StringRepr& other) const
+{
+    if (m_fixed_repr.m_short_repr && !(other.m_fixed_repr.m_short_repr)) {
+        return -1;
+    } else if (!(m_fixed_repr.m_short_repr) && other.m_fixed_repr.m_short_repr) {
+        return 1;
     }
+    // both are either short or long representations
+    if (m_fixed_repr.m_short_repr) {
+        auto length_mine = strlen(m_repr.m_short_repr.data());
+        auto length_other = strlen(other.m_repr.m_short_repr.data());
+        auto diff = length_mine - length_other;
+
+        if (diff != 0) {
+            return diff;
+        }
+        // lengths are equal
+        return memcmp(m_repr.m_short_repr.data(),
+                      other.m_repr.m_short_repr.data(),
+                      length_mine);
+    } else {
+        auto diff = m_repr.m_long_repr.m_length - other.m_repr.m_long_repr.m_length;
+        if (diff != 0) {
+            return diff;
+        }
+        return memcmp(m_repr.m_long_repr.m_data, other.m_repr.m_long_repr.m_data,
+                      m_repr.m_long_repr.m_length);
+    }
+}
+
+StringRepr::~StringRepr()
+{
+    if (m_fixed_repr.m_short_repr) {
+        return;
+    } else {
+        ka::deallocate_raw(m_repr.m_long_repr.m_data, m_repr.m_long_repr.m_length + 1);
+    }
+}
+
+const char* StringRepr::c_str() const
+{
+    if (m_fixed_repr.m_short_repr) {
+        return m_repr.m_short_repr.data();
+    } else {
+        return m_repr.m_long_repr.m_data;
+    }
+}
+
+bool StringRepr::operator == (const StringRepr& other) const
+{
+    if (hash() != other.hash()) {
+        return false;
+    }
+    return (compare(other) == 0);
+}
+
+bool StringRepr::operator != (const StringRepr& other) const
+{
+    if (hash() == other.hash()) {
+        return (compare(other) != 0);
+    }
+    return true;
+}
+
+bool StringRepr::operator < (const StringRepr& other) const
+{
+    return (compare(other) < 0);
+}
+
+bool StringRepr::operator <= (const StringRepr& other) const
+{
+    return (compare(other) <= 0);
+}
+
+bool StringRepr::operator > (const StringRepr& other) const
+{
+    return (compare(other) > 0);
+}
+
+bool StringRepr::operator >= (const StringRepr& other) const
+{
+    return (compare(other) >= 0);
+}
+
+bool StringRepr::equals(const char* other, u64 length) const
+{
+    // include the nul character in the hash computation
+    if (hash() != kinara::utils::default_hash_function(other, length + 1)) {
+        return false;
+    }
+    return (compare(other, length) == 0);
+}
+
+bool StringRepr::nequals(const char *other, u64 length) const
+{
+    if (hash() == kinara::utils::default_hash_function(other, length + 1)) {
+        return (compare(other, length) != 0);
+    }
+    return true;
+}
+
+bool StringRepr::lt(const char *other, u64 length) const
+{
+    return (compare(other, length) < 0)
+}
+
+bool StringRepr::le(const char *other, u64 length) const
+{
+    return (compare(other, length) <= 0)
+}
+
+bool StringRepr::gt(const char *other, u64 length) const
+{
+    return (compare(other, length) > 0)
+}
+
+bool StringRepr::ge(const char *other, u64 length) const
+{
+    return (compare(other, length) >= 0)
+}
+
+u64 StringRepr::hash() const
+{
+    if (m_fixed_repr.m_short_repr) {
+        return kinara::utils::default_hash_function(m_repr.m_short_repr,
+                                                    strlen(m_repr.m_short_repr) + 1);
+    } else {
+        return m_repr.m_long_repr.m_hashcode;
+    }
+}
+
+void StringRepr::inc_ref() const
+{
+    m_fixed_repr.m_ref_count++;
+}
+
+void StringRepr::dec_ref() const
+{
+    m_fixed_repr.m_ref_count--;
+}
+
+i64 StringRepr::get_ref_count() const
+{
+    return m_fixed_repr.m_ref_count;
+}
+
+u64 StringRepr::size() const
+{
+    if (m_fixed_repr.m_short_repr) {
+        return strlen(m_repr.m_short_repr);
+    } else {
+        return m_repr.m_long_repr.m_length;
+    }
+}
+
+u64 StringRepr::length() const
+{
+    return size();
 }
 
 } /* end namespace string_detail_ */

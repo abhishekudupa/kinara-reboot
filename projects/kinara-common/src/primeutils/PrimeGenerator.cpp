@@ -52,12 +52,12 @@ PrimeGenerator::PrimeGenerator(bool stateless)
     }
 }
 
-inline void PrimeGenerator::process_next_k(u32 k)
+inline void PrimeGenerator::process_next_k(u64 k)
 {
-    kc::u32Vector work_list(k/2);
+    kc::u64Vector work_list(k/2);
     auto first = m_primes.back() + 2;
     auto last = first + k;
-    for (u32 i = first; i < last; i += 2) {
+    for (u64 i = first; i < last; i += 2) {
         work_list.push_back(i);
     }
 
@@ -65,15 +65,15 @@ inline void PrimeGenerator::process_next_k(u32 k)
         throw KinaraException("Exceeded maximum size for prime generator");
     }
 
-    u32 next_prime_index = 0;
+    u64 next_prime_index = 0;
     while (work_list.size() > 0) {
-        u32 num_primes = m_primes.size();
+        u64 num_primes = m_primes.size();
         for (; next_prime_index < num_primes; ++next_prime_index) {
             auto cur_prime = m_primes[next_prime_index];
-            u32 num_work_elems = work_list.size();
-            u32 next_work_list_index = 0;
+            u64 num_work_elems = work_list.size();
+            u64 next_work_list_index = 0;
 
-            for (u32 i = 0; i < num_work_elems; ++i) {
+            for (u64 i = 0; i < num_work_elems; ++i) {
                 if (work_list[i] % cur_prime == 0) {
                     continue;
                 }
@@ -85,7 +85,7 @@ inline void PrimeGenerator::process_next_k(u32 k)
                 return;
             }
             if (cur_prime * cur_prime >= work_list.back()) {
-                for (u32 i = 0; i < next_work_list_index; ++i) {
+                for (u64 i = 0; i < next_work_list_index; ++i) {
                     m_primes.push_back(work_list[i]);
                 }
                 return;
@@ -94,19 +94,19 @@ inline void PrimeGenerator::process_next_k(u32 k)
 
         auto cur_prime = m_primes.back();
         cur_prime = cur_prime * cur_prime;
-        u32 work_list_index;
+        u64 work_list_index;
         for (work_list_index = 0; work_list[work_list_index] <= cur_prime; ++work_list_index) {
             m_primes.push_back(work_list[work_list_index]);
         }
-        u32 j = 0;
-        for (u32 i = work_list_index, end = work_list.size(); i < end; ++i, ++j) {
+        u64 j = 0;
+        for (u64 i = work_list_index, end = work_list.size(); i < end; ++i, ++j) {
             work_list[j] = work_list[i];
         }
         work_list.resize(j);
     }
 }
 
-inline u32 PrimeGenerator::find_smallest_prime(u32 lower_bound)
+inline u64 PrimeGenerator::find_smallest_prime(u64 lower_bound)
 {
     u64 low = 0;
     u64 high = m_primes.size() - 1;
@@ -129,9 +129,9 @@ inline u32 PrimeGenerator::find_smallest_prime(u32 lower_bound)
     }
 }
 
-inline bool PrimeGenerator::is_prime(u32 candidate)
+inline bool PrimeGenerator::is_prime(u64 candidate)
 {
-    for (u32 i = 3; i * i <= candidate; ++i) {
+    for (u64 i = 3; i * i <= candidate; ++i) {
         if (candidate % i == 0) {
             return false;
         }
@@ -139,10 +139,10 @@ inline bool PrimeGenerator::is_prime(u32 candidate)
     return true;
 }
 
-inline u32 PrimeGenerator::find_smallest_prime(u32 lower_bound)
+inline u64 PrimeGenerator::find_smallest_prime(u64 lower_bound)
 {
-    u32 candidate = (lower_bound % 2 == 0 ? lower_bound + 1 : lower_bound);
-    for (; candidate != UINT32_MAX; candidate += 2) {
+    u64 candidate = (lower_bound % 2 == 0 ? lower_bound + 1 : lower_bound);
+    for (; candidate != UINT64_MAX; candidate += 2) {
         if (is_prime(candidate)) {
             return candidate;
         }
@@ -150,10 +150,10 @@ inline u32 PrimeGenerator::find_smallest_prime(u32 lower_bound)
     throw KinaraException("Reached maximum limit when searching for prime!");
 }
 
-u32 PrimeGenerator::get_next_prime(u32 lower_bound)
+u64 PrimeGenerator::get_next_prime(u64 lower_bound)
 {
     if (m_is_stateless) {
-        return find_next_prime(u32 lower_bound);
+        return find_next_prime(lower_bound);
     }
     if (m_primes.back() >= lower_bound) {
         return find_smallest_prime(lower_bound);

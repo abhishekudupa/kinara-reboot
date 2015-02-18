@@ -1,5 +1,5 @@
-// String.hpp ---
-// Filename: String.hpp
+// StringRepr.hpp ---
+// Filename: StringRepr.hpp
 // Author: Abhishek Udupa
 // Created: Mon Feb 16 02:08:35 2015 (-0500)
 //
@@ -35,13 +35,15 @@
 
 // Code:
 
-#if !defined KINARA_KINARA_COMMON_CONTAINERS_STRING_HPP_
-#define KINARA_KINARA_COMMON_CONTAINERS_STRING_HPP_
+#if !defined KINARA_KINARA_COMMON_CONTAINERS_STRING_REPR_HPP_
+#define KINARA_KINARA_COMMON_CONTAINERS_STRING_REPR_HPP_
 
 #include <array>
+#include <cstring>
 
 #include "../basetypes/KinaraBase.hpp"
 #include "../primeutils/PrimeGenerator.hpp"
+#include "../hashfuncs/HashFunctions.hpp"
 
 namespace kinara {
 namespace containers {
@@ -54,63 +56,129 @@ namespace ka = kinara::allocators;
 class StringRepr
 {
 private:
-    static constexpr u32 s_max_short = 24;
-    static constexpr float s_hash_table_resize_factor = 1.618;
-    static constexpr float s_hash_table_max_load_factor = 0.7;
-    static constexpr StringRepr* s_hash_table_deleted_value =
-        reinterpret_cast<StringRepr*>(0x1);
-    static constexpr StringRepr* s_hash_table_empty_value =
-        reinterpret_cast<StringRepr*>(nullptr);
+    static constexpr u32 s_max_compact = 32;
 
-    static StringRepr* s_repr_hash_table;
-    static u64 s_repr_hash_table_size;
-    static u64 s_repr_hash_table_used;
-    static kinara::utils PrimeGenerator s_prime_generator;
+    struct FixedRepr {
+        bool m_short_repr :  1;
+        mutable i64 m_ref_count   : 63;
 
-    u64 m_size;
-    i64 m_ref_count;
-    union ReprUnion {
-        std::array<char, m_max_compact> m_short_repr;
-        char* m_long_repr;
+        inline FixedRepr(bool short_repr)
+            : m_short_repr(short_repr), m_ref_count(0)
+        {
+            // Nothing here
+        }
+
+        inline FixedRepr()
+            : m_short_repr(false), m_ref_count(0)
+        {
+            // Nothing here
+        }
     };
+
+    FixedRepr m_fixed_repr;
+
+    struct LongRepr {
+        char* m_data;
+        // hash code INCLUDES the nul character
+        u64 m_hashcode;
+        // length WITHOUT the null character
+        u64 m_length;
+    };
+
+    typedef std::array<char, s_max_compact> ShortRepr;
+
+    union ReprUnion {
+        LongRepr m_long_repr;
+        ShortRepr m_short_repr;
+
+        inline ReprUnion()
+        {
+            // Nothing here
+        }
+
+        inline void initialize(const char* contents, u64 length)
+        {
+            // for the terminating nul character
+            ++length;
+
+            if (contents == nullptr || length == 0) {
+                memset(m_short_repr.data(), 0, s_max_compact);
+                return;
+            }
+
+            if (length > s_max_compact) {
+                auto data = ka::casted_allocate_raw_cleared<char>(length);
+                memcpy(data, contents, length);
+                auto hashcode = kinara::utils::default_hash_function(data, length);
+                m_long_repr.m_data = data;
+                m_long_repr.m_hashcode = hashcode;
+                m_long_repr.m_length = length - 1;
+            } else {
+                memset(m_short_repr.data(), 0, s_max_compact);
+                memcpy(m_short_repr.data(), contents, length);
+            }
+        }
+
+        inline ReprUnion(const char* contents, u64 length)
+        {
+            initialize(contents, length);
+        }
+
+        inline ~ReprUnion()
+        {
+            // do nothing, it's not for me to decide.
+        }
+    };
+
     ReprUnion m_repr;
 
-    static inline void expand_hash_table();
-    static inline void garbage_collect();
+    StringRepr(const StringRepr& other) = delete;
+    StringRepr(StringRepr&& other) = delete;
+
+    StringRepr& operator = (const StringRepr& other) = delete;
+    StringRepr& operator = (StringRepr&& other) = delete;
+    i32 compare(const StringRepr& other) const;
+    i32 compare(const char* other, u64 length) const;
 
 public:
+    StringRepr();
+    StringRepr(const char* contents);
+    StringRepr(const char* contents, u64 length);
+
+    ~StringRepr();
+    const char* c_str() const;
+    bool operator == (const StringRepr& other) const;
+    bool operator != (const StringRepr& other) const;
+    bool operator < (const StringRepr& other) const;
+    bool operator <= (const StringRepr& other) const;
+    bool operator > (const StringRepr& other) const;
+    bool operator >= (const StringRepr& other) const;
+
+    // all lengths here are WITHOUT the nul character
+    bool equals(const char* other, u64 length) const;
+    bool nequals(const char* other, u64 length) const;
+    bool lt(const char* other, u64 length) const;
+    bool gt(const char* other, u64 length) const;
+    bool le(const char* other, u64 length) const;
+    bool ge(const char* other, u64 length) const;
+
+    u64 hash() const;
+    void inc_ref() const;
+    void dec_ref() const;
+    i64 get_ref_count() const;
+    u64 size() const;
+    u64 length() const;
     static StringRepr* make_repr(const char* contents);
+    static StringRepr* make_repr(const char* contents, u64 length);
 };
 
 } /* end namespace string_detail_ */
 
-class String
-{
-private:
-    StringRepr* m_the_repr;
-
-public:
-    String(const char* contents);
-    ~String();
-
-    const char* c_str() const;
-};
-
-inline operator String () (const char* char_data)
-{
-    return String(char_data);
-}
-
-inline std::ostream& operator << (std::ostream& out_stream,
-                                  const String& the_string)
-{
-    out << the_string.c_str() << endl;
-}
 
 } /* end namespace containers */
 } /* end namespace kinara */
 
-#endif /* KINARA_KINARA_COMMON_CONTAINERS_STRING_HPP_ */
+#endif /* KINARA_KINARA_COMMON_CONTAINERS_STRING_REPR_HPP_ */
 
 //
-// String.hpp ends here
+// StringRepr.hpp ends here
