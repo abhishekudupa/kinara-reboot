@@ -52,15 +52,19 @@ class CompileAndExecuteTest(CompileTest):
                                                     compiler_flags, executable_name, keep_executable)
         self.executable_args = executable_args
         self.expected_output = expected_output;
+        self.actual_keep_executable = self.keep_executable
+        self.keep_executable = True
 
     def execute_test(self):
         (compile_status, compile_output, compile_error) = super(CompileAndExecuteTest, self).execute_test()
+        self.keep_executable = self.actual_keep_executable
         if (compile_status != 0):
             return (compile_status, compile_output, compile_error)
         if (isinstance(self.executable_args, str)):
             executable_args = shlex.split(self.executable_args)
         else:
             executable_args = self.executable_args
+
         command_args = [self.executable_name] + executable_args
         test_process = subprocess.Popen(command_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         (test_output, test_error) = test_process.communicate()

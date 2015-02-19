@@ -13,6 +13,10 @@ The tests are categorized as follows:
        kinara build system to produce the configuration .h file (if
        specified) by replacing the '#config_define(key)' directives
        with "#define key value" macros, (idenfified by a -config.cpp) suffix
+   1c. Feature tests, which output again, a sequence of key value
+       pairs, but these do not go into the config file, instead they
+       are used to set variables in the build config. e.g. CXXFLAGS =
+       -O3 implies to append -O3 to the CXXFLAGS variable
 
 2. Python tests:
    These can again be of three kinds:

@@ -44,7 +44,7 @@ using namespace std;
 
 int main()
 {
-    if (sizeof(void*) != 0) {
+    if (sizeof(void*) != 8) {
         cout << "Test for 64 bit platform failed!" << endl;
         cerr << "Test for 64 bit platform failed!" << endl;
         exit(1);
