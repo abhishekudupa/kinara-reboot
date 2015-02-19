@@ -1,0 +1,23 @@
+Tests in this directory are executed by the kinara build system.
+The tests are categorized as follows:
+1. C++ tests: which are built and executed per the build instructions
+   in corresponding -buildinfo.py scripts (if exists, the
+   -buildinfo.py must evaluate to a single string, which contains
+   additional command line arguments to pass to the compiler)
+
+   C++ tests are further categorized into:
+   1a. Pass/fail tests, where only the return code is examined
+       (idenfied by a -pass-fail.cpp suffix)
+   1b. Configuration tests, where the output of the test is a sequence
+       of key = value pairs, one per line. These are used by the
+       kinara build system to produce the configuration .h file (if
+       specified) by replacing the '#config_define(key)' directives
+       with "#define key value" macros, (idenfified by a -config.cpp) suffix
+
+2. Python tests:
+   These can again be of three kinds:
+   2a. Pass/fail tests.
+   2b. Configuration tests, which are as in the case of the C++ tests
+       (identified by -config.py suffix)
+   2c. Feature tests, which return a string representing compiler
+       flags (identified by a -feature-test.py suffix)

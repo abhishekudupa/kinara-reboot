@@ -131,7 +131,8 @@ static inline u64 city_hash_64_with_seed(const void* data, u64 length, u64 seed)
 static inline u64 city_hash_64_with_seeds(const void* data, u64 length,
                                           u64 seed1, u64 seed2)
 {
-    return cityhash_detail_::CityHash64WithSeeds(static_cast<const char*>(data), length, seed1, seed2);
+    return cityhash_detail_::CityHash64WithSeeds(static_cast<const char*>(data),
+                                                 length, seed1, seed2);
 }
 
 static inline u32 city_hash_32(const void* data, u64 length)
@@ -144,8 +145,7 @@ static inline u128 city_hash_128(const void* data, u64 length)
     return cityhash_detail_::CityHash128(static_cast<const char*>(data), length);
 }
 
-static inline u128 city_hash_128_with_seed(const void* data,
-                                           u64 length,
+static inline u128 city_hash_128_with_seed(const void* data, u64 length,
                                            u64 seed1, u64 seed2)
 {
     return cityhash_detail_::CityHash128WithSeed(static_cast<const char*>(data), length,

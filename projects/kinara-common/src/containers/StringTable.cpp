@@ -118,7 +118,8 @@ inline const StringRepr* StringTable::find(const char* string_value, u64 length)
 inline const StringRepr* StringTable::insert(const char* string_value, u64 length)
 {
     expand_table();
-    return insert_into_table(string_value, length, hash_table(), hash_table_size());
+    auto retval = insert_into_table(string_value, length, hash_table(), hash_table_size());
+    ++(hash_table_used());
 }
 
 // precondition:
@@ -280,6 +281,7 @@ inline void StringTable::garbage_collect()
     ka::deallocate_raw(the_table, table_size);
     hash_table() = new_table;
     hash_table_size() = new_table_size;
+    hash_table_used() = table_used;
     return;
 }
 
