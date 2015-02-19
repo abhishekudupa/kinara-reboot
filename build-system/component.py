@@ -15,5 +15,11 @@ class ComponentBase(object):
     def generate_makefile(self, output_file):
         pass
 
-class SourceFile(ComponentBase):
-    def __init__(self, name,
+class ObjectFile(ComponentBase):
+    def __init__(self, name, source_filepath, object_filepath):
+        super(ObjectFile, self).__init__(name)
+        self.source_filepath = source_filepath
+        self.object_filepath = object_filepath
+
+    def generate_makefile(self. output_file):
+        pass

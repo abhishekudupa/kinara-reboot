@@ -76,7 +76,7 @@ void* MemoryManager::allocate(u64 size)
     s_peak_bytes_allocated = (s_total_bytes_allocated > s_peak_bytes_allocated ?
                               s_total_bytes_allocated : s_peak_bytes_allocated);
 
-    u64* block_ptr = reinterpret_cast<u64*>(malloc(size));
+    u64* block_ptr = static_cast<u64*>(malloc(size));
     if (block_ptr == nullptr) {
         throw OutOfMemoryError();
     }
@@ -99,7 +99,7 @@ void* MemoryManager::allocate_cleared(u64 size)
     s_peak_bytes_allocated = (s_total_bytes_allocated > s_peak_bytes_allocated ?
                               s_total_bytes_allocated : s_peak_bytes_allocated);
 
-    u64* block_ptr = reinterpret_cast<u64*>(calloc(size, 1));
+    u64* block_ptr = static_cast<u64*>(calloc(size, 1));
     if (block_ptr == nullptr) {
         throw OutOfMemoryError();
     }
@@ -156,9 +156,9 @@ void MemoryManager::deallocate(const void* block_ptr)
     if (block_ptr == nullptr) {
         return;
     }
-    u64* actual_block_ptr = (reinterpret_cast<u64*>(block_ptr) - 1);
+    auto actual_block_ptr = (static_cast<const u64*>(block_ptr) - 1);
     s_total_bytes_allocated -= *actual_block_ptr;
-    free(actual_block_ptr);
+    free(const_cast<u64*>(actual_block_ptr));
 }
 
 void MemoryManager::deallocate_raw(const void* block_ptr, u64 size)
@@ -167,7 +167,7 @@ void MemoryManager::deallocate_raw(const void* block_ptr, u64 size)
         return;
     }
     s_total_bytes_allocated -= size;
-    free(block_ptr);
+    free(const_cast<void*>(block_ptr));
 }
 
 void MemoryManager::set_allocation_limit(u64 allocation_limit)
