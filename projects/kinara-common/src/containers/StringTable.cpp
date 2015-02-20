@@ -76,6 +76,16 @@ inline u64& StringTable::hash_table_used()
     return the_hash_table_used;
 }
 
+inline bool StringTable::is_slot_nonused(const StringRepr* slot_ptr)
+{
+    return ((u64)slot_ptr == s_nonused_slot_marker);
+}
+
+inline bool StringTable::is_slot_deleted(const StringRepr* slot_ptr)
+{
+    return ((u64)slot_ptr == s_deleted_slot_marker);
+}
+
 inline const StringRepr* StringTable::find(const char* string_value, u64 length)
 {
     auto the_hash_table = hash_table();
@@ -99,7 +109,7 @@ inline const StringRepr* StringTable::find(const char* string_value, u64 length)
 
     auto index = h1 % the_hash_table_size;
     auto entry = the_hash_table[index];
-    while (entry != s_nonused_slot_marker) {
+    while (!is_slot_nonused(entry)) {
         if (entry->equals(string_value, length)) {
             return entry;
         }
@@ -135,8 +145,7 @@ inline const StringRepr* StringTable::insert_into_table(const char* string_value
     bool h2_computed = false;
     auto index = h1 % table_size;
     auto entry = string_table[index];
-    while (entry != s_nonused_slot_marker &&
-           entry != s_deleted_slot_marker) {
+    while (!is_slot_nonused(entry) && !is_slot_deleted(entry)) {
         if (!h2_computed) {
             h2 = ku::city_hash_64(string_value, length+1);
             h2_computed = true;
@@ -166,8 +175,7 @@ inline const StringRepr* StringTable::move_into_table(StringRepr* repr_ptr,
     bool h2_computed = false;
     auto index = h1 % table_size;
     auto entry = string_table[index];
-    while (entry != s_nonused_slot_marker &&
-           entry != s_deleted_slot_marker) {
+    while (!is_slot_nonused(entry) && !is_slot_deleted(entry)) {
         if (!h2_computed) {
             h2 = ku::city_hash_64(string_value, length+1);
             h2_computed = true;
@@ -216,12 +224,11 @@ inline void StringTable::expand_table()
 
     for (u64 i = 0; i < table_size; ++i) {
         auto entry = the_table[i];
-        if (entry == s_nonused_slot_marker ||
-            entry == s_deleted_slot_marker) {
+        if (is_slot_nonused(entry) || is_slot_deleted(entry)) {
             continue;
         }
         move_into_table(entry, new_table, new_table_size);
-        the_table[i] = s_nonused_slot_marker;
+        the_table[i] = (StringRepr*)s_nonused_slot_marker;
     }
 
     // free the old table and set the appropriate variables
@@ -242,13 +249,12 @@ inline void StringTable::garbage_collect()
 
     for (u64 i = 0; i < table_size; ++i) {
         auto entry = the_table[i];
-        if (entry == s_nonused_slot_marker ||
-            entry == s_deleted_slot_marker) {
+        if (is_slot_nonused(entry) || is_slot_deleted(entry)) {
             continue;
         }
         if (entry->get_ref_count() == 0) {
             ka::deallocate_object_raw(entry, sizeof(StringRepr));
-            the_table[i] = s_deleted_slot_marker;
+            the_table[i] = (StringRepr*)s_deleted_slot_marker;
             --table_used;
         }
     }
@@ -271,12 +277,11 @@ inline void StringTable::garbage_collect()
 
     for (u64 i = 0; i < table_size; ++i) {
         auto entry = the_table[i];
-        if (entry == s_nonused_slot_marker ||
-            entry == s_deleted_slot_marker) {
+        if (is_slot_nonused(entry) || is_slot_deleted(entry)) {
             continue;
         }
         move_into_table(entry, new_table, new_table_size);
-        the_table[i] = s_nonused_slot_marker;
+        the_table[i] = (StringRepr*)s_nonused_slot_marker;
     }
 
     ka::deallocate_raw(the_table, table_size);
@@ -303,8 +308,7 @@ void StringTable::finalize()
 
     for (u64 i = 0; i < table_size; ++i) {
         auto entry = the_table[i];
-        if (entry == s_nonused_slot_marker ||
-            entry == s_deleted_slot_marker) {
+        if (is_slot_nonused(entry) || is_slot_deleted(entry)) {
             continue;
         }
         ka::deallocate_object_raw(entry, sizeof(StringRepr));

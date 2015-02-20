@@ -638,7 +638,6 @@ public:
         }
 
         ConstructFunc the_construct_func;
-        u64 i = 0;
         for (u64 i = 0; i < size; ++i) {
             the_construct_func(&(m_data[i]), value);
         }

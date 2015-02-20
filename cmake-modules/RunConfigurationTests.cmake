@@ -3,7 +3,7 @@ try_run(_RUN_RESULT_VAR _COMPILE_RESULT_VAR "${CMAKE_CURRENT_BINARY_DIR}"
   "${CMAKE_SOURCE_DIR}/cmake-modules/cmake-tests/test-64-bit.cpp"
   COMPILE_DEFINITIONS "${CMAKE_CXX_FLAGS}")
 if(_COMPILE_RESULT_VAR AND NOT _RUN_RESULT_VAR)
-  message(STATUS "64 bit system test passed")
+  message(STATUS "Kinara: 64 bit system test passed")
 elseif(_COMPILE_RESULT_VAR AND _RUN_RESULT_VAR)
   message(FATAL_ERROR "Kinara: 64 bit system test failed. Kinara currently only supports 64-bit platforms")
 else()

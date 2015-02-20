@@ -71,10 +71,8 @@ private:
     StringTable& operator = (StringTable&&) = delete;
 
     // constants used as deleted and unused values in the hash table
-    static constexpr StringRepr* s_nonused_slot_marker =
-        reinterpret_cast<StringRepr*>(0x0);
-    static constexpr StringRepr* s_deleted_slot_marker =
-        reinterpret_cast<StringRepr*>(0x1);
+    static constexpr u64 s_nonused_slot_marker = (0x0);
+    static constexpr u64 s_deleted_slot_marker = (0x1);
 
     // actually configurable parameters, which are set to the
     // values above by default
@@ -85,6 +83,9 @@ private:
     static inline StringRepr**& hash_table();
     static inline u64& hash_table_size();
     static inline u64& hash_table_used();
+
+    static inline bool is_slot_nonused(const StringRepr* slot_ptr);
+    static inline bool is_slot_deleted(const StringRepr* slot_ptr);
 
     static inline const StringRepr* find(const char* string_value, u64 length);
     static inline const StringRepr* insert_into_table(const char* string_value,
