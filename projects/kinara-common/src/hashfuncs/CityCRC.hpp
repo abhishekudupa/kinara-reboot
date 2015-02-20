@@ -51,13 +51,13 @@ void CityHashCrc256(const char *s, size_t len, uint64 *result);
 
 } /* end namespace cityhash_detail_ */
 
-static inline uint128 city_hash_crc_128(const char* s, u64 len)
+static inline u128 city_hash_crc_128(const char* s, u64 len)
 {
     return cityhash_detail_::CityHashCrc128(s, len);
 }
 
-static inline uint128 city_hash_crc_128_with_seed(const char* data, u64 length,
-                                                  uint64 seed1, uint64 seed2)
+static inline u128 city_hash_crc_128_with_seed(const char* data, u64 length,
+                                               u64 seed1, u64 seed2)
 {
     return cityhash_detail_::CityHashCrc128WithSeed(data, length, std::make_pair(seed1, seed2));
 }

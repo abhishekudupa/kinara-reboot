@@ -48,7 +48,7 @@ namespace containers {
 namespace string_detail_ {
 
 StringRepr::StringRepr()
-    : m_fixed_repr(true), m_repr(nullptr)
+    : m_fixed_repr(true), m_repr(nullptr, 0)
 {
     // Nothing here
 }
@@ -66,15 +66,15 @@ StringRepr::StringRepr(const char* contents, u64 length)
     m_repr.initialize(contents, length);
 }
 
-i32 StringRepr::compare(const char* other, u64 length)
+i32 StringRepr::compare(const char* other, u64 length) const
 {
     if (m_fixed_repr.m_short_repr) {
-        auto length_mine = strlen(m_repr.m_short_repr);
+        auto length_mine = strlen(m_repr.m_short_repr.data());
         auto diff = length_mine - length;
         if (diff != 0) {
             return diff;
         }
-        return memcmp(m_repr.m_short_repr, other, length);
+        return memcmp(m_repr.m_short_repr.data(), other, length);
     } else {
         auto length_mine = m_repr.m_long_repr.m_length;
         auto diff = length_mine - length;
@@ -188,29 +188,29 @@ bool StringRepr::nequals(const char *other, u64 length) const
 
 bool StringRepr::lt(const char *other, u64 length) const
 {
-    return (compare(other, length) < 0)
+    return (compare(other, length) < 0);
 }
 
 bool StringRepr::le(const char *other, u64 length) const
 {
-    return (compare(other, length) <= 0)
+    return (compare(other, length) <= 0);
 }
 
 bool StringRepr::gt(const char *other, u64 length) const
 {
-    return (compare(other, length) > 0)
+    return (compare(other, length) > 0);
 }
 
 bool StringRepr::ge(const char *other, u64 length) const
 {
-    return (compare(other, length) >= 0)
+    return (compare(other, length) >= 0);
 }
 
 u64 StringRepr::hash() const
 {
     if (m_fixed_repr.m_short_repr) {
-        return kinara::utils::default_hash_function(m_repr.m_short_repr,
-                                                    strlen(m_repr.m_short_repr) + 1);
+        return kinara::utils::default_hash_function(m_repr.m_short_repr.data(),
+                                                    strlen(m_repr.m_short_repr.data()) + 1);
     } else {
         return m_repr.m_long_repr.m_hashcode;
     }
@@ -234,7 +234,7 @@ i64 StringRepr::get_ref_count() const
 u64 StringRepr::size() const
 {
     if (m_fixed_repr.m_short_repr) {
-        return strlen(m_repr.m_short_repr);
+        return strlen(m_repr.m_short_repr.data());
     } else {
         return m_repr.m_long_repr.m_length;
     }

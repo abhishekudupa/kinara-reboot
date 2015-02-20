@@ -94,6 +94,9 @@ static inline u64 default_hash_function(const void* data, u64 length)
         return fnv_hash_64a(data, length);
     case HashFunctionType::MurmurHash:
         return murmur_hash_64(data, length);
+    default:
+        // unreachable
+        return 0;
     }
 }
 
@@ -110,6 +113,9 @@ static inline u64 default_hash_function(const void* data, u64 length, u64 seed)
         return fnv_hash_64a(data, length, seed);
     case HashFunctionType::MurmurHash:
         return murmur_hash_64(data, length, seed);
+    default:
+        // unreachable
+        return 0;
     }
 }
 

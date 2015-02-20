@@ -1,2 +1,4 @@
-
-add_library(kinara-common-allocators OBJECT MemoryManager.cpp SmallBlockAllocator.cpp)
+define_lib_module("kinara-common-allocators"
+  MemoryManager.cpp
+  SmallBlockAllocator.cpp
+)

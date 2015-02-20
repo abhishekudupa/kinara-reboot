@@ -128,7 +128,7 @@ static uint32 Hash32Len0to4(const char *s, size_t len)
 {
     uint32 b = 0;
     uint32 c = 9;
-    for (int i = 0; i < len; i++) {
+    for (u64 i = 0; i < len; i++) {
         signed char v = s[i];
         b = b * c1 + v;
         c ^= b;

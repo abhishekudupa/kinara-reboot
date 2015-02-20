@@ -139,15 +139,17 @@ inline bool PrimeGenerator::is_prime(u64 candidate)
     return true;
 }
 
-inline u64 PrimeGenerator::find_smallest_prime(u64 lower_bound)
+inline u64 PrimeGenerator::find_next_prime(u64 lower_bound)
 {
-    u64 candidate = (lower_bound % 2 == 0 ? lower_bound + 1 : lower_bound);
-    for (; candidate != UINT64_MAX; candidate += 2) {
+    if (lower_bound % 2 == 0) {
+        ++lower_bound;
+    }
+    for (auto candidate = lower_bound; candidate < UINT64_MAX; ++candidate) {
         if (is_prime(candidate)) {
             return candidate;
         }
     }
-    throw KinaraException("Reached maximum limit when searching for prime!");
+    throw KinaraException("Exceeded maximum size for prime generator");
 }
 
 u64 PrimeGenerator::get_next_prime(u64 lower_bound)

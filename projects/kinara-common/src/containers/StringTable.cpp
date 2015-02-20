@@ -94,7 +94,7 @@ inline const StringRepr* StringTable::find(const char* string_value, u64 length)
     // okay, we begin searching the hash table
     // include the nul byte in the hash
     auto h1 = ku::spooky_hash_64(string_value, length+1);
-    u64 h2;
+    u64 h2 = 0;
     bool h2_computed = false;
 
     auto index = h1 % the_hash_table_size;
@@ -120,6 +120,7 @@ inline const StringRepr* StringTable::insert(const char* string_value, u64 lengt
     expand_table();
     auto retval = insert_into_table(string_value, length, hash_table(), hash_table_size());
     ++(hash_table_used());
+    return retval;
 }
 
 // precondition:

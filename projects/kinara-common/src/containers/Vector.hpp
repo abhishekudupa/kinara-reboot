@@ -490,7 +490,7 @@ public:
         if (new_size < old_size) {
             DestructFunc the_destruct_func;
             for (u64 i = new_size; i < old_size; ++i) {
-                the_destruct_func(&(m_data[i]));
+                the_destruct_func(m_data[i]);
             }
             set_size(new_size);
             compact();
@@ -696,7 +696,7 @@ public:
     void pop_back()
     {
         DestructFunc the_destruct_func;
-        the_destruct_func(&(m_data[get_size() - 1]));
+        the_destruct_func(m_data[get_size() - 1]);
         set_size(get_size() - 1);
     }
 
@@ -768,7 +768,7 @@ public:
     {
         auto distance_from_begin = std::distance(begin(), position);
         DestructFunc the_destruct_func;
-        the_destruct_func(position);
+        the_destruct_func(*position);
         memmove(position, position + 1, sizeof(T) * std::distance(position + 1, end()));
         set_size(get_size() - 1);
         compact();
@@ -781,7 +781,7 @@ public:
         auto num_deleted_elements = std::distance(first, last);
         DestructFunc the_destruct_func;
         for (auto it = first; it != last; ++it) {
-            the_destruct_func(it);
+            the_destruct_func(*it);
         }
         memmove(first, first + num_deleted_elements,
                 sizeof(T) * std::distance(first + num_deleted_elements, end()));
