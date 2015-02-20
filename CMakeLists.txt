@@ -87,3 +87,13 @@ foreach(_KINARA_LIB_PROJECT ${KINARA_LIB_PROJECTS})
     endif()
   endforeach(_BUILD_TYPE)
 endforeach(_KINARA_LIB_PROJECT)
+
+foreach(_BUILD_TYPE ${KINARA_BUILD_TYPES})
+  set(_DEP_TARGETS "")
+
+  foreach(_KINARA_PROJECT ${KINARA_PROJECTS})
+    set(_DEP_TARGETS "${_KINARA_PROJECT}-${_BUILD_TYPE}")
+  endforeach(_KINARA_PROJECT)
+
+  add_custom_target(${_BUILD_TYPE} DEPENDS ${_DEP_TARGETS})
+endforeach(_BUILD_TYPE)
