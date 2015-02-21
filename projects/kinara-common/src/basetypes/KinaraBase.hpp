@@ -37,8 +37,8 @@
 
 // Code:
 
-#if !defined KINARA_COMMON_KINARA_BASE_HPP_
-#define KINARA_COMMON_KINARA_BASE_HPP_
+#if !defined KINARA_KINARA_COMMON_BASETYPES_KINARA_BASE_HPP_
+#define KINARA_KINARA_COMMON_BASETYPES_KINARA_BASE_HPP_
 
 // check that we're on a 64 bit machine
 #if (__SIZEOF_POINTER__ < 8)
@@ -69,7 +69,8 @@ typedef std::int64_t  i64;
 
 } /* end namespace kinara */
 
-#endif /* KINARA_COMMON_KINARA_BASE_HPP_ */
+
+#endif /* KINARA_KINARA_COMMON_BASETYPES_KINARA_BASE_HPP_ */
 
 //
 // KinaraBase.hpp ends here

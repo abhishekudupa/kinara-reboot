@@ -67,7 +67,7 @@ void* MemoryManager::allocate(u64 size)
     if (size == 0) {
         return nullptr;
     }
-    auto actual_size = size + (sizeof(u64));
+    auto actual_size = size + sc_block_header_size;
 
     if (s_total_bytes_allocated + actual_size > s_memory_allocation_limit) {
         throw OutOfMemoryError();
@@ -89,7 +89,7 @@ void* MemoryManager::allocate_cleared(u64 size)
     if (size == 0) {
         return nullptr;
     }
-    auto actual_size = size + (sizeof(u64));
+    auto actual_size = size + sc_block_header_size;
 
     if (s_total_bytes_allocated + actual_size > s_memory_allocation_limit) {
         throw OutOfMemoryError();

@@ -56,7 +56,7 @@ namespace ka = kinara::allocators;
 class StringRepr
 {
 private:
-    static constexpr u32 s_max_compact = 32;
+    static constexpr u32 sc_max_compact = 32;
 
     struct FixedRepr {
         bool m_short_repr :  1;
@@ -85,7 +85,7 @@ private:
         u64 m_length;
     };
 
-    typedef std::array<char, s_max_compact> ShortRepr;
+    typedef std::array<char, sc_max_compact> ShortRepr;
 
     union ReprUnion {
         LongRepr m_long_repr;
@@ -102,11 +102,11 @@ private:
             ++length;
 
             if (contents == nullptr || length == 0) {
-                memset(m_short_repr.data(), 0, s_max_compact);
+                memset(m_short_repr.data(), 0, sc_max_compact);
                 return;
             }
 
-            if (length > s_max_compact) {
+            if (length > sc_max_compact) {
                 auto data = ka::casted_allocate_raw_cleared<char>(length);
                 memcpy(data, contents, length);
                 auto hashcode = kinara::utils::default_hash_function(data, length);
@@ -114,7 +114,7 @@ private:
                 m_long_repr.m_hashcode = hashcode;
                 m_long_repr.m_length = length - 1;
             } else {
-                memset(m_short_repr.data(), 0, s_max_compact);
+                memset(m_short_repr.data(), 0, sc_max_compact);
                 memcpy(m_short_repr.data(), contents, length);
             }
         }

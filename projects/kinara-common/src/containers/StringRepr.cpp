@@ -56,13 +56,13 @@ StringRepr::StringRepr()
 StringRepr::StringRepr(const char* contents)
 {
     auto length = strlen(contents);
-    m_fixed_repr.m_short_repr = (length < s_max_compact);
+    m_fixed_repr.m_short_repr = (length < sc_max_compact);
     m_repr.initialize(contents, length);
 }
 
 StringRepr::StringRepr(const char* contents, u64 length)
 {
-    m_fixed_repr.m_short_repr = (length < s_max_compact);
+    m_fixed_repr.m_short_repr = (length < sc_max_compact);
     m_repr.initialize(contents, length);
 }
 

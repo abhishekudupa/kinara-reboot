@@ -1,3 +1,5 @@
+include(CheckLibraryExists)
+
 message(STATUS "Kinara: Testing for 64 bit system...")
 try_run(_RUN_RESULT_VAR _COMPILE_RESULT_VAR "${CMAKE_CURRENT_BINARY_DIR}"
   "${CMAKE_SOURCE_DIR}/cmake-modules/cmake-tests/test-64-bit.cpp"
@@ -36,3 +38,28 @@ else()
 endif()
 
 message(STATUS "Kinara: Using base CXXFLAGS = \"${CMAKE_CXX_FLAGS}\"")
+
+# find if we have a gdb
+execute_process(COMMAND "which" "gdb" RESULT_VARIABLE _RESULT_VARIABLE
+  OUTPUT_VARIABLE _OUT_VAR ERROR_VARIABLE _OUT_VAR)
+string(STRIP ${_OUT_VAR} _PATH_TO_GDB)
+if(RESULT_VARIABLE)
+  message(STATUS "Kinara: No gdb found, disabling debug feaures on all builds")
+  set(KINARA_CFG_HAVE_GDB_ OFF)
+  set(KINARA_CFG_PATH_TO_GDB_ "#error \"No GDB found, but tried to invoke debugger. Please contact maintainer\"")
+else()
+  message(STATUS "Kinara: Using gdb: \"${_PATH_TO_GDB}\" and enabling debug features on debug builds")
+  set(KINARA_CFG_HAVE_GDB_ ON)
+  set(KINARA_CFG_PATH_TO_GDB_ "\"${_PATH_TO_GDB}\"")
+endif()
+
+set(KINARA_CFG_HAVE_GDB_ OFF)
+set(KINARA_CFG_PATH_TO_GDB_ "#error \"No GDB found, but tried to invoke debugger. Please contact maintainer\"")
+
+message(STATUS "Kinara: Checking for librt")
+CHECK_LIBRARY_EXISTS(rt timer_create "time.h" KINARA_CFG_HAVE_LIBRT_)
+if(NOT KINARA_CFG_HAVE_LIBRT_)
+  message(STATUS "Kinara: Could not find librt, all timer related functionality will be disabled!")
+else()
+  message(STATUS "Kinara: librt exists, all timer related functionality will be enabled!")
+endif()

@@ -35,8 +35,8 @@
 
 // Code:
 
-#if !defined KINARA_KINARA_COMMON_KINARA_TYPES_HPP_
-#define KINARA_KINARA_COMMON_KINARA_TYPES_HPP_
+#if !defined KINARA_KINARA_COMMON_BASETYPES_KINARA_TYPES_HPP_
+#define KINARA_KINARA_COMMON_BASETYPES_KINARA_TYPES_HPP_
 
 #include <ostream>
 #include <type_traits>
@@ -77,6 +77,13 @@ private:
             // Nothing here
         }
 
+        inline HashValue(const HashValue& other)
+            : m_hash_valid(other.m_hash_valid),
+              m_hash_value(other.m_hash_value)
+        {
+            // Nothing here
+        }
+
         inline HashValue(u64 hash_value)
             : m_hash_valid(true), m_hash_value(hash_value)
         {
@@ -109,7 +116,18 @@ private:
     HashValue m_hash_value;
 
 public:
-    Hashable();
+    inline Hashable()
+        : m_hash_value()
+    {
+        // Nothing here
+    }
+
+    inline Hashable(const Hashable& other)
+        : m_hash_value(other.m_hash_value)
+    {
+        // Nothing here
+    }
+
     virtual ~Hashable();
 
     u64 hash() const
@@ -164,6 +182,36 @@ public:
     inline bool operator >= (const Comparable& other) const
     {
         return (compare(other) >= 0);
+    }
+};
+
+class Interruptible
+{
+protected:
+    mutable volatile bool m_interrupted;
+
+public:
+    // one shot interruptible or
+    // repeated interrupts?
+    inline Interruptible()
+        : m_interrupted(false)
+    {
+        // Nothing here
+    }
+
+    virtual ~Interruptible()
+    {
+        // Nothing here
+    }
+
+    inline void interrupt() const
+    {
+        m_interrupted = true;
+    }
+
+    inline void reset_interrupted() const
+    {
+        m_interrupted = false;
     }
 };
 
@@ -275,7 +323,7 @@ static inline u64 get_hash_value(const Hashable* object_ptr)
 
 } /* end namespace kinara */
 
-#endif /* KINARA_KINARA_COMMON_KINARA_TYPES_HPP_ */
+#endif /* KINARA_KINARA_COMMON_BASETYPES_KINARA_TYPES_HPP_ */
 
 //
 // KinaraTypes.hpp ends here

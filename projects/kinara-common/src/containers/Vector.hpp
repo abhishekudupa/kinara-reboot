@@ -84,8 +84,8 @@ public:
 private:
     T* m_data;
 
-    static constexpr u64 s_array_overhead = (sizeof(u64) * 2);
-    static constexpr u64 s_max_size = (UINT64_MAX - s_array_overhead) / sizeof(ValueType);
+    static constexpr u64 sc_array_overhead = (sizeof(u64) * 2);
+    static constexpr u64 sc_max_size = (UINT64_MAX - sc_array_overhead) / sizeof(ValueType);
 
     inline u64 get_size() const
     {
@@ -125,7 +125,7 @@ private:
             return 0;
         }
         return ((*((static_cast<u64*>(static_cast<void*>(m_data))) - 2) *
-                 sizeof(T)) + s_array_overhead);
+                 sizeof(T)) + sc_array_overhead);
     }
 
     inline void call_destructors() const
@@ -138,7 +138,7 @@ private:
 
     inline T* allocate_data(u64 num_elements)
     {
-        auto retval = ka::casted_allocate_raw<T>(sizeof(T) * num_elements + s_array_overhead);
+        auto retval = ka::casted_allocate_raw<T>(sizeof(T) * num_elements + sc_array_overhead);
         auto retval_as_ptr_to_u64 = static_cast<u64*>(static_cast<void*>(retval));
         return static_cast<T*>(static_cast<void*>(retval_as_ptr_to_u64 + 2));
     }
@@ -481,7 +481,7 @@ public:
 
     u64 max_size() const
     {
-        return UINT64_MAX;
+        return sc_max_size;
     }
 
     void resize(u64 new_size, const ValueType& value = ValueType())

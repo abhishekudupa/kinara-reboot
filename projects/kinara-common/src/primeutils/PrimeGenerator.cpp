@@ -61,7 +61,7 @@ inline void PrimeGenerator::process_next_k(u64 k)
         work_list.push_back(i);
     }
 
-    if (m_primes.size() > MaxPrimeListSize) {
+    if (m_primes.size() > sc_max_prime_list_size) {
         throw KinaraException("Exceeded maximum size for prime generator");
     }
 

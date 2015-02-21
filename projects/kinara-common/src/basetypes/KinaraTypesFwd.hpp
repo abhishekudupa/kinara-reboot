@@ -1,7 +1,7 @@
-// PrimeGenerator.hpp ---
-// Filename: PrimeGenerator.hpp
+// KinaraTypesFwd.hpp ---
+// Filename: KinaraTypesFwd.hpp
 // Author: Abhishek Udupa
-// Created: Mon Feb 16 13:59:20 2015 (-0500)
+// Created: Sat Feb 21 13:50:30 2015 (-0500)
 //
 // Copyright (c) 2013, Abhishek Udupa, University of Pennsylvania
 // All rights reserved.
@@ -35,42 +35,27 @@
 
 // Code:
 
-#if !defined KINARA_KINARA_COMMON_PRIMEUTILS_PRIME_GENERATOR_HPP_
-#define KINARA_KINARA_COMMON_PRIMEUTILS_PRIME_GENERATOR_HPP_
+#if !defined KINARA_KINARA_COMMON_BASETYPES_KINARA_TYPES_FWD_HPP_
+#define KINARA_KINARA_COMMON_BASETYPES_KINARA_TYPES_FWD_HPP_
 
-#include "../basetypes/KinaraBase.hpp"
-#include "../containers/Vector.hpp"
+#include "KinaraBase.hpp"
 
 namespace kinara {
-namespace utils {
 
-namespace kc = kinara::containers;
+// forward declarations of various kinara types
+class Stringifiable;
+class Hashable;
+class Comparable;
+class Interruptible;
+class Constructible;
+class KinaraException;
+template <typename T> class ConstructFuncBase;
+template <typename T> class DestructFuncBase;
+template <typename T> class NullDestructFunc;
 
-class PrimeGenerator
-{
-private:
-    static constexpr u64 sc_max_prime_list_size = ((u64)1 << 26);
-
-    kc::u64Vector m_primes;
-    bool m_is_stateless;
-
-    inline void process_next_k(u64 k);
-    inline u64 find_smallest_prime(u64 lower_bound);
-    inline u64 find_next_prime(u64 lower_bound);
-    bool is_prime(u64 candidate);
-
-public:
-    PrimeGenerator(bool stateless);
-    ~PrimeGenerator();
-
-    // gets the next prime greater than or equal to lower_bound
-    u64 get_next_prime(u64 lower_bound);
-};
-
-} /* end namespace utils */
 } /* end namespace kinara */
 
-#endif /* KINARA_KINARA_COMMON_PRIMEUTILS_PRIME_GENERATOR_HPP_ */
+#endif /* KINARA_KINARA_COMMON_BASETYPES_KINARA_TYPES_FWD_HPP_ */
 
 //
-// PrimeGenerator.hpp ends here
+// KinaraTypesFwd.hpp ends here

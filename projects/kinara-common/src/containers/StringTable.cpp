@@ -54,9 +54,9 @@ namespace ka = kinara::allocators;
 namespace kc = kinara::containers;
 namespace ku = kinara::utils;
 
-float StringTable::s_resize_factor = StringTable::s_default_resize_factor;
-float StringTable::s_max_load_factor = StringTable::s_default_max_load_factor;
-float StringTable::s_min_load_factor = StringTable::s_default_min_load_factor;
+float StringTable::s_resize_factor = StringTable::sc_default_resize_factor;
+float StringTable::s_max_load_factor = StringTable::sc_default_max_load_factor;
+float StringTable::s_min_load_factor = StringTable::sc_default_min_load_factor;
 
 inline StringRepr**& StringTable::hash_table()
 {
@@ -78,12 +78,12 @@ inline u64& StringTable::hash_table_used()
 
 inline bool StringTable::is_slot_nonused(const StringRepr* slot_ptr)
 {
-    return ((u64)slot_ptr == s_nonused_slot_marker);
+    return ((u64)slot_ptr == sc_nonused_slot_marker);
 }
 
 inline bool StringTable::is_slot_deleted(const StringRepr* slot_ptr)
 {
-    return ((u64)slot_ptr == s_deleted_slot_marker);
+    return ((u64)slot_ptr == sc_deleted_slot_marker);
 }
 
 inline const StringRepr* StringTable::find(const char* string_value, u64 length)
@@ -228,7 +228,7 @@ inline void StringTable::expand_table()
             continue;
         }
         move_into_table(entry, new_table, new_table_size);
-        the_table[i] = (StringRepr*)s_nonused_slot_marker;
+        the_table[i] = (StringRepr*)sc_nonused_slot_marker;
     }
 
     // free the old table and set the appropriate variables
@@ -254,7 +254,7 @@ inline void StringTable::garbage_collect()
         }
         if (entry->get_ref_count() == 0) {
             ka::deallocate_object_raw(entry, sizeof(StringRepr));
-            the_table[i] = (StringRepr*)s_deleted_slot_marker;
+            the_table[i] = (StringRepr*)sc_deleted_slot_marker;
             --table_used;
         }
     }
@@ -281,7 +281,7 @@ inline void StringTable::garbage_collect()
             continue;
         }
         move_into_table(entry, new_table, new_table_size);
-        the_table[i] = (StringRepr*)s_nonused_slot_marker;
+        the_table[i] = (StringRepr*)sc_nonused_slot_marker;
     }
 
     ka::deallocate_raw(the_table, table_size);

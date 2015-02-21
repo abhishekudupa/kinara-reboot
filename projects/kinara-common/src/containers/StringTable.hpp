@@ -59,9 +59,9 @@ class StringTable
 {
 public:
     // default values for configurable parameters
-    static constexpr float s_default_resize_factor = 1.618f;
-    static constexpr float s_default_max_load_factor = 0.7f;
-    static constexpr float s_default_min_load_factor = 0.05f;
+    static constexpr float sc_default_resize_factor = 1.618f;
+    static constexpr float sc_default_max_load_factor = 0.7f;
+    static constexpr float sc_default_min_load_factor = 0.05f;
 
 private:
     StringTable() = delete;
@@ -71,8 +71,8 @@ private:
     StringTable& operator = (StringTable&&) = delete;
 
     // constants used as deleted and unused values in the hash table
-    static constexpr u64 s_nonused_slot_marker = (0x0);
-    static constexpr u64 s_deleted_slot_marker = (0x1);
+    static constexpr u64 sc_nonused_slot_marker = (0x0);
+    static constexpr u64 sc_deleted_slot_marker = (0x1);
 
     // actually configurable parameters, which are set to the
     // values above by default

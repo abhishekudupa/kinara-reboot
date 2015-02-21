@@ -39,7 +39,7 @@
 #define KINARA_KINARA_COMMON_ALLOCATORS_SMALL_BLOCK_ALLOCATOR_HPP_
 
 #include "../basetypes/KinaraBase.hpp"
-#include "MemoryManager.hpp"
+#include "../basetypes/KinaraErrors.hpp"
 
 namespace kinara {
 namespace allocators {
@@ -48,28 +48,44 @@ class SmallBlockAllocator
 {
 private:
     // preconfigured constants
-    static constexpr u32 PageSize = 8192;
-    static constexpr u32 ChunkSize = PageSize - (2 * sizeof(void*));
-    static constexpr u32 MaxSmallBlockSize = 256;
-    static constexpr u32 Alignment = 3;
-    static constexpr u32 NumBuckets = (MaxSmallBlockSize >> Alignment);
+    static constexpr u32 sc_page_size = 16384;
+    static constexpr u32 sc_chunk_size = sc_page_size - (2 * sizeof(void*));
+    static constexpr u32 sc_max_small_block_size = 256;
+    // power of two to align blocks at
+    static constexpr u32 sc_alignment = 3;
+    static constexpr u32 sc_num_buckets = (sc_page_size >> sc_alignment);
 
     struct Chunk
     {
         Chunk* m_next_chunk;
         u08* m_current_ptr;
-        u08 m_data[ChunkSize];
+        u08 m_data[sc_chunk_size];
 
-        Chunk()
-            : m_current_ptr(m_data)
+        inline Chunk()
+            : m_next_chunk(nullptr), m_current_ptr(m_data)
         {
             // Nothing here
         }
     };
 
-    Chunk* m_chunks[NumBuckets];
-    u08* m_free_lists[NumBuckets];
+    struct BlockList
+    {
+        BlockList* m_next;
+    };
+
+    Chunk* m_chunks[sc_num_buckets];
+    BlockList* m_free_lists[sc_num_buckets];
     u64 m_bytes_allocated;
+    u64 m_bytes_claimed;
+
+    inline void release_memory();
+    inline u64 get_slot_index_for_size(u64 size) const;
+    inline u64 count_blocks_in_range(u64 slot_index,
+                                     void* range_low,
+                                     void* range_high) const;
+    inline void remove_blocks_in_range(u64 slot_index,
+                                       void* range_low,
+                                       void* range_high);
 
 public:
     SmallBlockAllocator();
@@ -80,28 +96,8 @@ public:
     void deallocate(void* block_ptr, u64 block_size);
     u64 get_bytes_allocated() const;
     u64 get_bytes_claimed() const;
-    void consolidate();
+    void garbage_collect();
 };
-
-static inline void* operator new (size_t size, SmallBlockAllocator& allocator)
-{
-    return allocator.allocate(size)
-}
-
-static inline void* operator new[] (size_t size, SmallBlockAllocator& allocator)
-{
-    return allocator.allocate(size);
-}
-
-static inline void operator delete(void* ptr, SmallBlockAllocator& allocator)
-{
-    __builtin_unreachable();
-}
-
-static inline void operator delete[](void* ptr, SmallBlockAllocator& allocator)
-{
-    __builtin_unreachable();
-}
 
 } /* end namespace allocators */
 } /* end namespace kinara */

@@ -62,7 +62,7 @@ private:
     static u64 s_memory_allocation_limit;
     static u64 s_warn_watermark;
     static u64 s_peak_bytes_allocated;
-    static constexpr u64 s_block_header_size = sizeof(u64);
+    static constexpr u64 sc_block_header_size = sizeof(u64);
 
 public:
     static void* allocate(u64 size);
