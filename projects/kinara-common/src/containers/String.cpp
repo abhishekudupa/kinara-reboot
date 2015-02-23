@@ -418,7 +418,7 @@ i32 String::compare(const char* contents, u64 len) const
 
 bool String::operator == (const String& other) const
 {
-    return (compare(other) == 0);
+    return (m_the_repr == other.m_the_repr);
 }
 
 bool String::operator == (const char* contents) const
@@ -428,7 +428,7 @@ bool String::operator == (const char* contents) const
 
 bool String::operator != (const String& other) const
 {
-    return (compare(other) != 0);
+    return (m_the_repr != other.m_the_repr);
 }
 
 bool String::operator != (const char* contents) const
