@@ -48,6 +48,9 @@
 namespace kinara {
 namespace containers {
 
+// forward declaration
+class String;
+
 namespace string_detail_ {
 
 namespace ka = kinara::allocators;
@@ -55,6 +58,8 @@ namespace ka = kinara::allocators;
 // sizeof(StringRepr) = 40 bytes on all 64 bit platforms
 class StringRepr
 {
+    friend class kinara::containers::String;
+
 private:
     static constexpr u32 sc_max_compact = 32;
 
@@ -115,7 +120,7 @@ private:
                 m_long_repr.m_length = length - 1;
             } else {
                 memset(m_short_repr.data(), 0, sc_max_compact);
-                memcpy(m_short_repr.data(), contents, length);
+                memcpy(m_short_repr.data(), contents, length - 1);
             }
         }
 
@@ -168,8 +173,10 @@ public:
     i64 get_ref_count() const;
     u64 size() const;
     u64 length() const;
-    static StringRepr* make_repr(const char* contents);
-    static StringRepr* make_repr(const char* contents, u64 length);
+    static const StringRepr* make_repr(const char* contents);
+    static const StringRepr* make_repr(const char* contents, u64 length);
+
+    static const StringRepr* empty_string_repr();
 };
 
 } /* end namespace string_detail_ */

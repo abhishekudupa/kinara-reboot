@@ -39,6 +39,7 @@
 
 #include "../allocators/MemoryManager.hpp"
 
+#include "String.hpp"
 #include "StringBuffer.hpp"
 
 namespace kinara {
@@ -111,6 +112,14 @@ void StringBuffer::append(const char *contents)
         return;
     }
 }
+
+StringBuffer& operator << (StringBuffer& string_buffer,
+                           String& contents)
+{
+    string_buffer.append(contents.c_str());
+    return string_buffer;
+}
+
 
 } /* end namespace containers */
 } /* end namespace kinara */

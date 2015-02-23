@@ -41,6 +41,7 @@
 #include "../allocators/MemoryManager.hpp"
 
 #include "StringRepr.hpp"
+#include "StringTable.hpp"
 
 namespace kinara {
 namespace containers {
@@ -243,6 +244,29 @@ u64 StringRepr::size() const
 u64 StringRepr::length() const
 {
     return size();
+}
+
+const StringRepr* StringRepr::make_repr(const char *contents)
+{
+    if (contents == nullptr) {
+        return empty_string_repr();
+    }
+    auto length = strlen(contents);
+    return make_repr(contents, length);
+}
+
+const StringRepr* StringRepr::make_repr(const char* contents, u64 length)
+{
+    if (length == 0 || contents == nullptr) {
+        return empty_string_repr();
+    }
+    return string_table_detail_::StringTable::get_repr(contents, length);
+}
+
+const StringRepr* StringRepr::empty_string_repr()
+{
+    static StringRepr s_empty_string;
+    return &s_empty_string;
 }
 
 } /* end namespace string_detail_ */

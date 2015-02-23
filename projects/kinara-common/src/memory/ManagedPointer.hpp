@@ -37,13 +37,13 @@
 
 // Code:
 
-#if !defined KINARA_MEMORY_MANAGED_POINTER_HPP_
-#define KINARA_MEMORY_MANAGED_POINTER_HPP_
+#if !defined KINARA_KINARA_COMMON_MEMORY_MANAGED_POINTER_HPP_
+#define KINARA_KINARA_COMMON_MEMORY_MANAGED_POINTER_HPP_
 
 #include <type_traits>
 #include <utility>
 
-#include "../../common/KinaraBase.hpp"
+#include "../basetypes/KinaraBase.hpp"
 
 #include "RefCountable.hpp"
 
@@ -447,7 +447,7 @@ using ManagedConstPointer = detail::ManagedPointerBase<T, true>;
 
 template <typename T, bool CONSTPOINTER>
 static inline std::ostream& operator << (std::ostream& out_stream,
-                                         const detail::ManagedPointerBase<T, CONSTPOINTER>&
+                                         const memory::detail::ManagedPointerBase<T, CONSTPOINTER>&
                                          managed_ptr)
 {
     out_stream << *(managed_ptr);
@@ -456,7 +456,7 @@ static inline std::ostream& operator << (std::ostream& out_stream,
 
 } /* end namespace kinara */
 
-#endif /* KINARA_MEMORY_MANAGED_POINTER_HPP_ */
+#endif /* KINARA_KINARA_COMMON_MEMORY_MANAGED_POINTER_HPP_ */
 
 //
 // ManagedPointer.hpp ends here

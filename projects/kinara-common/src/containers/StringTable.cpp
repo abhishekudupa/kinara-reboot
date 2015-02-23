@@ -39,6 +39,7 @@
 #include <cmath>
 
 #include "../basetypes/KinaraBase.hpp"
+#include "../basetypes/KinaraErrors.hpp"
 #include "../primeutils/PrimeGenerator.hpp"
 #include "../allocators/MemoryManager.hpp"
 #include "../hashfuncs/HashFunctions.hpp"
@@ -293,6 +294,8 @@ inline void StringTable::garbage_collect()
 
 const StringRepr* StringTable::get_repr(const char* string_value, u64 length)
 {
+    KINARA_ASSERT(length > 0);
+
     auto existing = find(string_value, length);
     if (existing == nullptr) {
         return insert(string_value, length);

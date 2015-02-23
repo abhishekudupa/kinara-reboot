@@ -40,6 +40,8 @@
 
 #include <istream>
 
+#include "StringBuffer.hpp"
+
 namespace kinara {
 namespace containers {
 
@@ -53,17 +55,18 @@ class StringRepr;
 class String
 {
 private:
-    string_detail_::StringRepr* m_the_repr;
+    const string_detail_::StringRepr* m_the_repr;
+
+    static constexpr u64 sc_max_alloca = (1 << 10);
+    inline bool match(u64 pos, const char* match, u64 len) const;
+    inline bool imatch(u64 pos, const char* match, u64 len) const;
 
 public:
-    typedef const char* Iterator;
-    typedef const char* iterator;
-
     String();
     String(const char* contents);
+    String(const char* contents, u64 len);
     String(const String& other);
     String(const String& other, u64 pos, u64 len = UINT64_MAX);
-    String(const char* contents, u64 length);
     String(String&& other);
     String(u64 n, char c);
     ~String();
@@ -77,51 +80,43 @@ public:
     u64 length() const;
     u64 max_size() const;
 
-    void resize(u64 n);
-    void resize(u64 n, char c);
-
     u64 capacity() const;
-    void reserve(u64 n) const;
     void clear() noexcept;
     bool empty() const noexcept;
-    void shrink_to_fit();
 
-    char& operator [] (u64 index);
-    const char& operator [] (u64 index) const;
+    char operator [] (u64 index) const;
+    char at (u64 index) const;
 
-    char& at (u64 index);
-    const char& at (u64 index) const;
-
-    char& back();
-    const char& back() const;
-
-    char& front();
-    const char& front() const;
+    char back() const;
+    char front() const;
 
     String& operator += (const String& other);
     String& operator += (const char* contents);
     String& operator += (char c);
 
     String& append(const String& other);
-    String& append(const String& other, u64 pos, u64 len);
+    String& append(const String& other, u64 pos, u64 len = UINT64_MAX);
     String& append(const char* contents);
     String& append(const char* contents, u64 len);
     String& append(u64 n, char c);
 
-    void assign(const String& other);
-    void assign(const String& other, u64 pos, u64 len);
-    void assign(const char* contents);
-    void assign(const char* contents, u64 len);
-    void assign(u64 n, char c);
-    void assign(String&& other);
+    String& assign(const String& other);
+    String& assign(const String& other, u64 pos, u64 len = UINT64_MAX);
+    String& assign(const char* contents);
+    String& assign(const char* contents, u64 len);
+    String& assign(u64 n, char c);
+    String& assign(String&& other);
 
     const char* c_str() const;
 
     u64 find(const String& other) const;
     u64 find(const char* contents) const;
+    u64 find(const char* contents, u64 pos, u64 len) const;
+
     String substr(u64 pos = 0, u64 len = UINT64_MAX) const;
     i32 compare(const String& other) const;
     i32 compare(const char* contents) const;
+    i32 compare(const char* contents, u64 len) const;
 
     bool operator == (const String& other) const;
     bool operator == (const char* contents) const;
@@ -147,7 +142,13 @@ public:
     bool iends_with(const String& other) const;
     bool iends_with(const char* contents) const;
 
-    void strip() const;
+    String to_lower() const __attribute__((warn_unused_result));
+    String& to_lower();
+    String to_upper() const __attribute__((warn_unused_result));
+    String& to_upper();
+
+    String strip() const __attribute__((warn_unused_result));
+    String& strip();
 };
 
 static inline std::ostream& operator << (std::ostream& out_stream,
@@ -159,7 +160,9 @@ static inline std::ostream& operator << (std::ostream& out_stream,
 
 static inline std::istream& operator >> (std::istream& in_stream, String& str)
 {
-    // TODO: Implement me
+    StringBuffer string_buffer;
+    in_stream >> string_buffer;
+    str.assign(string_buffer.data());
     return in_stream;
 }
 

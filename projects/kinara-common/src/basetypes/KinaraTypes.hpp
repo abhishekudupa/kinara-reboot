@@ -43,6 +43,7 @@
 
 #include "../memory/RefCountable.hpp"
 #include "../containers/String.hpp"
+#include "../memory/ManagedPointer.hpp"
 
 namespace kinara {
 
@@ -264,7 +265,7 @@ public:
 
 // A function to be called to construct an object
 template <typename T>
-class ConstructFuncBase
+class ConstructFunc
 {
 public:
     template <typename... ArgTypes>
@@ -277,13 +278,38 @@ public:
 
 // A destructor for various classes
 template <typename T>
-class DestructFuncBase
+class DestructFunc
 {
 public:
     inline void operator () (const T& object) const
     {
         (&object)->~T();
         memory::dec_ref(&object);
+    }
+};
+
+// specialization for managed pointers
+template <typename T>
+class DestructFunc<const memory::ManagedPointer<T>>
+{
+private:
+    typedef memory::ManagedPointer<T> PtrType;
+public:
+    inline void operator () (const PtrType& managed_ptr) const
+    {
+        (&managed_ptr)->~PtrType();
+    }
+};
+
+template <typename T>
+class DestructFunc<const memory::ManagedConstPointer<T>>
+{
+private:
+    typedef memory::ManagedConstPointer<T> PtrType;
+public:
+    inline void operator () (const PtrType& managed_ptr) const
+    {
+        (&managed_ptr)->~PtrType();
     }
 };
 

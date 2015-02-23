@@ -38,12 +38,15 @@
 #if !defined KINARA_KINARA_COMMON_CONTAINERS_STRING_BUFFER_HPP_
 #define KINARA_KINARA_COMMON_CONTAINERS_STRING_BUFFER_HPP_
 
-#include "../basetypes/KinaraBase.hpp"
-#include "../basetypes/KinaraTypes.hpp"
 #include <istream>
+
+#include "../basetypes/KinaraBase.hpp"
 
 namespace kinara {
 namespace containers {
+
+// forward declaration of string
+class String;
 
 class StringBuffer
 {
@@ -75,12 +78,7 @@ static inline StringBuffer& operator << (StringBuffer& string_buffer,
     return string_buffer;
 }
 
-static inline StringBuffer& operator << (StringBuffer& string_buffer,
-                                         String& contents)
-{
-    string_buffer.append(contents.c_str());
-    return string_buffer;
-}
+extern StringBuffer& operator << (StringBuffer& string_buffer, String& contents);
 
 static inline std::istream& operator >> (std::istream& input_stream,
                                          StringBuffer& string_buffer)

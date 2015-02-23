@@ -98,6 +98,24 @@ public:
     }
 };
 
+template <typename T>
+static inline void inc_ref(const T& object)
+{
+    return;
+}
+
+template <typename T>
+static inline void dec_ref(const T& object)
+{
+    return;
+}
+
+template <typename T>
+static inline i64 get_ref_count(const T& object)
+{
+    return 0;
+}
+
 // manage ref count of a RefCountable pointer or reference
 static inline void inc_ref(const RefCountable* ptr)
 {
@@ -127,24 +145,6 @@ static inline i64 get_ref_count(const RefCountable* ptr)
 static inline i64 get_ref_count(const RefCountable& ref)
 {
     return ref.get_ref_count_();
-}
-
-template <typename T>
-static inline void inc_ref(const T& object)
-{
-    return;
-}
-
-template <typename T>
-static inline void dec_ref(const T& object)
-{
-    return;
-}
-
-template <typename T>
-static inline i64 get_ref_count(const T& object)
-{
-    return 0;
 }
 
 } /* end namespace memory */
