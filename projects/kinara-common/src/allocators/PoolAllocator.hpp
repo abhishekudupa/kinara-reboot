@@ -1,7 +1,7 @@
-// SmallBlockAllocator.hpp ---
-// Filename: SmallBlockAllocator.hpp
+// PoolAllocator.hpp ---
+// Filename: PoolAllocator.hpp
 // Author: Abhishek Udupa
-// Created: Fri Feb 13 20:41:01 2015 (-0500)
+// Created: Sun Feb 22 22:45:54 2015 (-0500)
 //
 // Copyright (c) 2013, Abhishek Udupa, University of Pennsylvania
 // All rights reserved.
@@ -35,8 +35,8 @@
 
 // Code:
 
-#if !defined KINARA_KINARA_COMMON_ALLOCATORS_SMALL_BLOCK_ALLOCATOR_HPP_
-#define KINARA_KINARA_COMMON_ALLOCATORS_SMALL_BLOCK_ALLOCATOR_HPP_
+#if !defined KINARA_KINARA_COMMON_ALLOCATORS_POOL_ALLOCATOR_HPP_
+#define KINARA_KINARA_COMMON_ALLOCATORS_POOL_ALLOCATOR_HPP_
 
 #include <new>
 
@@ -46,80 +46,89 @@
 namespace kinara {
 namespace allocators {
 
-class SmallBlockAllocator
+
+// Like a small block allocator, but only one fixed size
+// which is rounded up to the alignment factor
+class PoolAllocator
 {
 private:
-    // preconfigured constants
-    static constexpr u32 sc_page_size = 16384;
-    static constexpr u32 sc_chunk_size = sc_page_size - (2 * sizeof(void*));
-    static constexpr u32 sc_max_small_block_size = 256;
-    // power of two to align blocks at
+    static constexpr u32 sc_default_num_objects = 32;
     static constexpr u32 sc_alignment = 3;
-    static constexpr u32 sc_num_buckets = (sc_page_size >> sc_alignment);
+    static constexpr u32 sc_chunk_overhead = sizeof(void*);
 
-    struct Chunk
+    // number of objects in a page of allocation
+    u32 m_num_objects;
+    u32 m_object_size;
+    u32 m_page_size;
+
+    struct Block
     {
-        Chunk* m_next_chunk;
-        u08* m_current_ptr;
-        u08 m_data[sc_chunk_size];
+        Block* m_next_block;
 
-        inline Chunk()
-            : m_next_chunk(nullptr), m_current_ptr(m_data)
+        inline Block()
+            : m_next_block(nullptr)
         {
             // Nothing here
         }
     };
 
-    struct BlockList
+    struct Chunk
     {
-        BlockList* m_next;
+        Chunk* m_next_chunk;
+        inline Chunk()
+            : m_next_chunk(nullptr)
+        {
+            // Nothing here
+        }
     };
 
-    Chunk* m_chunks[sc_num_buckets];
-    BlockList* m_free_lists[sc_num_buckets];
-    u64 m_bytes_allocated;
+    Block* m_free_list;
+    Chunk* m_chunk_list;
+    u08* m_current_chunk_ptr;
+    u08* m_current_chunk_end_ptr;
     u64 m_bytes_claimed;
+    u64 m_bytes_allocated;
 
-    inline void release_memory();
-    inline u64 get_slot_index_for_size(u64 size) const;
-    inline u64 count_blocks_in_range(u64 slot_index,
-                                     void* range_low,
-                                     void* range_high) const;
-    inline void remove_blocks_in_range(u64 slot_index,
-                                       void* range_low,
-                                       void* range_high);
+    inline u08* get_data_ptr_from_chunk_ptr(Chunk* chunk_ptr) const;
+    inline u64 count_blocks_in_range(void* range_low, void* range_high) const;
+    inline void remove_blocks_in_range(void* range_low, void* range_high);
 
 public:
-    SmallBlockAllocator();
-    ~SmallBlockAllocator();
+    PoolAllocator(u32 object_size, u32 num_objects = sc_default_num_objects);
+    ~PoolAllocator();
 
+    void* allocate();
+    void deallocate(void* block_ptr);
     void reset();
-    void* allocate(u64 size);
-    void deallocate(void* block_ptr, u64 block_size);
+    void garbage_collect();
+
     u64 get_bytes_allocated() const;
     u64 get_bytes_claimed() const;
-    void garbage_collect();
+    u64 get_block_size() const;
+    u64 get_num_objects_at_once() const;
 };
 
-// static methods
 template <typename T, typename... ArgTypes>
-static inline T* allocate(SmallBlockAllocator& sb_allocator, ArgTypes&&... args)
+static inline T* allocate(PoolAllocator& pool_allocator, ArgTypes&&... args)
 {
-    return new (sb_allocator.allocate(sizeof(T))) T(std::forward<ArgTypes>(args)...);
+    KINARA_ASSERT((sizeof(T) <= pool_allocator.get_block_size()));
+    return new (pool_allocator.allocate()) T(std::forward<ArgTypes>(args)...);
 }
 
-// template arguments must match whatever match was used for allocate
 template <typename T>
-static inline void deallocate(SmallBlockAllocator& sb_allocator, const T* object_ptr)
+static inline void deallocate(PoolAllocator& pool_allocator,
+                              const T* object_ptr)
 {
+    KINARA_ASSERT((sizeof(T) <= pool_allocator.get_block_size() &&
+                   sizeof(T) + 8 > pool_allocator.get_block_size()));
     object_ptr->~T();
-    sb_allocator.deallocate(object_ptr, sizeof(T));
+    return pool_allocator.deallocate(object_ptr);
 }
 
 } /* end namespace allocators */
 } /* end namespace kinara */
 
-#endif /* KINARA_KINARA_COMMON_ALLOCATORS_SMALL_BLOCK_ALLOCATOR_HPP_ */
+#endif /* KINARA_KINARA_COMMON_ALLOCATORS_POOL_ALLOCATOR_HPP_ */
 
 //
-// SmallBlockAllocator.hpp ends here
+// PoolAllocator.hpp ends here

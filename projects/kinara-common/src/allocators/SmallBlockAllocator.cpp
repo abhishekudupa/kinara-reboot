@@ -36,8 +36,7 @@
 // Code:
 
 #include <cstring>
-#include <new> // for placement new
-#include <functional> // for less, etc
+#include <functional>
 
 #include "MemoryManager.hpp"
 #include "SmallBlockAllocator.hpp"
