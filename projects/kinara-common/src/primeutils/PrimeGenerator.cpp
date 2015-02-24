@@ -52,6 +52,11 @@ PrimeGenerator::PrimeGenerator(bool stateless)
     }
 }
 
+PrimeGenerator::~PrimeGenerator()
+{
+    // Nothing here
+}
+
 inline void PrimeGenerator::process_next_k(u64 k)
 {
     kc::u64Vector work_list(k/2);

@@ -46,7 +46,8 @@ namespace allocators {
 PoolAllocator::PoolAllocator(u32 object_size, u32 num_objects)
     : m_num_objects(num_objects), m_object_size(object_size),
       m_page_size(0), m_free_list(nullptr), m_chunk_list(nullptr),
-      m_current_chunk_ptr(nullptr), m_current_chunk_end_ptr(nullptr)
+      m_current_chunk_ptr(nullptr), m_current_chunk_end_ptr(nullptr),
+      m_bytes_claimed(0), m_bytes_allocated(0)
 {
     KINARA_ASSERT(object_size > 0);
 

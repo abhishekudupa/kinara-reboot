@@ -57,7 +57,7 @@ class String
 private:
     const string_detail_::StringRepr* m_the_repr;
 
-    static constexpr u64 sc_max_alloca = (1 << 10);
+    static constexpr u64 sc_max_alloca = 0;
     inline bool match(u64 pos, const char* match, u64 len) const;
     inline bool imatch(u64 pos, const char* match, u64 len) const;
 

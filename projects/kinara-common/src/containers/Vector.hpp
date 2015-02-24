@@ -918,8 +918,9 @@ using PtrVector = VectorBase<T*, detail::MultiplicativeIncrementer<3, 2, 8>,
                              DefaultDestructFunc<T*>>;
 
 template <typename T>
-using CompactPtrVector = VectorBase<T*, detail::AdditiveIncrementer<16>,
-                                    1, ConstructFunc<T*>, DestructFunc<T*>>;
+using CompactPtrVector = VectorBase<T*, detail::AdditiveIncrementer<16>, 1,
+                                    DefaultConstructFunc<T*>,
+                                    DefaultDestructFunc<T*>>;
 
 class String;
 

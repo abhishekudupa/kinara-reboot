@@ -147,7 +147,7 @@ inline const StringRepr* StringTable::insert(const char* string_value, u64 lengt
 // 2. string_table is large enough to accommodate the value
 // 3. table_size is a prime number
 inline const StringRepr* StringTable::insert_into_table(const char* string_value, u64 length,
-                                                        StringRepr **string_table, u64 table_size)
+                                                        StringRepr** string_table, u64 table_size)
 {
     auto h1 = ku::spooky_hash_64(string_value, length+1);
     u64 h2;
@@ -300,8 +300,10 @@ inline void StringTable::garbage_collect()
 
     // garbage collect the pool as well
     auto the_allocator = allocator();
-    if (((float)(the_allocator->get_bytes_allocated()) /
-         (float)(the_allocator->get_bytes_claimed())) < sc_allocator_utilization_low) {
+    auto bytes_allocated = the_allocator->get_bytes_allocated();
+    auto bytes_claimed = the_allocator->get_bytes_claimed();
+
+    if (((float)bytes_allocated / (float)bytes_claimed) < sc_allocator_utilization_low) {
         the_allocator->garbage_collect();
     }
     return;
@@ -330,7 +332,7 @@ void StringTable::finalize()
     hash_table_used() = (u64)0;
 
     // deallocate the pool
-    ka::deallocate_object(allocator());
+    ka::deallocate_object_raw(allocator(), sizeof(ka::PoolAllocator));
 }
 
 void StringTable::set_resize_factor(float new_resize_factor)

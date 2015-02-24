@@ -16,8 +16,8 @@ namespace utils {
 namespace murmur_hash_detail_ {
 
 extern void MurmurHash3_x86_32  (const void * key, u64 len, u32 seed, void* out);
-extern void MurmurHash3_x86_128 (const void * key, int len, u32 seed, void* out);
-extern void MurmurHash3_x64_128 (const void * key, int len, u32 seed, void* out);
+extern void MurmurHash3_x86_128 (const void * key, u64 len, u32 seed, void* out);
+extern void MurmurHash3_x64_128 (const void * key, u64 len, u32 seed, void* out);
 
 } /* end namespace murmur_hash_detail_ */
 

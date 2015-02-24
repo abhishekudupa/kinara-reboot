@@ -252,6 +252,7 @@ template <typename T>
 static inline void deallocate_object(const T* object_ptr)
 {
     typename std::is_polymorphic<T>::type is_polymorphic_value;
+    object_ptr->~T();
     deallocate_object(object_ptr, is_polymorphic_value);
 }
 
@@ -275,6 +276,7 @@ template <typename T>
 static inline void deallocate_object_raw(const T* object_ptr, u64 size)
 {
     typename std::is_polymorphic<T>::type is_polymorphic_value;
+    object_ptr->~T();
     deallocate_object_raw(object_ptr, size, is_polymorphic_value);
 }
 

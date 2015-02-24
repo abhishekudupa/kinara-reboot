@@ -74,6 +74,9 @@ set(kinara-common-modules
   timers
 )
 
+# add the subdir for gtest
+add_subdirectory(${CMAKE_SOURCE_DIR}/thirdparty/gtest)
+
 # add the modules for kinara
 foreach(_KINARA_PROJECT ${KINARA_PROJECTS})
   set(_PROJECT_MODULES "${${_KINARA_PROJECT}-modules}")
@@ -94,7 +97,7 @@ foreach(_KINARA_LIB_PROJECT ${KINARA_LIB_PROJECTS})
 
     set(_TARGET_NAME "${_KINARA_LIB_PROJECT}.${_BUILD_TYPE}")
 
-    if(_BUILD_TYPE MATCHES "\\.shared")
+    if(_TARGET_NAME MATCHES "\\.shared")
       add_library(${_TARGET_NAME} SHARED ${_MODULES_FOR_BUILD_TYPE})
       set_property(TARGET ${_TARGET_NAME} PROPERTY POSITION_INDEPENDENT_CODE ON)
     else()
@@ -112,6 +115,9 @@ foreach(_KINARA_LIB_PROJECT ${KINARA_LIB_PROJECTS})
     endif()
   endforeach(_BUILD_TYPE)
 endforeach(_KINARA_LIB_PROJECT)
+
+# add the tests
+include(KinaraTests)
 
 foreach(_BUILD_TYPE ${KINARA_BUILD_TYPES})
   set(_DEP_TARGETS "")
