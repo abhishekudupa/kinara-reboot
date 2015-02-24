@@ -46,6 +46,7 @@ namespace kinara {
 namespace error_handlers {
 
 volatile bool gdb_is_attached__ = false;
+volatile bool gdb_ignore_further_errors__ = false;
 
 void notify_assertion_violation(const char* function_name,
                                 const char* filename,
@@ -68,6 +69,10 @@ void notify_assertion_violation(const char* function_name,
 void invoke_debugger()
 {
 #ifdef KINARA_CFG_HAVE_GDB_
+    if (gdb_ignore_further_errors__) {
+        return;
+    }
+
     fprintf(stderr, "Invoking Debugger...\n");
     fflush(stderr);
 

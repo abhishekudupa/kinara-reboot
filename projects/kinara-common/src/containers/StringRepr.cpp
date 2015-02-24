@@ -172,8 +172,7 @@ bool StringRepr::operator >= (const StringRepr& other) const
 
 bool StringRepr::equals(const char* other, u64 length) const
 {
-    // include the nul character in the hash computation
-    if (hash() != kinara::utils::default_hash_function(other, length + 1)) {
+    if (hash() != kinara::utils::default_hash_function(other, length)) {
         return false;
     }
     return (compare(other, length) == 0);
@@ -181,7 +180,7 @@ bool StringRepr::equals(const char* other, u64 length) const
 
 bool StringRepr::nequals(const char *other, u64 length) const
 {
-    if (hash() == kinara::utils::default_hash_function(other, length + 1)) {
+    if (hash() == kinara::utils::default_hash_function(other, length)) {
         return (compare(other, length) != 0);
     }
     return true;
@@ -211,7 +210,7 @@ u64 StringRepr::hash() const
 {
     if (m_fixed_repr.m_short_repr) {
         return kinara::utils::default_hash_function(m_repr.m_short_repr.data(),
-                                                    strlen(m_repr.m_short_repr.data()) + 1);
+                                                    strlen(m_repr.m_short_repr.data()));
     } else {
         return m_repr.m_long_repr.m_hashcode;
     }

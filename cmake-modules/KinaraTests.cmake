@@ -32,5 +32,10 @@ foreach(_BUILD_TYPE ${KINARA_BUILD_TYPES})
       "-ggdb3;-O0;-fno-inline;-DKINARA_CFG_DEBUG_MODE_BUILD_")
   endif()
 
+  set_target_properties(${_TARGET_NAME} PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/tests"
+    )
+
+
   add_test(unit_test ${_TARGET_NAME})
 endforeach(_BUILD_TYPE)

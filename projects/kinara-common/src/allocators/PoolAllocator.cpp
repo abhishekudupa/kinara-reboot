@@ -73,6 +73,7 @@ inline u08* PoolAllocator::get_data_ptr_from_chunk_ptr(Chunk* chunk_ptr) const
 
 void* PoolAllocator::allocate()
 {
+    std::less<void*> less_func;
     if (m_free_list != nullptr) {
         auto block_ptr = m_free_list;
         void* retval = static_cast<void*>(block_ptr);
@@ -82,7 +83,7 @@ void* PoolAllocator::allocate()
     }
     // no free blocks
     if (m_current_chunk_ptr != nullptr &&
-        m_current_chunk_ptr + m_object_size < m_current_chunk_ptr) {
+        less_func(m_current_chunk_ptr + m_object_size, m_current_chunk_end_ptr)) {
         void* retval = static_cast<void*>(m_current_chunk_ptr);
         m_current_chunk_ptr += m_object_size;
         m_bytes_allocated += m_object_size;
@@ -112,6 +113,7 @@ void PoolAllocator::deallocate(void *void_ptr)
 
     auto block_ptr = static_cast<Block*>(void_ptr);
     block_ptr->m_next_block = m_free_list;
+    m_free_list = block_ptr;
     m_bytes_allocated -= m_object_size;
 }
 

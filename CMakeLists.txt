@@ -113,6 +113,13 @@ foreach(_KINARA_LIB_PROJECT ${KINARA_LIB_PROJECTS})
       set_target_properties(${_TARGET_NAME} PROPERTIES COMPILE_OPTIONS
         "-ggdb3;-O0;-fno-inline;-DKINARA_CFG_DEBUG_MODE_BUILD_")
     endif()
+
+    set_target_properties(${_TARGET_NAME} PROPERTIES
+      ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
+      LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
+      RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+      )
+
   endforeach(_BUILD_TYPE)
 endforeach(_KINARA_LIB_PROJECT)
 

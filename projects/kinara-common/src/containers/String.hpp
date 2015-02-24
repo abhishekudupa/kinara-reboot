@@ -54,10 +54,24 @@ class StringRepr;
 
 class String
 {
+    friend String add_strings_(const char*, const char*, u64, u64);
+    friend String operator + (const String& lhs, const String& rhs);
+    friend String operator + (const char* lhs, const String& rhs);
+    friend String operator + (const String& lhs, const char* rhs);
+    friend String operator + (const String& lhs, char rhs);
+    friend String operator + (char lhs, const String& rhs);
+
+    friend bool operator == (const char* rhs, const String& lhs);
+    friend bool operator != (const char* rhs, const String& lhs);
+    friend bool operator < (const char* rhs, const String& lhs);
+    friend bool operator <= (const char* rhs, const String& lhs);
+    friend bool operator > (const char* rhs, const String& lhs);
+    friend bool operator >= (const char* rhs, const String& lhs);
+
 private:
     const string_detail_::StringRepr* m_the_repr;
 
-    static constexpr u64 sc_max_alloca = 0;
+    static constexpr u64 sc_max_alloca = (1 << 10);
     inline bool match(u64 pos, const char* match, u64 len) const;
     inline bool imatch(u64 pos, const char* match, u64 len) const;
 

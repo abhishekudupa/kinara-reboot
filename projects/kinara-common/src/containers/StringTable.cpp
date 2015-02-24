@@ -110,26 +110,36 @@ inline const StringRepr* StringTable::find(const char* string_value, u64 length)
         return nullptr;
     }
 
+    KINARA_ASSERT(the_hash_table_size == 0 ||
+                  (the_hash_table_used < the_hash_table_size));
+
     // okay, we begin searching the hash table
-    // include the nul byte in the hash
-    auto h1 = ku::spooky_hash_64(string_value, length+1);
+    auto h1 = ku::spooky_hash_64(string_value, length) % the_hash_table_size;
     u64 h2 = 0;
     bool h2_computed = false;
 
-    auto index = h1 % the_hash_table_size;
+    auto index = h1;
     auto entry = the_hash_table[index];
-    while (!is_slot_nonused(entry)) {
-        if (entry->equals(string_value, length)) {
+    u64 num_probes = 0;
+    while (!is_slot_nonused(entry) && num_probes < the_hash_table_size) {
+        ++num_probes;
+        if (!is_slot_deleted(entry) && entry->equals(string_value, length)) {
             return entry;
         }
         // rehash
         if (!h2_computed) {
-            h2 = ku::city_hash_64(string_value, length+1);
+            h2 = 1 + (ku::city_hash_64(string_value, length) % (the_hash_table_size - 1));
             h2_computed = true;
         }
-        index = (h1 + (index * h2)) % the_hash_table_size;
+
+        index = (index + h2) % the_hash_table_size;
         entry = the_hash_table[index];
     }
+
+    // no slot is marked unused in the table, but
+    // slots could possibly be marked deleted, but
+    // nothing that is actually in use matches the
+    // required string ==> not found in the table.
     return nullptr;
 }
 
@@ -149,19 +159,35 @@ inline const StringRepr* StringTable::insert(const char* string_value, u64 lengt
 inline const StringRepr* StringTable::insert_into_table(const char* string_value, u64 length,
                                                         StringRepr** string_table, u64 table_size)
 {
-    auto h1 = ku::spooky_hash_64(string_value, length+1);
+    auto h1 = ku::spooky_hash_64(string_value, length) % table_size;
     u64 h2;
     bool h2_computed = false;
-    auto index = h1 % table_size;
+    auto index = h1;
     auto entry = string_table[index];
-    while (!is_slot_nonused(entry) && !is_slot_deleted(entry)) {
+
+    u64 num_probes = 0;
+
+    while (!is_slot_nonused(entry) &&
+           !is_slot_deleted(entry) &&
+           num_probes < table_size) {
+
+        ++num_probes;
         if (!h2_computed) {
-            h2 = ku::city_hash_64(string_value, length+1);
+            h2 = 1 + (ku::city_hash_64(string_value, length) % (table_size - 1));
             h2_computed = true;
         }
-        index = (h1 + (index * h2)) % table_size;
+        index = (index + h2) % table_size;
         entry = string_table[index];
     }
+
+    if (!is_slot_deleted(entry) &&
+        !is_slot_deleted(entry) &&
+        num_probes >= table_size) {
+        // No slot left in the table
+        // should never happen!
+        KINARA_UNREACHABLE_CODE();
+    }
+
     // we now have an empty or deleted slot
     auto new_object = ka::allocate<StringRepr>(*(allocator()), string_value, length);
     string_table[index] = new_object;
@@ -179,17 +205,19 @@ inline const StringRepr* StringTable::move_into_table(StringRepr* repr_ptr,
     auto string_value = repr_ptr->c_str();
     auto length = repr_ptr->length();
 
-    auto h1 = ku::spooky_hash_64(string_value, length+1);
-    u64 h2;
+    auto h1 = ku::spooky_hash_64(string_value, length) % table_size;
+    u64 h2 = 0;
     bool h2_computed = false;
-    auto index = h1 % table_size;
+
+    auto index = h1;
     auto entry = string_table[index];
+
     while (!is_slot_nonused(entry) && !is_slot_deleted(entry)) {
         if (!h2_computed) {
-            h2 = ku::city_hash_64(string_value, length+1);
+            h2 = 1 + (ku::city_hash_64(string_value, length) % (table_size - 1));
             h2_computed = true;
         }
-        index = (h1 + (index * h2)) % table_size;
+        index = (index + h2) % table_size;
         entry = string_table[index];
     }
     // we now have an empty or deleted slot
@@ -225,8 +253,8 @@ inline void StringTable::expand_table()
     // okay, we really need to resize this table
     ku::PrimeGenerator the_prime_generator(true);
     auto new_table_size = (u64)ceil((float)table_size * s_resize_factor);
-    new_table_size = the_prime_generator.get_next_prime(new_table_size);
     new_table_size = std::max(new_table_size, table_used + 3);
+    new_table_size = the_prime_generator.get_next_prime(new_table_size);
 
     auto new_table =
         ka::casted_allocate_raw_cleared<StringRepr*>(sizeof(StringRepr*) * new_table_size);
@@ -268,6 +296,8 @@ inline void StringTable::garbage_collect()
         }
     }
 
+    hash_table_used() = table_used;
+
     float table_utilization = (float)table_used / (float)table_size;
     if (table_utilization >= s_min_load_factor) {
         return;
@@ -296,7 +326,6 @@ inline void StringTable::garbage_collect()
     ka::deallocate_raw(the_table, table_size);
     hash_table() = new_table;
     hash_table_size() = new_table_size;
-    hash_table_used() = table_used;
 
     // garbage collect the pool as well
     auto the_allocator = allocator();
@@ -325,6 +354,14 @@ void StringTable::finalize()
 {
     auto the_table = hash_table();
     auto table_size = hash_table_size();
+
+    for (u64 i = 0; i < table_size; ++i) {
+        auto entry = the_table[i];
+        if (!is_slot_nonused(entry) &&
+            !is_slot_deleted(entry)) {
+            ka::deallocate((*(allocator())), entry);
+        }
+    }
 
     ka::deallocate_raw(the_table, sizeof(StringRepr*) * table_size);
     hash_table() = nullptr;

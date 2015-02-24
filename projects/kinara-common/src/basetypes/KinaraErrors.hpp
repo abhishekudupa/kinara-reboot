@@ -65,7 +65,7 @@ extern void invoke_debugger();
 #if defined KINARA_CFG_DEBUG_MODE_BUILD_
 
 #define KINARA_ASSERT_WITH_MSG(CONDITION__, MESSAGE__)                        \
-    if (!CONDITION__) {                                                       \
+    if (!(CONDITION__)) {                                                     \
         kinara::error_handlers::notify_assertion_violation(__FUNCTION__,      \
                                                            __FILE__,          \
                                                            __LINE__,          \
@@ -78,7 +78,7 @@ extern void invoke_debugger();
 #elif defined KINARA_CFG_ASSERTIONS_ENABLED_ /* !KINARA_CFG_DEBUG_MODE_BUILD_ */
 
 #define KINARA_ASSERT_WITH_MSG(CONDITION__, MESSAGE__)                        \
-    if (!CONDITION__) {                                                       \
+    if (!(CONDITION__)) {                                                     \
         notify_assertion_violation(__FUNCTION__,                              \
                                    __FILE__,                                  \
                                    __LINE__,                                  \
@@ -98,12 +98,28 @@ extern void invoke_debugger();
 #define KINARA_ASSERT(CONDITION__)                                      \
     KINARA_ASSERT_WITH_MSG(CONDITION__, nullptr)
 
+#if defined KINARA_CFG_DEBUG_MODE_BUILD_
+
 #define KINARA_UNREACHABLE_CODE()                                       \
     KINARA_ASSERT_WITH_MSG(false, "Error: Code that should never have " \
                            "been reached was executed!");               \
     __builtin_unreachable();                                            \
     (void(0))
 
+#else /* !KINARA_CFG_DEBUG_MODE_BUILD_ */
+
+// Non-debug mode build, trigger a crash!
+#define KINARA_UNREACHABLE_CODE()                                       \
+    KINARA_ASSERT_WITH_MSG(false, "Error: Code that should never have " \
+                           "been reached was executed!");               \
+    {                                                                   \
+        int* int_ptr__ = nullptr;                                       \
+        *int_ptr__ = 0xDEADBEEF;                                        \
+    }                                                                   \
+    __builtin_unreachable();                                            \
+    (void(0))
+
+#endif /* KINARA_CFG_DEBUG_MODE_BUILD_ */
 
 #endif /* KINARA_KINARA_COMMON_BASETYPES_KINARA_ERRORS_HPP_ */
 

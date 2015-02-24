@@ -113,8 +113,9 @@ private:
 
             if (length > sc_max_compact) {
                 auto data = ka::casted_allocate_raw_cleared<char>(length);
-                memcpy(data, contents, length);
-                auto hashcode = kinara::utils::default_hash_function(data, length);
+                memcpy(data, contents, length - 1);
+                // hashcode does not include the nul character
+                auto hashcode = kinara::utils::default_hash_function(data, length - 1);
                 m_long_repr.m_data = data;
                 m_long_repr.m_hashcode = hashcode;
                 m_long_repr.m_length = length - 1;

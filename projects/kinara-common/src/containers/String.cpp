@@ -238,6 +238,7 @@ String& String::append(const char* contents, u64 len)
 
     old_repr->dec_ref();
     m_the_repr->inc_ref();
+
     if (!using_alloca) {
         kinara::allocators::deallocate_raw(local_buffer, new_length);
     }
@@ -709,6 +710,60 @@ String& String::strip()
     m_the_repr->inc_ref();
 
     return *this;
+}
+
+String add_strings_(const char* string1, const char* string2,
+                    u64 length1, u64 length2)
+{
+    if (length1 == 0) {
+        return String(string2, length2);
+    } else if (length2 == 0) {
+        return String(string1, length1);
+    }
+    u64 len = length1 + length2;
+    char* local_buffer;
+    if (len <= String::sc_max_alloca) {
+        local_buffer = static_cast<char*>(alloca(len));
+    } else {
+        local_buffer = ka::casted_allocate_raw<char>(len);
+    }
+    memcpy(local_buffer, string1, length1);
+    memcpy(local_buffer + length1, string2, length2);
+    auto retval = String(local_buffer, len);
+    if (len > String::sc_max_alloca) {
+        ka::deallocate_raw(local_buffer, len);
+    }
+    return retval;
+}
+
+// overloaded friend functions
+String operator + (const String& lhs, const String& rhs)
+{
+    return add_strings_(lhs.c_str(), rhs.c_str(), lhs.length(), rhs.length());
+}
+
+String operator + (const char* lhs, const String& rhs)
+{
+    return add_strings_(lhs, rhs.c_str(), strlen(lhs), rhs.length());
+}
+
+String operator + (const String& lhs, const char* rhs)
+{
+    return add_strings_(lhs.c_str(), rhs, lhs.length(), strlen(rhs));
+}
+
+String operator + (const String& lhs, char rhs)
+{
+    char buffer[1];
+    buffer[0] = rhs;
+    return add_strings_(lhs.c_str(), buffer, lhs.length(), 1);
+}
+
+String operator + (char lhs, const String& rhs)
+{
+    char buffer[1];
+    buffer[0] = lhs;
+    return add_strings_(buffer, rhs.c_str(), 1, rhs.length());
 }
 
 } /* end namespace containers */

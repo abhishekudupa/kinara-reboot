@@ -53,9 +53,6 @@ else()
   set(KINARA_CFG_PATH_TO_GDB_ "\"${_PATH_TO_GDB}\"")
 endif()
 
-set(KINARA_CFG_HAVE_GDB_ OFF)
-set(KINARA_CFG_PATH_TO_GDB_ "#error \"No GDB found, but tried to invoke debugger. Please contact maintainer\"")
-
 message(STATUS "Kinara: Checking for librt")
 CHECK_LIBRARY_EXISTS(rt timer_create "time.h" KINARA_CFG_HAVE_LIBRT_)
 if(NOT KINARA_CFG_HAVE_LIBRT_)

@@ -37,17 +37,85 @@
 
 #include "../../projects/kinara-common/src/containers/String.hpp"
 #include <string>
+#include <random>
 #include "../../thirdparty/gtest/include/gtest/gtest.h"
 
 using kinara::containers::String;
 
-TEST(String, EmptyString) {
-    String EmptyString;
-    EXPECT_EQ(EmptyString.length(), 0);
+// Test short strings
+TEST(String, ShortStrings) {
+    String empty_string;
+    EXPECT_EQ(empty_string.length(), 0);
 
     // short string test
-    EmptyString += "hello";
-    EXPECT_EQ(EmptyString, "hello");
+    empty_string += "hello";
+    EXPECT_EQ(empty_string, "hello");
+
+    String world_string("world");
+    String hello_world_string = empty_string + " " + world_string;
+    EXPECT_EQ(hello_world_string, "hello world");
+    EXPECT_EQ(hello_world_string.length(), 11);
+}
+
+TEST(String, LongStrings) {
+    String short_string1("This is a short string");
+    String short_string2("This is a short string as well");
+    EXPECT_EQ(short_string1.length(), 22);
+    EXPECT_EQ(short_string2.length(), 30);
+    String long_string = short_string1 + short_string2;
+    EXPECT_EQ(long_string.length(), 52);
+    String long_string2 = (short_string1 += short_string2);
+    EXPECT_EQ((void*)(long_string2.c_str()), (void*)(long_string.c_str()));
+
+    String another_long_string(std::move(long_string));
+    EXPECT_EQ((void*)(long_string2.c_str()), (void*)(another_long_string.c_str()));
+
+    EXPECT_EQ(another_long_string.find("This"), 0);
+    EXPECT_EQ(another_long_string.find("short"), 10);
+
+    EXPECT_EQ(another_long_string.to_lower(), "this is a short stringthis is a short string as well");
+}
+
+// Fuzz test with random strings
+TEST(String, RandomStrings) {
+    std::random_device rd;
+    const int max_string_len = 256;
+    for (int i = 0; i < 1024; ++i) {
+        auto len1 = rd() % max_string_len;
+        auto len2 = rd() % max_string_len;
+        auto len3 = rd() % max_string_len;
+
+        String str1, str2, str3;
+        std::string stdstr1, stdstr2, stdstr3;
+
+        for (size_t j = 0; j < len1; ++j) {
+            char c = ((rd() % 2 == 0 ? 'a' : 'A') + (rd() % 26));
+            str1 += c;
+            stdstr1 += c;
+        }
+        EXPECT_EQ(str1, stdstr1.c_str());
+
+        for (size_t j = 0; j < len2; ++j) {
+            char c = ((rd() % 2 == 0 ? 'a' : 'A') + (rd() % 26));
+            str2 += c;
+            stdstr2 += c;
+        }
+        EXPECT_EQ(str2, stdstr2.c_str());
+
+        for (size_t j = 0; j < len3; ++j) {
+            char c = ((rd() % 2 == 0 ? 'a' : 'A') + (rd() % 26));
+            str3 += c;
+            stdstr3 += c;
+        }
+        EXPECT_EQ(str3, stdstr3.c_str());
+
+        // some concat tests
+        str1 += str2;
+        stdstr1 += stdstr2;
+        EXPECT_EQ(str1, stdstr1.c_str());
+
+        EXPECT_EQ(str1 + str3, (stdstr1 + stdstr3).c_str());
+    }
 }
 
 //

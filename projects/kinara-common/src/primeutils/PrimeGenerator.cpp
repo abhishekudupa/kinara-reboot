@@ -149,7 +149,7 @@ inline u64 PrimeGenerator::find_next_prime(u64 lower_bound)
     if (lower_bound % 2 == 0) {
         ++lower_bound;
     }
-    for (auto candidate = lower_bound; candidate < UINT64_MAX; ++candidate) {
+    for (auto candidate = lower_bound; candidate < UINT64_MAX; candidate += 2) {
         if (is_prime(candidate)) {
             return candidate;
         }
