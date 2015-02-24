@@ -265,7 +265,7 @@ public:
 
 // A function to be called to construct an object
 template <typename T>
-class ConstructFunc
+class DefaultConstructFunc
 {
 public:
     template <typename... ArgTypes>
@@ -278,7 +278,7 @@ public:
 
 // A destructor for various classes
 template <typename T>
-class DestructFunc
+class DefaultDestructFunc
 {
 public:
     inline void operator () (const T& object) const
@@ -290,7 +290,7 @@ public:
 
 // specialization for managed pointers
 template <typename T>
-class DestructFunc<const memory::ManagedPointer<T>>
+class DefaultDestructFunc<const memory::ManagedPointer<T>>
 {
 private:
     typedef memory::ManagedPointer<T> PtrType;
@@ -302,7 +302,7 @@ public:
 };
 
 template <typename T>
-class DestructFunc<const memory::ManagedConstPointer<T>>
+class DefaultDestructFunc<const memory::ManagedConstPointer<T>>
 {
 private:
     typedef memory::ManagedConstPointer<T> PtrType;

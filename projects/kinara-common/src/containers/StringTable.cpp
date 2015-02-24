@@ -42,6 +42,7 @@
 #include "../basetypes/KinaraErrors.hpp"
 #include "../primeutils/PrimeGenerator.hpp"
 #include "../allocators/MemoryManager.hpp"
+#include "../allocators/PoolAllocator.hpp"
 #include "../hashfuncs/HashFunctions.hpp"
 
 #include "StringRepr.hpp"
@@ -63,6 +64,13 @@ inline StringRepr**& StringTable::hash_table()
 {
     static StringRepr** the_hash_table = nullptr;
     return the_hash_table;
+}
+
+inline ka::PoolAllocator* StringTable::allocator()
+{
+    static ka::PoolAllocator* the_pool_allocator =
+        ka::allocate_object_raw<ka::PoolAllocator>(sizeof(StringRepr), 128);
+    return the_pool_allocator;
 }
 
 inline u64& StringTable::hash_table_size()
@@ -155,7 +163,7 @@ inline const StringRepr* StringTable::insert_into_table(const char* string_value
         entry = string_table[index];
     }
     // we now have an empty or deleted slot
-    auto new_object = ka::allocate_object_raw<StringRepr>(string_value, length);
+    auto new_object = ka::allocate<StringRepr>(*(allocator()), string_value, length);
     string_table[index] = new_object;
     return new_object;
 }
@@ -254,7 +262,7 @@ inline void StringTable::garbage_collect()
             continue;
         }
         if (entry->get_ref_count() == 0) {
-            ka::deallocate_object_raw(entry, sizeof(StringRepr));
+            ka::deallocate(*(allocator()), entry);
             the_table[i] = (StringRepr*)sc_deleted_slot_marker;
             --table_used;
         }
@@ -289,6 +297,13 @@ inline void StringTable::garbage_collect()
     hash_table() = new_table;
     hash_table_size() = new_table_size;
     hash_table_used() = table_used;
+
+    // garbage collect the pool as well
+    auto the_allocator = allocator();
+    if (((float)(the_allocator->get_bytes_allocated()) /
+         (float)(the_allocator->get_bytes_claimed())) < sc_allocator_utilization_low) {
+        the_allocator->garbage_collect();
+    }
     return;
 }
 
@@ -309,18 +324,13 @@ void StringTable::finalize()
     auto the_table = hash_table();
     auto table_size = hash_table_size();
 
-    for (u64 i = 0; i < table_size; ++i) {
-        auto entry = the_table[i];
-        if (is_slot_nonused(entry) || is_slot_deleted(entry)) {
-            continue;
-        }
-        ka::deallocate_object_raw(entry, sizeof(StringRepr));
-    }
-
     ka::deallocate_raw(the_table, sizeof(StringRepr*) * table_size);
     hash_table() = nullptr;
     hash_table_size() = (u64)0;
     hash_table_used() = (u64)0;
+
+    // deallocate the pool
+    ka::deallocate_object(allocator());
 }
 
 void StringTable::set_resize_factor(float new_resize_factor)

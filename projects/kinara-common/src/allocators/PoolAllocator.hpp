@@ -103,6 +103,7 @@ public:
     void garbage_collect();
 
     u64 get_bytes_allocated() const;
+    u64 get_objects_allocated() const;
     u64 get_bytes_claimed() const;
     u64 get_block_size() const;
     u64 get_num_objects_at_once() const;
@@ -122,7 +123,7 @@ static inline void deallocate(PoolAllocator& pool_allocator,
     KINARA_ASSERT((sizeof(T) <= pool_allocator.get_block_size() &&
                    sizeof(T) + 8 > pool_allocator.get_block_size()));
     object_ptr->~T();
-    return pool_allocator.deallocate(object_ptr);
+    pool_allocator.deallocate(const_cast<T*>(object_ptr));
 }
 
 } /* end namespace allocators */

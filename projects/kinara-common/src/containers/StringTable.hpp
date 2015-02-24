@@ -41,6 +41,14 @@
 #include "../basetypes/KinaraBase.hpp"
 
 namespace kinara {
+
+namespace allocators {
+
+// forward declaration
+class PoolAllocator;
+
+} /* end namespace allocators */
+
 namespace containers {
 
 namespace string_detail_ {
@@ -54,6 +62,7 @@ namespace string_table_detail_ {
 
 namespace kcsd = kinara::containers::string_detail_;
 using kcsd::StringRepr;
+namespace ka = kinara::allocators;
 
 class StringTable
 {
@@ -62,6 +71,7 @@ public:
     static constexpr float sc_default_resize_factor = 1.618f;
     static constexpr float sc_default_max_load_factor = 0.7f;
     static constexpr float sc_default_min_load_factor = 0.05f;
+    static constexpr float sc_allocator_utilization_low = 0.1f;
 
 private:
     StringTable() = delete;
@@ -81,6 +91,7 @@ private:
     static float s_min_load_factor;
 
     static inline StringRepr**& hash_table();
+    static inline ka::PoolAllocator* allocator();
     static inline u64& hash_table_size();
     static inline u64& hash_table_used();
 

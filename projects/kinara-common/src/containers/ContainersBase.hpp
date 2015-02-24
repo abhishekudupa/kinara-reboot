@@ -40,6 +40,7 @@
 #if !defined KINARA_CONTAINERS_CONTAINERS_BASE_HPP_
 #define KINARA_CONTAINERS_CONTAINERS_BASE_HPP_
 
+#include <cmath>
 #include <ostream>
 
 #include "../basetypes/KinaraBase.hpp"

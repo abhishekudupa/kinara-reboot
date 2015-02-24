@@ -40,7 +40,6 @@
 #if !defined KINARA_KINARA_COMMON_CONTAINERS_VECTOR_HPP_
 #define KINARA_KINARA_COMMON_CONTAINERS_VECTOR_HPP_
 
-#include <cmath>
 #include <cstring>
 #include <initializer_list>
 
@@ -902,20 +901,21 @@ static inline bool operator >= (const VectorBase<T, Inc1, MS1, CF1, DF1>& vector
 
 // some useful typedefs
 template <typename T,
-          typename ConstructFunc = ConstructFunc<T>,
-          typename DestructFunc = DestructFunc<T>>
+          typename ConstructFunc = DefaultConstructFunc<T>,
+          typename DestructFunc = DefaultDestructFunc<T>>
 using CompactVector = VectorBase<T, detail::AdditiveIncrementer<16>,
                                  1, ConstructFunc, DestructFunc>;
 
 template <typename T,
-          typename ConstructFunc = ConstructFunc<T>,
-          typename DestructFunc = DestructFunc<T>>
+          typename ConstructFunc = DefaultConstructFunc<T>,
+          typename DestructFunc = DefaultDestructFunc<T>>
 using Vector = VectorBase<T, detail::MultiplicativeIncrementer<3, 2, 8>,
                           2, ConstructFunc, DestructFunc>;
 
 template <typename T>
 using PtrVector = VectorBase<T*, detail::MultiplicativeIncrementer<3, 2, 8>,
-                             2, ConstructFunc<T*>, DestructFunc<T*>>;
+                             2, DefaultConstructFunc<T*>,
+                             DefaultDestructFunc<T*>>;
 
 template <typename T>
 using CompactPtrVector = VectorBase<T*, detail::AdditiveIncrementer<16>,

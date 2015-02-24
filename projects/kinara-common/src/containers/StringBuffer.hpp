@@ -103,6 +103,7 @@ static inline std::istream& operator >> (std::istream& input_stream,
     } else {
         local_buffer[used_buffer] = (char)0;
         string_buffer.append(local_buffer);
+        return input_stream;
     }
 }
 

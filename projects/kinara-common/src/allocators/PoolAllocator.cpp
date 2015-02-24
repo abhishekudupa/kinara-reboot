@@ -206,6 +206,11 @@ u64 PoolAllocator::get_bytes_allocated() const
     return m_bytes_allocated;
 }
 
+u64 PoolAllocator::get_objects_allocated() const
+{
+    return (m_bytes_allocated / m_object_size);
+}
+
 u64 PoolAllocator::get_bytes_claimed() const
 {
     return m_bytes_claimed;
