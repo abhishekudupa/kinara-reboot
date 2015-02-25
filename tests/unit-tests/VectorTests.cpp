@@ -39,6 +39,8 @@
 #include <vector>
 #include <random>
 #include <cstdlib>
+#include <algorithm>
+
 #include "../../thirdparty/gtest/include/gtest/gtest.h"
 
 using kinara::containers::u32Vector;
@@ -194,7 +196,25 @@ TEST(Vector, RefCountableObjects)
             EXPECT_EQ(i - 10, (int)(*(vector2[i])));
         }
     }
+}
 
+// test compatibility of iterators
+// with the rest of stl
+TEST(Vector, IteratorCompat)
+{
+    u32Vector test_vector = {9, 8, 7, 6, 5, 4, 3, 2, 1, 0};
+    std::sort(test_vector.begin(), test_vector.end());
+    for (u64 i = 0, last = test_vector.size(); i < last; ++i) {
+        for (u64 j = i + 1; j < last; ++j) {
+            EXPECT_LE(test_vector[i], test_vector[j]);
+        }
+    }
+
+    u32 i = 0;
+    for (auto elem : test_vector) {
+        EXPECT_EQ(i, elem);
+        ++i;
+    }
 }
 
 

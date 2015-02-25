@@ -42,6 +42,8 @@
 
 #include <cstring>
 #include <initializer_list>
+#include <algorithm>
+#include <functional>
 
 #include "../basetypes/KinaraBase.hpp"
 #include "../basetypes/KinaraTypes.hpp"
@@ -723,6 +725,46 @@ public:
     void emplace_back(ArgTypes&&... args)
     {
         push_back(T(std::forward<ArgTypes>(args)...));
+    }
+
+    // functions that are not part of std::vector
+    // find the first occurence of value
+    // requires values to have the == operator defined
+    Iterator find(const ValueType& value)
+    {
+        for (auto it = begin(), last = end(); it != last; ++it) {
+            if ((*it) == value) {
+                return it;
+            }
+        }
+        return end();
+    }
+
+    ConstIterator find(const ValueType& value) const
+    {
+        typedef kc::VectorBase<T, IncrementFunc, MAXSLACK, ConstructFunc, DestructFunc> MyType;
+        auto non_const_this = const_cast<MyType*>(this);
+        return const_cast<const T*>(non_const_this->find(value));
+    }
+
+    void sort()
+    {
+        std::sort(begin(), end());
+    }
+
+    void sort(const std::function<bool(const T&, const T&)>& compare_fun)
+    {
+        std::sort(begin(), end(), compare_fun);
+    }
+
+    void stable_sort()
+    {
+        std::stable_sort(begin(), end());
+    }
+
+    void stable_sort(const std::function<bool(const T&, const T&)>& compare_fun)
+    {
+        std::stable_sort(begin(), end(), compare_fun);
     }
 };
 

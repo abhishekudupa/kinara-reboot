@@ -54,14 +54,40 @@ namespace containers {
 namespace ka = kinara::allocators;
 namespace kc = kinara::containers;
 
+// forward declaration of list class
+template <typename T, typename ConstructFunc, typename DestructFunc, bool USEPOOLS>
+class SListBase;
+
 namespace slist_detail_ {
+
+// Just a pointer to the next node
+struct SListNodeBase
+{
+    SListNodeBase* m_next;
+
+    inline SListNodeBase()
+        : m_next(nullptr)
+    {
+        // Nothing here
+    }
+
+    inline SListNodeBase(SListNodeBase* next)
+        : m_next(next)
+    {
+        // Nothing here
+    }
+
+    inline ~SListNodeBase()
+    {
+        // Nothing here
+    }
+};
 
 template <typename T, typename ConstructFunc,
           typename DestructFunc>
-struct SListNode
+struct SListNode : public SListNodeBase
 {
     T m_value;
-    SListNode* m_next;
 
     inline SListNode() = delete;
     inline SListNode(const SListNode& other) = delete;
@@ -84,113 +110,165 @@ struct SListNode
     }
 };
 
-
-template <typename T, bool ISCONST, typename ConstructFunc, typename DestructFunc>
-class Iterator : public std::iterator<std::forward_iterator_tag, T, u64,
-                                      typename std::conditional<ISCONST, const T*, T*>::type,
-                                      typename std::conditional<ISCONST, const T&, T&>::type>
+template <typename T, typename ConstructFunc, typename DestructFunc, bool ISCONST>
+class IteratorBase :
+        public std::iterator<std::forward_iterator_tag, T, u64,
+                             typename std::conditional<ISCONST, const T*, T*>::type,
+                             typename std::conditional<ISCONST, const T&, T&>::type>
 {
+    friend class SListBase<T, ConstructFunc, DestructFunc, true>;
+    friend class SListBase<T, ConstructFunc, DestructFunc, false>;
+
 private:
-    typedef typename
-    std::conditional<ISCONST,
-                     const SListNode<T, ConstructFunc, DestructFunc>*,
-                     SListNode<T, ConstructFunc, DestructFunc>*>::type NodeType;
+    typedef SListNode<T, ConstructFunc, DestructFunc> NodeType;
+    typedef typename std::conditional<ISCONST, const T*, T*>::type ValPtrType;
+    typedef typename std::conditional<ISCONST, const T&, T&>::type ValRefType;
 
-    typedef typename
-    std::conditional<ISCONST, const T&, T&>::type ValRefType;
+    // helper to get the node
+    inline NodeType* get_node() const
+    {
+        return m_node;
+    }
 
-    typedef typename
-    std::conditional<ISCONST, const T*, T*>::type ValPtrType;
+    inline operator NodeType () const
+    {
+        return m_node;
+    }
 
-    NodeType* m_list_node;
-
+protected:
+    NodeType* m_node;
 
 public:
-    inline Iterator()
-        : m_list_node(nullptr)
+    inline IteratorBase()
+        : m_node(nullptr)
     {
         // Nothing here
     }
 
-    inline Iterator(NodeType* list_node)
-        : m_list_node(list_node)
+    inline IteratorBase(NodeType* node)
+        : m_node(node)
     {
         // Nothing here
     }
 
-    template <bool OTHERISCONST>
-    inline Iterator(const kc::slist_detail_::Iterator<T, OTHERISCONST,
-                                                      ConstructFunc, DestructFunc>& other)
-        : m_list_node(other.m_list_node)
-    {
-        static_assert(!OTHERISCONST || ISCONST,
-                      "Cannot construct non-const iterator from const iterator");
-    }
-
-    inline ~Iterator()
+    inline IteratorBase(const IteratorBase& other)
+        : m_node(other.m_node)
     {
         // Nothing here
     }
 
-    template <bool OTHERISCONST>
-    inline Iterator&
-    operator = (const kc::slist_detail_::Iterator<T, OTHERISCONST,
-                                                  ConstructFunc, DestructFunc>& other)
+    template <bool OISCONST>
+    inline
+    IteratorBase(const kc::slist_detail_::IteratorBase<T, ConstructFunc, DestructFunc, OISCONST>&
+                 other)
+        : m_node(other.m_node)
     {
-        static_assert(!OTHERISCONST || ISCONST,
+        static_assert(((!OISCONST) || ISCONST),
+                      "Cannot construct const iterator "
+                      "from non-const iterator");
+    }
+
+
+    inline ~IteratorBase()
+    {
+        // Nothing here
+    }
+
+    inline IteratorBase& operator = (const IteratorBase& other)
+    {
+        if (&other == this) {
+            return *this;
+        }
+        m_node = other.m_node;
+        return *this;
+    }
+
+    template <bool OISCONST>
+    inline IteratorBase&
+    operator = (const kc::slist_detail_::IteratorBase<T, ConstructFunc, DestructFunc, OISCONST>&
+                other)
+    {
+        static_assert(((!OISCONST) || ISCONST),
                       "Cannot assign const iterator to non-const iterator");
 
         if (&other == this) {
             return *this;
         }
-        m_list_node = other.m_list_node;
+        m_node = other.m_node;
         return *this;
     }
 
-    template <bool OTHERISCONST>
-    inline bool
-    operator == (const kc::slist_detail_::Iterator<T, OTHERISCONST,
-                                                   ConstructFunc, DestructFunc>& other) const
+    inline IteratorBase& operator ++ ()
     {
-        return (m_list_node == other.m_list_node);
+        m_node = m_node->m_next;
     }
 
-    template <bool OTHERISCONST>
-    inline bool
-    operator != (const kc::slist_detail_::Iterator<T, OTHERISCONST,
-                                                   ConstructFunc, DestructFunc>& other) const
-    {
-        return (m_list_node != other.m_list_node);
-    }
-
-    inline Iterator& operator ++ ()
-    {
-        m_list_node = m_list_node->get_next();
-    }
-
-    inline Iterator operator ++ (int unused)
+    inline IteratorBase operator ++ (int unused)
     {
         auto retval = *this;
-        m_list_node = m_list_node->get_next();
+        m_node = m_node->m_next;
         return retval;
     }
 
-    inline ValRefType operator * () const
+    inline ValRefType operator * ()
     {
-        return m_list_node->get_value();
+        return m_node->m_value;
     }
 
-    inline ValPtrType operator -> () const
+    inline ValRefType operator -> ()
     {
-        return &(m_list_node->get_value());
+        return m_node->m_value;
+    }
+
+    inline bool operator == (const IteratorBase& other) const
+    {
+        return (m_node == other.m_node);
+    }
+
+    template <bool OISCONST>
+    inline bool
+    operator == (const kc::slist_detail_::IteratorBase<T, ConstructFunc, DestructFunc, OISCONST>&
+                 other) const
+    {
+        return (m_node == other.m_node);
+    }
+
+
+    inline bool operator != (const IteratorBase& other) const
+    {
+        return (m_node != other.m_node);
+    }
+
+    template <bool OISCONST>
+    inline bool
+    operator != (const kc::slist_detail_::IteratorBase<T, ConstructFunc, DestructFunc, OISCONST>&
+                 other) const
+    {
+        return (m_node != other.m_node);
     }
 };
 
+template <typename T, typename ConstructFunc, typename DestructFunc>
+using Iterator = IteratorBase<T, ConstructFunc, DestructFunc, false>;
+
+template <typename T, typename ConstructFunc, typename DestructFunc>
+using ConstIterator = IteratorBase<T, ConstructFunc, DestructFunc, true>;
+
 } /* end namespace slist_detail_ */
+
+/*
+   A singly-linked list:
+   - push_back, push_front are constant time operations
+   - pop_front is also constant time
+   - pop_back is linear time
+   - inserts are constant time
+   - searches are linear time
+   - overhead = (3 words) + (n * 1 word)
+*/
 
 template <typename T, typename ConstructFunc,
           typename DestructFunc, bool USEPOOLS>
-class SListBase
+class SListBase final
 {
 public:
     typedef T ValueType;
@@ -199,9 +277,9 @@ public:
     typedef T& RefType;
     typedef const T& ConstRefType;
 
-    typedef slist_detail_::Iterator<T, false, ConstructFunc, DestructFunc> Iterator;
+    typedef slist_detail_::Iterator<T, ConstructFunc, DestructFunc> Iterator;
     typedef Iterator iterator;
-    typedef slist_detail_::Iterator<T, true, ConstructFunc, DestructFunc> ConstIterator;
+    typedef slist_detail_::ConstIterator<T, ConstructFunc, DestructFunc> ConstIterator;
     typedef ConstIterator const_iterator;
 
     // No reverse iteration is possible!
@@ -268,6 +346,20 @@ private:
         }
     }
 
+    inline void add_to_size(u64 addend)
+    {
+        if (!USEPOOLS) {
+            m_pool_or_size.m_size += addend;
+        }
+    }
+
+    inline void sub_from_size(u64 subend)
+    {
+        if (!USEPOOLS) {
+            m_pool_or_size.m_size -= subend;
+        }
+    }
+
     inline u64 get_size() const
     {
         if (m_list_head == nullptr) {
@@ -280,11 +372,24 @@ private:
         }
     }
 
+    // constructs n objects AFTER the current position
+    inline Iterator construct_core(Iterator position, u64 n, const ValueType& value)
+    {
+
+    }
+
+    // constructs the objects in the range AFTER the position
+    template <typename InputIterator>
+    inline void construct_core(Iterator position, InputIterator first, InputIterator last)
+    {
+
+    }
+
 public:
     explicit SListBase()
-        : m_pool_or_size(), m_list_head(nullptr)
+        : m_pool_or_size(), m_list_head(nullptr), m_list_tail(nullptr)
     {
-        // Nothing here
+
     }
 
     explicit SListBase(u64 n)

@@ -87,12 +87,12 @@ inline u64& StringTable::hash_table_used()
 
 inline bool StringTable::is_slot_nonused(const StringRepr* slot_ptr)
 {
-    return ((u64)slot_ptr == sc_nonused_slot_marker);
+    return (reinterpret_cast<u64>(slot_ptr) == sc_nonused_slot_marker);
 }
 
 inline bool StringTable::is_slot_deleted(const StringRepr* slot_ptr)
 {
-    return ((u64)slot_ptr == sc_deleted_slot_marker);
+    return (reinterpret_cast<u64>(slot_ptr) == sc_deleted_slot_marker);
 }
 
 inline const StringRepr* StringTable::find(const char* string_value, u64 length)

@@ -81,8 +81,9 @@ private:
     StringTable& operator = (StringTable&&) = delete;
 
     // constants used as deleted and unused values in the hash table
-    static constexpr u64 sc_nonused_slot_marker = (0x0);
-    static constexpr u64 sc_deleted_slot_marker = (0x1);
+    static constexpr u64 sc_nonused_slot_marker = 0x0;
+    static constexpr u64 sc_deleted_slot_marker = 0x1;
+
 
     // actually configurable parameters, which are set to the
     // values above by default
