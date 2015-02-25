@@ -488,16 +488,6 @@ static inline std::ostream& operator << (std::ostream& out_stream,
     return out_stream;
 }
 
-static inline u64 get_hash_value(const Hashable& object_ref)
-{
-    return object_ref.hash();
-}
-
-static inline u64 get_hash_value(const Hashable* object_ptr)
-{
-    return object_ptr->hash();
-}
-
 } /* end namespace kinara */
 
 #endif /* KINARA_KINARA_COMMON_BASETYPES_KINARA_TYPES_HPP_ */

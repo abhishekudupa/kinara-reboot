@@ -43,6 +43,7 @@
 // to combine/mix hash values in a nice fashion
 
 #include <functional>
+#include <type_traits>
 
 #include "../basetypes/KinaraBase.hpp"
 #include "../basetypes/KinaraTypes.hpp"
@@ -56,28 +57,91 @@ template <typename T>
 class Hasher
 {
 private:
-    inline u64 get_hash(const Hashable& hashable_ref) const
+    inline u64 compute_hash(const T& object,
+                            const std::true_type& is_hashable_object) const
     {
-        return hashable_ref.hash();
+        return object.hash();
     }
 
-    inline u64 get_hash(const Hashable* hashable_ptr) const
+    inline u64 compute_hash(const T& object,
+                            const std::false_type& is_hashable_object) const
     {
-        return hashable_ptr->hash();
-    }
-
-    inline u64 get_hash(const Stringifiable& stringifiable_ref) const
-    {
-        return
+        std::hash<T> hasher;
+        return hasher(object);
     }
 
 public:
     inline u64 operator () (const T& object) const
     {
+        typename std::is_convertible<const T*, const Hashable*>::type is_hashable_object;
+        return compute_hash(object, is_hashable_object);
     }
 };
 
-// Specializations for basic types
+// specialization for pointers
+template <typename T>
+class Hasher<T*>
+{
+private:
+    inline u64 compute_hash(const T* ptr,
+                            const std::true_type& is_hashable_object) const
+    {
+        return ptr->hash();
+    }
+
+    inline u64 compute_hash(const T* ptr,
+                            const std::false_type& is_hashable_object) const
+    {
+        std::hash<T*> hasher;
+        return hasher(object);
+    }
+
+public:
+    inline u64 operator () (const T* ptr) const
+    {
+        typename std::is_convertible<const T*, const Hashable*>::type is_hashable_object;
+        return compute_hash(ptr, is_hashable_object);
+    }
+};
+
+template <typename T>
+class Hasher<const T*>
+{
+private:
+    inline u64 compute_hash(const T* ptr,
+                            const std::true_type& is_hashable_object) const
+    {
+        return ptr->hash();
+    }
+
+    inline u64 compute_hash(const T* ptr,
+                            const std::false_type& is_hashable_object) const
+    {
+        std::hash<T*> hasher;
+        return hasher(object);
+    }
+
+public:
+    inline u64 operator () (const T* ptr) const
+    {
+        typename std::is_convertible<const T*, const Hashable*>::type is_hashable_object;
+        return compute_hash(ptr, is_hashable_object);
+    }
+};
+
+// or perhaps you want the raw hash?
+template <typename T>
+class RawHasher
+{
+public:
+    inline u64 operator () (const T& object) const
+    {
+        std::hash<T> hasher;
+        return hasher(object);
+    }
+};
+
+// TODO: Specialize for tuples and compound types
 
 } /* end namespace utils */
 } /* end namespace kinara */
