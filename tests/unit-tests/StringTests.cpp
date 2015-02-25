@@ -42,11 +42,13 @@
 #include "../../thirdparty/gtest/include/gtest/gtest.h"
 
 using kinara::containers::String;
+using kinara::u32;
+using kinara::u64;
 
 // Test short strings
 TEST(String, ShortStrings) {
     String empty_string;
-    EXPECT_EQ(empty_string.length(), 0);
+    EXPECT_EQ(empty_string.length(), (u64)0);
 
     // short string test
     empty_string += "hello";
@@ -55,24 +57,24 @@ TEST(String, ShortStrings) {
     String world_string("world");
     String hello_world_string = empty_string + " " + world_string;
     EXPECT_EQ(hello_world_string, "hello world");
-    EXPECT_EQ(hello_world_string.length(), 11);
+    EXPECT_EQ(hello_world_string.length(), (u64)11);
 }
 
 TEST(String, LongStrings) {
     String short_string1("This is a short string");
     String short_string2("This is a short string as well");
-    EXPECT_EQ(short_string1.length(), 22);
-    EXPECT_EQ(short_string2.length(), 30);
+    EXPECT_EQ(short_string1.length(), (u64)22);
+    EXPECT_EQ(short_string2.length(), (u64)30);
     String long_string = short_string1 + short_string2;
-    EXPECT_EQ(long_string.length(), 52);
+    EXPECT_EQ(long_string.length(), (u64)52);
     String long_string2 = (short_string1 += short_string2);
     EXPECT_EQ((void*)(long_string2.c_str()), (void*)(long_string.c_str()));
 
     String another_long_string(std::move(long_string));
     EXPECT_EQ((void*)(long_string2.c_str()), (void*)(another_long_string.c_str()));
 
-    EXPECT_EQ(another_long_string.find("This"), 0);
-    EXPECT_EQ(another_long_string.find("short"), 10);
+    EXPECT_EQ(another_long_string.find("This"), (u64)0);
+    EXPECT_EQ(another_long_string.find("short"), (u64)10);
 
     EXPECT_EQ(another_long_string.to_lower(), "this is a short stringthis is a short string as well");
 }

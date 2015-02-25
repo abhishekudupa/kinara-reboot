@@ -46,6 +46,9 @@ using kinara::containers::u32CompactVector;
 using kinara::containers::PtrVector;
 using kinara::memory::RefCountable;
 
+using kinara::u32;
+using kinara::u64;
+
 class RCClass : public RefCountable
 {
 private:
@@ -84,7 +87,7 @@ public:
 TEST(Vector, EmptyIntVector)
 {
     u32Vector test_vector;
-    EXPECT_EQ(0, test_vector.size());
+    EXPECT_EQ((u64)0, test_vector.size());
     EXPECT_EQ(nullptr, test_vector.data());
 }
 
@@ -93,25 +96,25 @@ TEST(Vector, ShortIntVector)
     u32Vector test_vector;
     test_vector = {1, 2, 3};
 
-    EXPECT_EQ(3, test_vector.size());
-    EXPECT_EQ(1, test_vector[0]);
-    EXPECT_EQ(2, test_vector[1]);
-    EXPECT_EQ(3, test_vector[2]);
+    EXPECT_EQ((u32)3, test_vector.size());
+    EXPECT_EQ((u32)1, test_vector[0]);
+    EXPECT_EQ((u32)2, test_vector[1]);
+    EXPECT_EQ((u32)3, test_vector[2]);
 
     u32Vector test_vector2;
     test_vector2 = test_vector;
     test_vector.push_back(2);
 
-    EXPECT_EQ(3, test_vector2.size());
-    EXPECT_EQ(1, test_vector2[0]);
-    EXPECT_EQ(2, test_vector2[1]);
-    EXPECT_EQ(3, test_vector2[2]);
+    EXPECT_EQ((u32)3, test_vector2.size());
+    EXPECT_EQ((u32)1, test_vector2[0]);
+    EXPECT_EQ((u32)2, test_vector2[1]);
+    EXPECT_EQ((u32)3, test_vector2[2]);
 
-    EXPECT_EQ(4, test_vector.size());
-    EXPECT_EQ(1, test_vector[0]);
-    EXPECT_EQ(2, test_vector[1]);
-    EXPECT_EQ(3, test_vector[2]);
-    EXPECT_EQ(2, test_vector[3]);
+    EXPECT_EQ((u32)4, test_vector.size());
+    EXPECT_EQ((u32)1, test_vector[0]);
+    EXPECT_EQ((u32)2, test_vector[1]);
+    EXPECT_EQ((u32)3, test_vector[2]);
+    EXPECT_EQ((u32)2, test_vector[3]);
 }
 
 TEST(Vector, LongIntVector)
@@ -125,32 +128,32 @@ TEST(Vector, LongIntVector)
     u32Vector vector2 = vector1;
 
     for (int i = 0; i < (1 << 16); ++i) {
-        EXPECT_EQ(i, vector1[i]);
-        EXPECT_EQ(i, vector2[i]);
+        EXPECT_EQ((u32)i, vector1[i]);
+        EXPECT_EQ((u32)i, vector2[i]);
     }
 
     EXPECT_TRUE(vector1 == vector2);
 
     vector1.clear();
 
-    EXPECT_EQ(0, vector1.size());
-    EXPECT_EQ((1 << 16), vector2.size());
+    EXPECT_EQ((u32)0, vector1.size());
+    EXPECT_EQ((u32)(1 << 16), vector2.size());
 
     for (int i = 0; i < 10; ++i) {
         vector1.push_back(i);
     }
     vector2.insert(vector2.begin() + 10, vector1.begin(), vector1.end());
-    EXPECT_EQ((1<<16) + 10, vector2.size());
+    EXPECT_EQ((u64)((1<<16) + 10), vector2.size());
 
     EXPECT_TRUE(vector1 < vector2);
     EXPECT_TRUE(vector2 > vector1);
 
     for (int i = 0; i < (1 << 16) + 10; ++i) {
         if (i < 10) {
-            EXPECT_EQ(i, vector2[i]);
+            EXPECT_EQ((u32)i, vector2[i]);
         }
         else {
-            EXPECT_EQ(i - 10, vector2[i]);
+            EXPECT_EQ((u32)(i - 10), vector2[i]);
         }
     }
 }
@@ -172,8 +175,8 @@ TEST(Vector, RefCountableObjects)
 
     vector1.clear();
 
-    EXPECT_EQ(0, vector1.size());
-    EXPECT_EQ((1 << 16), vector2.size());
+    EXPECT_EQ((u32)0, vector1.size());
+    EXPECT_EQ((u32)(1 << 16), vector2.size());
 
     for (int i = 0; i < 10; ++i) {
         vector1.push_back(new RCClass(i));
@@ -181,7 +184,7 @@ TEST(Vector, RefCountableObjects)
 
     vector2.insert(vector2.begin() + 10, vector1.begin(), vector1.end());
 
-    EXPECT_EQ((1<<16) + 10, vector2.size());
+    EXPECT_EQ((u64)((1<<16) + 10), vector2.size());
 
     for (int i = 0; i < (1 << 16) + 10; ++i) {
         if (i < 10) {

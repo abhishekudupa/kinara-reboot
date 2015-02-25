@@ -298,7 +298,7 @@ public:
     void assign(InputIterator first, InputIterator last)
     {
         call_destructors();
-        auto new_size = std::distance(first, last);
+        auto new_size = (u64)std::distance(first, last);
 
         if (new_size == 0) {
             deallocate_data();
