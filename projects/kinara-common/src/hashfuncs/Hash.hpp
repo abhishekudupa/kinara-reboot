@@ -93,7 +93,7 @@ private:
                             const std::false_type& is_hashable_object) const
     {
         std::hash<T*> hasher;
-        return hasher(object);
+        return hasher(ptr);
     }
 
 public:
@@ -118,7 +118,7 @@ private:
                             const std::false_type& is_hashable_object) const
     {
         std::hash<T*> hasher;
-        return hasher(object);
+        return hasher(ptr);
     }
 
 public:
@@ -126,6 +126,52 @@ public:
     {
         typename std::is_convertible<const T*, const Hashable*>::type is_hashable_object;
         return compute_hash(ptr, is_hashable_object);
+    }
+};
+
+// Specialization for pairs
+template <typename T1, typename T2>
+class Hasher<std::pair<T1, T2>>
+{
+public:
+    inline u64 operator () (const std::pair<T1, T2>& the_pair) const
+    {
+        Hasher<T1> t1_hasher;
+        Hasher<T2> t2_hasher;
+        return (t1_hasher(the_pair.first) ^ t2_hasher(the_pair.second));
+    }
+};
+
+// Specialization for tuples
+template <typename... ArgTypes>
+class Hasher<std::tuple<ArgTypes...>>
+{
+private:
+    template <u64 INDEX, typename... TupleTypes>
+    inline typename std::enable_if<INDEX == sizeof...(TupleTypes), void>::type
+    compute_hash(const std::tuple<TupleTypes...>& the_tuple,
+                 std::array<u64, sizeof...(TupleTypes)>& the_array) const
+    {
+     	// break recursion
+    }
+
+    template <u64 INDEX, typename... TupleTypes>
+    inline typename std::enable_if<INDEX < sizeof...(TupleTypes), void>::type
+    compute_hash(const std::tuple<TupleTypes...>& the_tuple,
+                 std::array<u64, sizeof...(TupleTypes)>& the_array) const
+    {
+        Hasher<typename std::tuple_element<INDEX, typename std::tuple<TupleTypes...> >::type> hasher;
+        the_array[INDEX] = hasher(std::get<INDEX>(the_tuple));
+        compute_hash<INDEX+1>(the_tuple, the_array);
+    }
+
+public:
+    inline u64 operator () (const std::tuple<ArgTypes...>& the_tuple) const
+    {
+        std::array<u64, sizeof...(ArgTypes)> the_array;
+        memset(the_array.data(), 0, sizeof(u64) * sizeof...(ArgTypes));
+        compute_hash<0>(the_tuple, the_array);
+        return default_hash_function(the_array.data(), sizeof(u64) * sizeof...(ArgTypes));
     }
 };
 
@@ -141,7 +187,52 @@ public:
     }
 };
 
-// TODO: Specialize for tuples and compound types
+// Specialization of raw hash for pairs
+template <typename T1, typename T2>
+class RawHasher<std::pair<T1, T2>>
+{
+public:
+    inline u64 operator () (const std::pair<T1, T2>& the_pair) const
+    {
+        RawHasher<T1> t1_hasher;
+        RawHasher<T2> t2_hasher;
+        return (t1_hasher(the_pair.first) ^ t2_hasher(the_pair.second));
+    }
+};
+
+// specialization of raw hash for tuples
+template <typename... ArgTypes>
+class RawHasher<std::tuple<ArgTypes...>>
+{
+private:
+    template <u64 INDEX, typename... TupleTypes>
+    inline typename std::enable_if<INDEX == sizeof...(TupleTypes), void>::type
+    compute_hash(const std::tuple<TupleTypes...>& the_tuple,
+                 std::array<u64, sizeof...(TupleTypes)>& the_array) const
+    {
+     	// break recursion
+    }
+
+    template <u64 INDEX, typename... TupleTypes>
+    inline typename std::enable_if<INDEX < sizeof...(TupleTypes), void>::type
+    compute_hash(const std::tuple<TupleTypes...>& the_tuple,
+                 std::array<u64, sizeof...(TupleTypes)>& the_array) const
+    {
+        RawHasher<typename std::tuple_element<INDEX, typename std::tuple<TupleTypes...> >::type> hasher;
+        the_array[INDEX] = hasher(std::get<INDEX>(the_tuple));
+        compute_hash<INDEX+1>(the_tuple, the_array);
+    }
+
+public:
+    inline u64 operator () (const std::tuple<ArgTypes...>& the_tuple) const
+    {
+        std::array<u64, sizeof...(ArgTypes)> the_array;
+        memset(the_array.data(), 0, sizeof(u64) * sizeof...(ArgTypes));
+        compute_hash<0>(the_tuple, the_array);
+        return default_hash_function(the_array.data(), sizeof(u64) * sizeof...(ArgTypes));
+    }
+};
+
 
 } /* end namespace utils */
 } /* end namespace kinara */
