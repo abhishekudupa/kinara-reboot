@@ -272,9 +272,100 @@ public:
     inline void operator () (void* mem_ptr, ArgTypes&&... args) const
     {
         new (mem_ptr) T(std::forward<ArgTypes>(args)...);
-        memory::inc_ref(static_cast<const T*>(mem_ptr));
     }
 };
+
+// partial specialization for pointers
+template <typename T>
+class DefaultConstructFunc<T*>
+{
+private:
+    typedef T* PtrType;
+    typedef const T* ConstPtrType;
+
+    inline void inc_ref(PtrType ptr,
+                        const std::true_type& is_refcountable_ptr) const
+    {
+        auto proc_ptr =
+            const_cast<const memory::RefCountable*>(static_cast<memory::RefCountable*>(ptr));
+        memory::inc_ref(proc_ptr);
+    }
+
+    inline void inc_ref(PtrType ptr,
+                        const std::false_type& is_refcountable_ptr) const
+    {
+        return;
+    }
+
+public:
+    inline void operator () (void* mem_ptr, PtrType value) const
+    {
+        typename
+            std::is_convertible<PtrType, const memory::RefCountable*>::type is_refcountable_ptr;
+        new (mem_ptr) PtrType(value);
+        inc_ref(value, is_refcountable_ptr);
+    }
+};
+
+template <typename T>
+class DefaultConstructFunc<const T*>
+{
+private:
+    typedef T* PtrType;
+    typedef const T* ConstPtrType;
+
+    inline void inc_ref(ConstPtrType ptr,
+                        const std::true_type& is_refcountable_ptr) const
+    {
+        auto proc_ptr = static_cast<const memory::RefCountable*>(ptr);
+        memory::inc_ref(proc_ptr);
+    }
+
+    inline void inc_ref(PtrType ptr,
+                        const std::false_type& is_refcountable_ptr) const
+    {
+        return;
+    }
+
+public:
+    inline void operator () (void* mem_ptr, ConstPtrType value) const
+    {
+        typename
+            std::is_convertible<PtrType, const memory::RefCountable*>::type is_refcountable_ptr;
+        new (mem_ptr) ConstPtrType(value);
+        inc_ref(value, is_refcountable_ptr);
+    }
+};
+
+// specialization for managed pointers
+template <typename T>
+class DefaultConstructFunc<memory::ManagedPointer<T>>
+{
+private:
+    typedef memory::ManagedPointer<T> PtrType;
+
+public:
+    template <typename... ArgTypes>
+    inline void operator () (void* mem_ptr, ArgTypes&&... args) const
+    {
+        new (mem_ptr) PtrType(std::forward<ArgTypes>(args)...);
+    }
+};
+
+template <typename T>
+class DefaultConstructFunc<memory::ManagedConstPointer<T>>
+{
+private:
+    typedef memory::ManagedConstPointer<T> PtrType;
+
+public:
+    template <typename... ArgTypes>
+    inline void operator () (void* mem_ptr, ArgTypes&&... args) const
+    {
+        new (mem_ptr) PtrType(std::forward<ArgTypes>(args)...);
+    }
+};
+
 
 // A destructor for various classes
 template <typename T>
@@ -284,13 +375,73 @@ public:
     inline void operator () (const T& object) const
     {
         (&object)->~T();
-        memory::dec_ref(&object);
+    }
+};
+
+// specialization for pointers
+template <typename T>
+class DefaultDestructFunc<T*>
+{
+private:
+    typedef T* PtrType;
+    typedef const T* ConstPtrType;
+
+    inline void dec_ref(PtrType value,
+                        const std::true_type& is_refcountable_ptr) const
+    {
+        auto proc_ptr =
+            const_cast<const memory::RefCountable*>(static_cast<memory::RefCountable*>(value));
+        memory::dec_ref(proc_ptr);
+    }
+
+    inline void dec_ref(PtrType value,
+                        const std::false_type& is_refcountable_ptr) const
+    {
+        return;
+    }
+
+public:
+    inline void operator () (const PtrType& ptr) const
+    {
+        typename std::is_convertible<PtrType, memory::RefCountable*>::type is_refcountable_ptr;
+        (&ptr)->~PtrType();
+        dec_ref(ptr, is_refcountable_ptr);
+    }
+};
+
+template <typename T>
+class DefaultDestructFunc<const T*>
+{
+private:
+    typedef T* PtrType;
+    typedef const T* ConstPtrType;
+
+    inline void dec_ref(ConstPtrType value,
+                        const std::true_type& is_refcountable_ptr) const
+    {
+        auto proc_ptr = static_cast<const memory::RefCountable*>(value);
+        memory::dec_ref(proc_ptr);
+    }
+
+    inline void dec_ref(ConstPtrType value,
+                        const std::false_type& is_refcountable_ptr) const
+    {
+        return;
+    }
+
+public:
+    inline void operator () (const ConstPtrType& ptr) const
+    {
+        typename
+            std::is_convertible<ConstPtrType, const memory::RefCountable*>::type is_refcountable_ptr;
+        (&ptr)->~ConstPtrType();
+        dec_ref(ptr, is_refcountable_ptr);
     }
 };
 
 // specialization for managed pointers
 template <typename T>
-class DefaultDestructFunc<const memory::ManagedPointer<T>>
+class DefaultDestructFunc<memory::ManagedPointer<T>>
 {
 private:
     typedef memory::ManagedPointer<T> PtrType;
@@ -302,7 +453,7 @@ public:
 };
 
 template <typename T>
-class DefaultDestructFunc<const memory::ManagedConstPointer<T>>
+class DefaultDestructFunc<memory::ManagedConstPointer<T>>
 {
 private:
     typedef memory::ManagedConstPointer<T> PtrType;

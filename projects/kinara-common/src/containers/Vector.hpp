@@ -62,7 +62,7 @@ namespace kc = kinara::containers;
 template <typename T, typename IncrementFunc,
           u32 MAXSLACK, typename ConstructFunc,
           typename DestructFunc>
-class VectorBase
+class VectorBase final
 {
 public:
     typedef T ValueType;
@@ -100,6 +100,14 @@ private:
             return;
         }
         *((static_cast<u64*>(static_cast<void*>(m_data))) - 1) = size;
+    }
+
+    inline void increment_size()
+    {
+        if (m_data == nullptr) {
+            return;
+        }
+        ++(*((static_cast<u64*>(static_cast<void*>(m_data))) - 1));
     }
 
     inline u64 get_capacity() const
@@ -142,56 +150,127 @@ private:
         return static_cast<T*>(static_cast<void*>(retval_as_ptr_to_u64 + 2));
     }
 
+    inline void deallocate_data()
+    {
+        if (m_data == nullptr) {
+            return;
+        }
+        ka::deallocate_raw(get_array_ptr(), get_array_size());
+    }
+
+    inline void copy_core(T* dst_ptr, const T* src_start, const T* src_end)
+    {
+        auto num_elems = std::distance(src_start, src_end);
+        memcpy(dst_ptr, src_start, sizeof(T) * num_elems);
+    }
+
+    template <typename InputIterator>
+    inline void construct_core(T* dst_ptr, InputIterator first, InputIterator last)
+    {
+        ConstructFunc the_construct_func;
+        InputIterator it = first;
+        for (auto cur_ptr = dst_ptr; it != last; ++cur_ptr, ++it) {
+            the_construct_func(cur_ptr, *it);
+        }
+    }
+
+    inline void construct_core(T* dst_ptr, u64 n, const ValueType& value)
+    {
+        ConstructFunc the_construct_func;
+        u64 i = 0;
+        for (auto cur_ptr = dst_ptr; i < n; ++i, ++cur_ptr) {
+            the_construct_func(cur_ptr, value);
+        }
+    }
+
     inline void* get_array_ptr() const
     {
         return static_cast<void*>(static_cast<u64*>(static_cast<void*>(m_data)) - 2);
     }
 
-    inline void expand(u64 new_capacity)
+    // expand to accommodate one more element
+    inline void expand()
     {
         auto capacity = get_capacity();
         auto size = get_size();
-        auto array_size = get_array_size();
 
-        if (capacity >= new_capacity) {
+        if (capacity > size) {
             return;
         }
-        // need to reallocate
+
+        IncrementFunc increment_fun;
+        auto new_capacity = increment_fun(capacity);
+
+        auto array_size = get_array_size();
         auto new_data = allocate_data(new_capacity);
 
-        memcpy(new_data, m_data, size * sizeof(T));
-        ka::deallocate_raw(get_array_ptr(), array_size);
+        if (m_data != nullptr) {
+            memcpy(new_data, m_data, size * sizeof(T));
+            ka::deallocate_raw(get_array_ptr(), array_size);
+        }
 
         m_data = new_data;
         set_size(size);
         set_capacity(new_capacity);
     }
 
-    inline void expand_with_hole(u64 new_capacity, u64 hole_size,
-                                 const ConstIterator& hole_position)
+    inline void expand(u64 new_capacity)
     {
         auto capacity = get_capacity();
         auto size = get_size();
+
+        if (capacity >= new_capacity) {
+            return;
+        }
+
         auto array_size = get_array_size();
+
+        // need to reallocate
+        auto new_data = allocate_data(new_capacity);
+
+        if (m_data != nullptr) {
+            memcpy(new_data, m_data, size * sizeof(T));
+            ka::deallocate_raw(get_array_ptr(), array_size);
+        }
+
+        m_data = new_data;
+        set_size(size);
+        set_capacity(new_capacity);
+    }
+
+    inline Iterator expand_with_hole(u64 hole_size,
+                                     ConstIterator hole_position)
+    {
+        auto capacity = get_capacity();
+        auto array_size = get_array_size();
+        auto size = get_size();
+        auto new_capacity = size + hole_size;
+        Iterator retval = const_cast<T*>(hole_position);
 
         if (capacity >= new_capacity) {
             // punch a hole and return
-            memmove(hole_position + hole_size, hole_position,
-                    std::distance(hole_position, end()));
-            return;
+            memmove(const_cast<T*>(hole_position) + hole_size, hole_position,
+                    std::distance(hole_position, cend()));
+            return retval;
         }
         // reallocate
         auto new_data = allocate_data(new_capacity);
-        auto offset_from_begin = std::distance(begin(), hole_position);
-        memcpy(new_data, m_data, sizeof(T) * offset_from_begin);
-        memcpy(new_data + hole_size, m_data + offset_from_begin,
-               sizeof(T) * std::distance(m_data + offset_from_begin, end()));
+        auto offset_from_begin = std::distance(cbegin(), hole_position);
+        retval = new_data + offset_from_begin;
 
-        ka::deallocate_raw(get_array_ptr(), array_size);
+        if (m_data != nullptr) {
+            memcpy(new_data, m_data, sizeof(T) * offset_from_begin);
+            memcpy(new_data + offset_from_begin + hole_size,
+                   m_data + offset_from_begin,
+                   sizeof(T) * (size - offset_from_begin));
+            ka::deallocate_raw(get_array_ptr(), array_size);
+        }
+
         m_data = new_data;
 
         set_capacity(new_capacity);
-        return;
+        set_size(size);
+        return retval;
     }
 
     inline void compact(u64 allowed_slack = MAXSLACK)
@@ -214,6 +293,51 @@ private:
     }
 
 public:
+    // we define the assign functions first
+    template <typename InputIterator>
+    void assign(InputIterator first, InputIterator last)
+    {
+        call_destructors();
+        auto new_size = std::distance(first, last);
+
+        if (new_size == 0) {
+            deallocate_data();
+            return;
+        }
+
+        if (new_size > get_capacity()) {
+            deallocate_data();
+            m_data = allocate_data(new_size);
+            set_size(new_size);
+            set_capacity(new_size);
+        } else {
+            set_size(new_size);
+        }
+
+        construct_core(m_data, std::move(first), std::move(last));
+        compact();
+    }
+
+    void assign(u64 n, const ValueType& value)
+    {
+        call_destructors();
+        if (n > get_capacity()) {
+            deallocate_data();
+            m_data = allocate_data(n);
+            set_size(n);
+            set_capacity(n);
+        } else {
+            set_size(n);
+        }
+        construct_core(m_data, n, value);
+        compact();
+    }
+
+    void assign(std::initializer_list<ValueType> init_list)
+    {
+        assign(init_list.begin(), init_list.end());
+    }
+
     explicit VectorBase()
         : m_data(nullptr)
     {
@@ -221,14 +345,9 @@ public:
     }
 
     explicit VectorBase(u64 size)
-        : m_data(nullptr)
+        : VectorBase(size, ValueType())
     {
-        if (size == 0) {
-            return;
-        }
-        m_data = allocate_data(size);
-        set_size(0);
-        set_capacity(size);
+        // Nothing here
     }
 
     VectorBase(u64 size, const ValueType& value)
@@ -237,60 +356,32 @@ public:
         if (size == 0) {
             return;
         }
-        set_size(size);
-        ConstructFunc the_construct_func;
-        for (u64 i = 0; i < size; ++i) {
-            the_construct_func(&(m_data[i]), value);
-        }
+        assign(size, value);
     }
 
     template <typename InputIterator>
-    VectorBase(const InputIterator& first, const InputIterator& last)
+    VectorBase(InputIterator first, InputIterator last)
         : m_data(nullptr)
     {
         auto size = distance(first, last);
         if (size == 0) {
             return;
         }
-        m_data = allocate_data(size);
-        set_size(size);
-        set_capacity(size);
-
-        ConstructFunc the_construct_func;
-
-        u64 i = 0;
-        for (auto it = first; it != last; ++it, ++i) {
-            the_construct_func(&(m_data[i]), *it);
-        }
+        assign(first, last);
     }
 
-    template <typename OtherIncrementer, u32 OTHERMAXSLACK>
-    VectorBase(const typename kc::VectorBase<T, OtherIncrementer,
-                                             OTHERMAXSLACK, ConstructFunc,
-                                             DestructFunc>& other)
+    // overload default copy and move constructors
+    VectorBase(const VectorBase& other)
         : m_data(nullptr)
     {
         auto size = other.size();
         if (size == 0) {
             return;
         }
-
-        m_data = allocate_data(size);
-        set_size(size);
-        set_capacity(size);
-
-        ConstructFunc the_construct_func;
-
-        for (u64 i = 0; i < size; ++i) {
-            the_construct_func(&(m_data[i]), other[i]);
-        }
+        assign(other.begin(), other.end());
     }
 
-    // The destructor and post constructors must match!
-    template <typename OtherIncrementer, u32 OTHERMAXSLACK>
-    VectorBase(typename kc::VectorBase<T, OtherIncrementer,
-                                      OTHERMAXSLACK, ConstructFunc,
-                                      DestructFunc>&& other)
+    VectorBase(const VectorBase&& other)
         : m_data(nullptr)
     {
         std::swap(m_data, other.m_data);
@@ -303,15 +394,7 @@ public:
         if (size == 0) {
             return;
         }
-        m_data = allocate_data(size);
-        set_size(size);
-        set_capacity(size);
-
-        u64 i = 0;
-        ConstructFunc the_construct_func;
-        for (auto it = init_list.begin(), end = init_list.end(); it != end; ++it, ++i) {
-            the_construct_func(&(m_data[i]), *it);
-        }
+        assign(init_list.begin(), init_list.end());
     }
 
     ~VectorBase()
@@ -320,96 +403,35 @@ public:
             return;
         }
         call_destructors();
-        ka::deallocate_raw(get_array_ptr(), get_array_size());
+        deallocate_data();
         m_data = nullptr;
     }
 
-    // The destruct func and the post construct func must match
-    template <typename OtherIncrementer, u32 OTHERMAXSLACK>
-    VectorBase&
-    operator = (const typename kc::VectorBase<T, OtherIncrementer, OTHERMAXSLACK,
-                                              ConstructFunc, DestructFunc>& other)
+    // The default assignment operator
+    VectorBase& operator = (const VectorBase& other)
     {
         if (&other == this) {
             return *this;
         }
-
-        auto size = other.size();
-        call_destructors();
-
-        if (size == 0) {
-            if (m_data != nullptr) {
-                ka::deallocate_raw(get_array_ptr(), get_array_size());
-            }
-            return;
-        }
-
-        if (size > get_capacity()) {
-            if (m_data != nullptr) {
-                ka::deallocate_raw(get_array_ptr(), get_array_size());
-            }
-            m_data = allocate_data(size);
-            set_size(size);
-            set_capacity(size);
-        } else {
-            // just resize
-            set_size(size);
-        }
-
-        ConstructFunc the_construct_func;
-        for (u64 i = 0; i < size; ++i) {
-            the_construct_func(&(m_data[i]), other[i]);
-        }
-
-        compact();
+        assign(other.begin(), other.end());
         return *this;
     }
 
-    template <typename OtherIncrementer, u32 OTHERMAXSLACK>
-    VectorBase& operator = (VectorBase<T, OtherIncrementer, OTHERMAXSLACK,
-                                       ConstructFunc, DestructFunc>&& other)
+    // move assignment
+    VectorBase& operator = (VectorBase&& other)
     {
         if (&other == this) {
             return *this;
         }
-
         call_destructors();
-        ka::deallocate_raw(get_array_ptr(), get_array_size());
         m_data = nullptr;
-
-        std::swap(m_data, other.m_data);
+        std::swap(other.m_data, m_data);
+        return *this;
     }
 
     VectorBase& operator = (std::initializer_list<ValueType> init_list)
     {
-        call_destructors();
-        auto size = init_list.size();
-
-        if (size == 0) {
-            if (m_data != nullptr) {
-                ka::deallocate_raw(get_array_ptr(), get_array_size());
-            }
-            return;
-        }
-
-        if (size > get_capacity()) {
-            if (m_data != nullptr) {
-                ka::deallocate_raw(get_array_ptr(), get_array_size());
-            }
-            m_data = allocate_data(size);
-            set_size(size);
-            set_capacity(size);
-        } else {
-            set_size(size);
-        }
-
-        ConstructFunc the_construct_func;
-        u64 i = 0;
-        for (auto it = init_list.begin(), end = init_list.end(); it != end; ++it, ++i) {
-            the_construct_func(&(m_data[i]), *it);
-        }
-
-        compact();
+        assign(std::move(init_list));
         return *this;
     }
 
@@ -497,10 +519,7 @@ public:
             if (new_size > get_capacity()) {
                 expand(new_size);
             }
-            ConstructFunc the_construct_func;
-            for (u64 i = old_size; i < new_size; ++i) {
-                the_construct_func(&(m_data[i]), value);
-            }
+            construct_core(begin() + old_size, (new_size - old_size), value);
         }
         return;
     }
@@ -581,114 +600,20 @@ public:
         return m_data;
     }
 
-    template <typename InputIterator>
-    void assign(const InputIterator& first, const InputIterator& last)
-    {
-        call_destructors();
-        auto size = std::distance(first, last);
-
-        if (size == 0) {
-            if (m_data != nullptr) {
-                ka::deallocate_raw(get_array_ptr(), get_array_size());
-            }
-            return;
-        }
-
-        if (size > get_capacity()) {
-            if (m_data != nullptr) {
-                ka::deallocate_raw(get_array_ptr(), get_array_size());
-            }
-            m_data = allocate_data(size);
-            set_size(size);
-            set_capacity(size);
-        } else {
-            set_size(size);
-        }
-
-        ConstructFunc the_construct_func;
-        u64 i = 0;
-        for (auto it = first; it != last; ++it, ++i) {
-            the_construct_func(&(m_data[i]), *it);
-        }
-
-        return *this;
-    }
-
-    void assign(u64 n, const ValueType& value)
-    {
-        call_destructors();
-        auto size = n;
-        if (size == 0) {
-            if (m_data != nullptr) {
-                ka::deallocate_raw(get_array_ptr(), get_array_size());
-            }
-            return;
-        }
-
-        if (size > get_capacity()) {
-            if (m_data != nullptr) {
-                ka::deallocate_raw(get_array_ptr(), get_array_size());
-            }
-            m_data = allocate_data(size);
-            set_size(size);
-            set_capacity(size);
-        } else {
-            set_size(size);
-        }
-
-        ConstructFunc the_construct_func;
-        for (u64 i = 0; i < size; ++i) {
-            the_construct_func(&(m_data[i]), value);
-        }
-
-        return *this;
-    }
-
-    void assign(std::initializer_list<ValueType> il)
-    {
-        call_destructors();
-        auto size = il.size();
-
-        if (size == 0) {
-            if (m_data != nullptr) {
-                ka::deallocate_raw(get_array_ptr(), get_array_size());
-            }
-            return;
-        }
-
-        if (size > get_capacity()) {
-            if (m_data != nullptr) {
-                ka::deallocate_raw(get_array_ptr(), get_array_size());
-            }
-            m_data = allocate_data(size);
-            set_size(size);
-            set_capacity(size);
-        } else {
-            set_size(size);
-        }
-
-        ConstructFunc the_construct_func;
-        u64 i = 0;
-        for (auto it = il.begin(), end = il.end(); it != end; ++it, ++i) {
-            the_construct_func(&(m_data[i]), *it);
-        }
-
-        return *this;
-    }
-
     void push_back(const ValueType& value)
     {
-        expand(get_size() + 1);
+        expand();
         ConstructFunc the_construct_func;
         the_construct_func(&(m_data[get_size()]), value);
-        set_size(get_size() + 1);
+        increment_size();
     }
 
     void push_back(ValueType&& value)
     {
-        expand(get_size() + 1);
+        expand();
         ConstructFunc the_construct_func;
         the_construct_func(&(m_data[get_size()]), std::move(value));
+        increment_size();
     }
 
     void pop_back()
@@ -698,94 +623,76 @@ public:
         set_size(get_size() - 1);
     }
 
-    Iterator insert(const ConstIterator& position, const ValueType& value)
+    Iterator insert(ConstIterator position, const ValueType& value)
     {
-        auto distance_from_begin = std::distance(begin(), position);
-        expand_with_hole(get_size() + 1, 1, position);
+        auto actual_pos = expand_with_hole(1, position);
         ConstructFunc the_construct_func;
-        the_construct_func(position, value);
-        set_size(get_size() + 1);
-        return (begin() + distance_from_begin);
+        the_construct_func(actual_pos, value);
+        increment_size();
+        return actual_pos;
     }
 
-    Iterator insert(const ConstIterator& position, u64 n, const ValueType& value)
+    Iterator insert(ConstIterator position, u64 n, const ValueType& value)
     {
-        auto distance_from_begin = std::distance(begin(), position);
-        expand_with_hole(get_size() + n, n, position);
+        auto actual_pos = expand_with_hole(n, position);
         ConstructFunc the_construct_func;
-        for (u64 i = 0; i < n; ++i) {
-            the_construct_func(position + i, value);
-        }
+        construct_core(actual_pos, n, value);
         set_size(get_size() + n);
-        return (begin() + distance_from_begin);
+        return actual_pos;
     }
 
     template <typename InputIterator>
-    Iterator insert(const ConstIterator& position, const InputIterator& first,
-                    const InputIterator& last)
+    Iterator insert(ConstIterator position, InputIterator first, InputIterator last)
     {
-        auto distance_from_begin = std::distance(begin(), position);
         auto num_elements = std::distance(first, last);
-        expand_with_hole(get_size() + num_elements, num_elements, position);
-
-        ConstructFunc the_construct_func;
-        auto cur_ptr = position;
-        for (auto it = first; it != last; ++it, ++cur_ptr) {
-            the_construct_func(cur_ptr, *it);
-        }
+        auto actual_pos = expand_with_hole(num_elements, position);
+        construct_core(actual_pos, first, last);
         set_size(get_size() + num_elements);
-        return (begin() + distance_from_begin);
+        return actual_pos;
     }
 
-    Iterator insert(const ConstIterator& position, ValueType&& value)
+    Iterator insert(ConstIterator position, ValueType&& value)
     {
-        auto distance_from_begin = std::distance(begin(), position);
-        expand_with_hole(get_size() + 1, 1, position);
+        auto actual_pos = expand_with_hole(1, position);
         ConstructFunc the_construct_func;
-        the_construct_func(position, std::move(value));
+        the_construct_func(actual_pos, std::move(value));
         set_size(get_size() + 1);
-        return (begin() + distance_from_begin);
+        return actual_pos;
     }
 
-    Iterator insert(const ConstIterator& position, std::initializer_list<ValueType> il)
+    Iterator insert(ConstIterator position, std::initializer_list<ValueType> il)
     {
-        auto distance_from_begin = std::distance(begin(), position);
         auto num_elements = il.size();
-        expand_with_hole(get_size() + num_elements, num_elements, position);
-
-        ConstructFunc the_construct_func;
-        auto cur_ptr = position;
-        for (auto it = il.begin(), last = il.end(); it != last; ++it, ++cur_ptr) {
-            the_construct_func(cur_ptr, *it);
-        }
+        auto actual_pos = expand_with_hole(num_elements, position);
+        construct_core(actual_pos, il.begin(), il.end());
         set_size(get_size() + num_elements);
-        return (begin() + distance_from_begin);
+        return actual_pos;
     }
 
-    Iterator erase(const ConstIterator& position)
+    Iterator erase(ConstIterator position)
     {
-        auto distance_from_begin = std::distance(begin(), position);
         DestructFunc the_destruct_func;
         the_destruct_func(*position);
-        memmove(position, position + 1, sizeof(T) * std::distance(position + 1, end()));
+
+        memmove(position, position + 1, sizeof(T) * std::distance(position + 1, cend()));
+
         set_size(get_size() - 1);
         compact();
-        return (begin() + distance_from_begin);
+        return (const_cast<T*>(position));
     }
 
-    Iterator erase(const ConstIterator& first, const ConstIterator& last)
+    Iterator erase(ConstIterator first, ConstIterator last)
     {
-        auto distance_from_begin = std::distance(begin(), first);
         auto num_deleted_elements = std::distance(first, last);
         DestructFunc the_destruct_func;
         for (auto it = first; it != last; ++it) {
             the_destruct_func(*it);
         }
         memmove(first, first + num_deleted_elements,
-                sizeof(T) * std::distance(first + num_deleted_elements, end()));
-        set_size(get_size() - 1);
+                sizeof(T) * std::distance(first + num_deleted_elements, cend()));
+        set_size(get_size() - num_deleted_elements);
         compact();
-        return (begin() + distance_from_begin);
+        return (const_cast<T*>(first));
     }
 
     void swap(const VectorBase& other)
@@ -802,7 +709,7 @@ public:
     // clear, but without destructors
     void reset()
     {
-        ka::deallocate_raw(get_array_ptr(), get_array_size());
+        deallocate_data();
         m_data = nullptr;
     }
 

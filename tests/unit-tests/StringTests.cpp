@@ -38,6 +38,7 @@
 #include "../../projects/kinara-common/src/containers/String.hpp"
 #include <string>
 #include <random>
+#include <cstdlib>
 #include "../../thirdparty/gtest/include/gtest/gtest.h"
 
 using kinara::containers::String;
@@ -115,6 +116,121 @@ TEST(String, RandomStrings) {
         EXPECT_EQ(str1, stdstr1.c_str());
 
         EXPECT_EQ(str1 + str3, (stdstr1 + stdstr3).c_str());
+    }
+}
+
+// Perf tests
+TEST(String, PerfRandomStrings) {
+    std::random_device rd;
+    const int max_string_len = 256;
+    for (int i = 0; i < 1024; ++i) {
+        auto len1 = rd() % max_string_len;
+        auto len2 = rd() % max_string_len;
+        auto len3 = rd() % max_string_len;
+
+        String str1, str2, str3;
+
+        for (size_t j = 0; j < len1; ++j) {
+            char c = ((rd() % 2 == 0 ? 'a' : 'A') + (rd() % 26));
+            str1 += c;
+        }
+
+        for (size_t j = 0; j < len2; ++j) {
+            char c = ((rd() % 2 == 0 ? 'a' : 'A') + (rd() % 26));
+            str2 += c;
+        }
+
+        for (size_t j = 0; j < len3; ++j) {
+            char c = ((rd() % 2 == 0 ? 'a' : 'A') + (rd() % 26));
+            str3 += c;
+        }
+
+        // some concat tests
+        str1 += str2;
+        EXPECT_NE(nullptr, str1.c_str());
+        EXPECT_NE(nullptr, (str1 + str3).c_str());
+    }
+}
+
+TEST(String, PerfRandomStringsStd) {
+    std::random_device rd;
+    const int max_string_len = 256;
+    for (int i = 0; i < 1024; ++i) {
+        auto len1 = rd() % max_string_len;
+        auto len2 = rd() % max_string_len;
+        auto len3 = rd() % max_string_len;
+
+        std::string str1, str2, str3;
+
+        for (size_t j = 0; j < len1; ++j) {
+            char c = ((rd() % 2 == 0 ? 'a' : 'A') + (rd() % 26));
+            str1 += c;
+        }
+
+        for (size_t j = 0; j < len2; ++j) {
+            char c = ((rd() % 2 == 0 ? 'a' : 'A') + (rd() % 26));
+            str2 += c;
+        }
+
+        for (size_t j = 0; j < len3; ++j) {
+            char c = ((rd() % 2 == 0 ? 'a' : 'A') + (rd() % 26));
+            str3 += c;
+        }
+
+        // some concat tests
+        str1 += str2;
+        EXPECT_NE(nullptr, str1.c_str());
+        EXPECT_NE(nullptr, (str1 + str3).c_str());
+    }
+}
+
+// fixture for a random string
+class PerfTestFixture : public ::testing::Test
+{
+protected:
+    static constexpr int sc_test_size = (1 << 16) - 1;
+    static constexpr int sc_num_strings = (1 << 8);
+
+    char* m_buffer;
+
+    std::string std_strings[sc_num_strings];
+    String kinara_strings[sc_num_strings];
+
+    virtual void SetUp()
+    {
+        std::mt19937 rd;
+        m_buffer = (char*)calloc(1, sc_test_size + 1);
+        for (int i = 0; i < sc_test_size; ++i) {
+            m_buffer[i] = ((rd() % 2 == 0 ? 'a' : 'A') + (rd() % 26));
+        }
+
+        for (int i = 0; i < sc_num_strings; ++i) {
+            std_strings[i] = std::string(m_buffer);
+            kinara_strings[i] = String(m_buffer);
+        }
+    }
+
+    virtual void TearDown()
+    {
+        free(m_buffer);
+    }
+};
+
+// Perf tests on comparing pairwise equality of std strings
+TEST_F(PerfTestFixture, StdString) {
+    for (int i = 0; i < sc_num_strings; ++i) {
+        for (int j = 0; j < sc_num_strings; ++j) {
+            EXPECT_EQ(std_strings[i], std_strings[j]);
+        }
+    }
+}
+
+// Perf tests on comparing pairwise equality of kinara strings
+TEST_F(PerfTestFixture, KinaraString) {
+    for (int i = 0; i < sc_num_strings; ++i) {
+        for (int j = 0; j < sc_num_strings; ++j) {
+            EXPECT_EQ(kinara_strings[i], kinara_strings[j]);
+        }
     }
 }
 
