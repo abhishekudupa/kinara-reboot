@@ -41,12 +41,11 @@
 #include <initializer_list>
 #include <iterator>
 
-#include "../basetypes/KinaraBase.hpp"
 #include "../basetypes/KinaraTypes.hpp"
 #include "../allocators/MemoryManager.hpp"
 #include "../allocators/PoolAllocator.hpp"
 
-#include "ContainersBase.hpp"
+#include "SListTypes.hpp"
 
 namespace kinara {
 namespace containers {
@@ -54,223 +53,21 @@ namespace containers {
 namespace ka = kinara::allocators;
 namespace kc = kinara::containers;
 
-// forward declaration of list class
-template <typename T, typename ConstructFunc, typename DestructFunc, bool USEPOOLS>
-class SListBase;
-
-namespace slist_detail_ {
-
-// Just a pointer to the next node
-struct SListNodeBase
-{
-    SListNodeBase* m_next;
-
-    inline SListNodeBase()
-        : m_next(nullptr)
-    {
-        // Nothing here
-    }
-
-    inline SListNodeBase(SListNodeBase* next)
-        : m_next(next)
-    {
-        // Nothing here
-    }
-
-    inline ~SListNodeBase()
-    {
-        // Nothing here
-    }
-};
-
-template <typename T, typename ConstructFunc,
-          typename DestructFunc>
-struct SListNode : public SListNodeBase
-{
-    T m_value;
-
-    inline SListNode() = delete;
-    inline SListNode(const SListNode& other) = delete;
-    inline SListNode(SListNode&& other) = delete;
-    inline SListNode& operator = (const SListNode& other) = delete;
-    inline SListNode& operator = (SListNode&& other) = delete;
-
-    inline ~SListNode()
-    {
-        DestructFunc the_destructor;
-        the_destructor(m_value);
-    }
-
-    template <typename... ArgTypes>
-    static inline SListNode* construct(void* mem_ptr, ArgTypes&&... args)
-    {
-        SListNode* node_ptr = static_cast<SListNode*>(mem_ptr);
-        ConstructFunc the_constructor;
-        the_constructor(&(node_ptr->m_value), std::forward<ArgTypes>(args)...);
-    }
-};
-
-template <typename T, typename ConstructFunc, typename DestructFunc, bool ISCONST>
-class IteratorBase :
-        public std::iterator<std::forward_iterator_tag, T, u64,
-                             typename std::conditional<ISCONST, const T*, T*>::type,
-                             typename std::conditional<ISCONST, const T&, T&>::type>
-{
-    friend class SListBase<T, ConstructFunc, DestructFunc, true>;
-    friend class SListBase<T, ConstructFunc, DestructFunc, false>;
-
-private:
-    typedef SListNode<T, ConstructFunc, DestructFunc> NodeType;
-    typedef typename std::conditional<ISCONST, const T*, T*>::type ValPtrType;
-    typedef typename std::conditional<ISCONST, const T&, T&>::type ValRefType;
-
-    // helper to get the node
-    inline NodeType* get_node() const
-    {
-        return m_node;
-    }
-
-    inline operator NodeType () const
-    {
-        return m_node;
-    }
-
-protected:
-    NodeType* m_node;
-
-public:
-    inline IteratorBase()
-        : m_node(nullptr)
-    {
-        // Nothing here
-    }
-
-    inline IteratorBase(NodeType* node)
-        : m_node(node)
-    {
-        // Nothing here
-    }
-
-    inline IteratorBase(const IteratorBase& other)
-        : m_node(other.m_node)
-    {
-        // Nothing here
-    }
-
-    template <bool OISCONST>
-    inline
-    IteratorBase(const kc::slist_detail_::IteratorBase<T, ConstructFunc, DestructFunc, OISCONST>&
-                 other)
-        : m_node(other.m_node)
-    {
-        static_assert(((!OISCONST) || ISCONST),
-                      "Cannot construct const iterator "
-                      "from non-const iterator");
-    }
-
-
-    inline ~IteratorBase()
-    {
-        // Nothing here
-    }
-
-    inline IteratorBase& operator = (const IteratorBase& other)
-    {
-        if (&other == this) {
-            return *this;
-        }
-        m_node = other.m_node;
-        return *this;
-    }
-
-    template <bool OISCONST>
-    inline IteratorBase&
-    operator = (const kc::slist_detail_::IteratorBase<T, ConstructFunc, DestructFunc, OISCONST>&
-                other)
-    {
-        static_assert(((!OISCONST) || ISCONST),
-                      "Cannot assign const iterator to non-const iterator");
-
-        if (&other == this) {
-            return *this;
-        }
-        m_node = other.m_node;
-        return *this;
-    }
-
-    inline IteratorBase& operator ++ ()
-    {
-        m_node = m_node->m_next;
-    }
-
-    inline IteratorBase operator ++ (int unused)
-    {
-        auto retval = *this;
-        m_node = m_node->m_next;
-        return retval;
-    }
-
-    inline ValRefType operator * ()
-    {
-        return m_node->m_value;
-    }
-
-    inline ValRefType operator -> ()
-    {
-        return m_node->m_value;
-    }
-
-    inline bool operator == (const IteratorBase& other) const
-    {
-        return (m_node == other.m_node);
-    }
-
-    template <bool OISCONST>
-    inline bool
-    operator == (const kc::slist_detail_::IteratorBase<T, ConstructFunc, DestructFunc, OISCONST>&
-                 other) const
-    {
-        return (m_node == other.m_node);
-    }
-
-
-    inline bool operator != (const IteratorBase& other) const
-    {
-        return (m_node != other.m_node);
-    }
-
-    template <bool OISCONST>
-    inline bool
-    operator != (const kc::slist_detail_::IteratorBase<T, ConstructFunc, DestructFunc, OISCONST>&
-                 other) const
-    {
-        return (m_node != other.m_node);
-    }
-};
-
-template <typename T, typename ConstructFunc, typename DestructFunc>
-using Iterator = IteratorBase<T, ConstructFunc, DestructFunc, false>;
-
-template <typename T, typename ConstructFunc, typename DestructFunc>
-using ConstIterator = IteratorBase<T, ConstructFunc, DestructFunc, true>;
-
-} /* end namespace slist_detail_ */
-
 /*
-   A singly-linked list:
-   - push_back, push_front are constant time operations
-   - pop_front is also constant time
-   - pop_back is linear time
-   - inserts are constant time
-   - searches are linear time
-   - overhead = (3 words) + (n * 1 word)
+  A singly-linked list:
+  - push_back, push_front are constant time operations
+  - pop_front is also constant time
+  - pop_back is linear time
+  - inserts are constant time
+  - searches are linear time
+  - overhead = (3 words) + (n * 1 word)
 */
 
 template <typename T, typename ConstructFunc,
           typename DestructFunc, bool USEPOOLS>
 class SListBase final
 {
-public:
+ public:
     typedef T ValueType;
     typedef T* PtrType;
     typedef const T* ConstPtrType;
@@ -284,15 +81,16 @@ public:
 
     // No reverse iteration is possible!
 
-private:
+ private:
     typedef slist_detail_::SListNode<T, ConstructFunc, DestructFunc> NodeType;
+    typedef slist_detail_::SListNodeBase NodeBaseType;
 
     union PoolSizeUnionType {
         ka::PoolAllocator* m_pool_allocator;
         u64 m_size;
 
         PoolSizeUnionType()
-            : m_pool_allocator(nullptr)
+            : m_size(0)
         {
             // Nothing here
         }
@@ -303,10 +101,12 @@ private:
         }
     };
 
+    // member variables
     PoolSizeUnionType m_pool_or_size;
-    NodeType* m_list_head;
-    NodeType* m_list_tail;
+    NodeBaseType m_node_before_head;
+    NodeType* m_tail;
 
+    // helper functions
     template <typename... ArgTypes>
     inline NodeType* allocate_block(ArgTypes&&... args)
     {
@@ -362,7 +162,7 @@ private:
 
     inline u64 get_size() const
     {
-        if (m_list_head == nullptr) {
+        if (m_tail == nullptr) {
             return 0;
         }
         if (USEPOOLS) {
@@ -373,23 +173,48 @@ private:
     }
 
     // constructs n objects AFTER the current position
-    inline Iterator construct_core(Iterator position, u64 n, const ValueType& value)
+    inline Iterator construct_fill(NodeBaseType* position, u64 n, const ValueType& value)
     {
+        KINARA_ASSERT(n > 0);
 
+        auto last_inserted = position;
+        for (u64 i = 0; i < n; ++i) {
+            auto node = allocate_block(value);
+            last_inserted->m_next = node;
+            last_inserted = node;
+        }
+        if (m_tail == nullptr || position == m_tail) {
+            m_tail = static_cast<NodeType*>(last_inserted);
+        }
+
+        return Iterator(position->m_next);
     }
 
     // constructs the objects in the range AFTER the position
     template <typename InputIterator>
-    inline void construct_core(Iterator position, InputIterator first, InputIterator last)
+    inline Iterator construct_core(NodeBaseType* position, InputIterator first, InputIterator last)
     {
+        KINARA_ASSERT (first != last);
 
+        auto last_inserted = position;
+        for (auto it = first; it != last; ++it) {
+            auto node = allocate_block(*it);
+            last_inserted->m_next = node;
+            last_inserted = node;
+            increment_size();
+        }
+        if (m_tail == nullptr || position == m_tail) {
+            m_tail = static_cast<NodeType*>(last_inserted);
+        }
+
+        return Iterator(position->m_next);
     }
 
-public:
+ public:
     explicit SListBase()
-        : m_pool_or_size(), m_list_head(nullptr), m_list_tail(nullptr)
+        : m_pool_or_size(), m_node_before_head(nullptr), m_tail(nullptr)
     {
-
+        // Nothing here
     }
 
     explicit SListBase(u64 n)
@@ -400,57 +225,336 @@ public:
 
 
     explicit SListBase(u64 n, const ValueType& value)
-        : m_pool_or_size(), m_list_head(nullptr)
+        : SListBase()
     {
-        // allocate n blocks all initialized to value
-        for (u64 i = 0; i < n; ++i) {
-            auto node = allocate_block(value);
-            node->m_next = nullptr;
-            if (m_list_head == nullptr) {
-                m_list_head = node;
-                m_list_tail = node;
-            } else {
-                m_list_tail->m_next = node;
-                m_list_tail = node;
-            }
-            increment_size();
+        if (n == 0) {
+            return;
         }
+        construct_fill(&m_node_before_head, n, value);
     }
 
     template <typename InputIterator>
-    SListBase(const InputIterator& first, const InputIterator& last)
-        : m_pool_or_size(), m_list_head(nullptr), m_list_tail(nullptr)
+    SListBase(InputIterator first, InputIterator last)
+        : SListBase()
     {
-        for (auto it = first; it != last; ++it) {
-            auto node = allocate_block(*it);
-            if (m_list_head == nullptr) {
-                m_list_head = node;
-                m_list_tail = node;
-            } else {
-                m_list_tail->m_next = node;
-                m_list_tail = node;
-            }
-            increment_size();
+        if (first == last) {
+            return;
         }
+        construct_core(&m_node_before_head, first, last);
     }
 
     SListBase(const SListBase& other)
-        : m_pool_or_size(), m_list_head(nullptr), m_list_tail(nullptr)
+        : SListBase(other.begin(), other.end())
     {
-        for (auto it = other.begin(), last = other.end(); it != last; ++it) {
-            auto node = allocate_block(*it);
-            if (m_list_head == nullptr) {
-                m_list_head = node;
-                m_list_tail = node;
-            } else {
-                m_list_tail->m_next = node;
-                m_list_tail = node;
-            }
-            increment_size();
+        // Nothing here
+    }
+
+    SListBase(SListBase&& other)
+        : SListBase()
+    {
+        if (USEPOOLS) {
+            m_pool_or_size.m_pool_allocator = other.m_pool_or_size.m_pool_allocator;
+            other.m_pool_or_size.m_pool_allocator = nullptr;
+        } else {
+            m_pool_or_size.m_size = other.m_pool_or_size.m_size;
+            other.m_pool_or_size.m_size = 0;
         }
+        std::swap(m_node_before_head, other.m_node_before_head);
+        std::swap(m_tail, other.m_tail);
+    }
+
+    SListBase(std::initializer_list<ValueType> init_list)
+        : SListBase()
+    {
+        if (init_list.size() == 0) {
+            return;
+        }
+        construct_core(&m_node_before_head, init_list.begin(), init_list.end());
+    }
+
+    inline void reset()
+    {
+        for (auto cur_node = m_node_before_head.m_next; cur_node != nullptr; ) {
+            auto next_node = cur_node->m_next;
+            deallocate_block(static_cast<NodeType*>(cur_node));
+            cur_node = next_node;
+        }
+        if (USEPOOLS && m_pool_or_size.m_pool_allocator != nullptr) {
+            ka::deallocate_object_raw(m_pool_or_size.m_pool_allocator, sizeof(ka::PoolAllocator));
+        }
+        m_node_before_head.m_next = nullptr;
+        m_tail = nullptr;
+    }
+
+    ~SListBase()
+    {
+        reset();
+    }
+
+    template <typename InputIterator>
+    inline void assign(InputIterator first, InputIterator last)
+    {
+        reset();
+        construct_core(m_node_before_head, first, last);
+    }
+
+    template <bool OUSEPOOLS>
+    inline void assign(const kc::SListBase<T, ConstructFunc, DestructFunc, OUSEPOOLS>& other)
+    {
+        assign(other.begin(), other.end());
+    }
+
+    void assign(u64 n, const ValueType& value)
+    {
+        reset();
+        construct_fill(m_node_before_head, n, value);
+    }
+
+    void assign(std::initializer_list<ValueType> init_list)
+    {
+        assign(init_list.begin(), init_list.end());
+    }
+
+    inline SListBase& operator = (const SListBase& other)
+    {
+        if (&other == this) {
+            return *this;
+        }
+        assign(other);
+        return *this;
+    }
+
+    template <bool OUSEPOOLS>
+    inline SListBase& operator = (const kc::SListBase<T, ConstructFunc,
+                                                      DestructFunc, OUSEPOOLS>& other)
+    {
+        if (&other == this) {
+            return *this;
+        }
+        assign(other);
+        return *this;
+    }
+
+    inline SListBase& operator = (SListBase&& other)
+    {
+        if (&other == this) {
+            return *this;
+        }
+        reset();
+        if (USEPOOLS) {
+            m_pool_or_size.m_pool_allocator = other.m_pool_or_size.m_pool_allocator;
+            other.m_pool_or_size.m_pool_allocator = nullptr;
+        } else {
+            m_pool_or_size.m_size = other.m_pool_or_size.m_size;
+            other.m_pool_or_size.m_size = 0;
+        }
+        std::swap(m_node_before_head, other.m_node_before_head);
+        std::swap(m_tail, other.m_tail);
+        return *this;
+    }
+
+    inline SListBase& operator = (std::initializer_list<ValueType> init_list)
+    {
+        assign(std::move(init_list));
+    }
+
+    Iterator before_begin() noexcept
+    {
+        return Iterator(&m_node_before_head);
+    }
+
+    ConstIterator before_begin() const noexcept
+    {
+        return ConstIterator(&m_node_before_head);
+    }
+
+    Iterator begin() noexcept
+    {
+        return Iterator(m_node_before_head.m_next);
+    }
+
+    ConstIterator begin() const noexcept
+    {
+        return ConstIterator(m_node_before_head.m_next);
+    }
+
+    Iterator end() noexcept
+    {
+        return Iterator(nullptr);
+    }
+
+    ConstIterator end() const noexcept
+    {
+        return ConstIterator(nullptr);
+    }
+
+    ConstIterator cbefore_begin() const noexcept
+    {
+        return before_begin();
+    }
+
+    ConstIterator cbegin() const noexcept
+    {
+        return begin();
+    }
+
+    ConstIterator cend() const noexcept
+    {
+        return end();
+    }
+
+    bool empty() const noexcept
+    {
+        return (m_node_before_head.m_next == nullptr);
+    }
+
+    u64 max_size() const noexcept
+    {
+        return UINT64_MAX;
+    }
+
+    RefType front()
+    {
+        return static_cast<NodeType*>(m_node_before_head.m_next)->m_value;
+    }
+
+    ConstRefType front() const
+    {
+        return static_cast<NodeType*>(m_node_before_head.m_next)->m_value;
+    }
+
+    RefType back()
+    {
+        return m_tail->m_value;
+    }
+
+    ConstRefType back() const
+    {
+        return m_tail->m_value;
+    }
+
+    template <typename... ArgTypes>
+    void emplace_front(ArgTypes&&... args)
+    {
+        auto new_node = NodeType::construct(std::forward<ArgTypes>(args)...);
+        new_node->m_next = m_node_before_head.m_next;
+        m_node_before_head.m_next = new_node;
+        increment_size();
+    }
+
+    template <typename... ArgTypes>
+    void emplace_back(ArgTypes&&... args)
+    {
+        auto new_node = NodeType::construct(std::forward<ArgTypes>(args)...);
+        m_tail->m_next = new_node;
+        m_tail = new_node;
+        increment_size();
+    }
+
+    void push_front(const ValueType& value)
+    {
+        auto new_node = NodeType::construct(value);
+        new_node->m_next = m_node_before_head.m_next;
+        m_node_before_head.m_next = new_node;
+        increment_size();
+    }
+
+    void push_front(ValueType&& value)
+    {
+        auto new_node = NodeType::construct(std::move(value));
+        new_node->m_next = m_node_before_head.m_next;
+        m_node_before_head.m_next = new_node;
+        increment_size();
+    }
+
+    void push_back(const ValueType& value)
+    {
+        auto new_node = NodeType::construct(value);
+        m_tail->m_next = new_node;
+        m_tail = new_node;
+        increment_size();
+    }
+
+    void push_back(ValueType&& value)
+    {
+        auto new_node = NodeType::construct(std::move(value));
+        m_tail->m_next = new_node;
+        m_tail = new_node;
+        increment_size();
+    }
+
+    void pop_front()
+    {
+        auto node = m_node_before_head.m_next;
+        m_node_before_head.m_next = node->m_next;
+        deallocate_block(static_cast<NodeType*>(node));
+        decrement_size();
+    }
+
+    // This is linear in the length of the list!
+    void pop_back()
+    {
+        auto cur_ptr = m_node_before_head.m_next;
+        if (cur_ptr == nullptr) {
+            return;
+        }
+
+        auto prev_ptr = cur_ptr;
+        while (cur_ptr != m_tail) {
+            cur_ptr = cur_ptr->m_next;
+            prev_ptr = cur_ptr;
+        }
+
+        deallocate_block(cur_ptr);
+        m_tail = prev_ptr;
+        decrement_size();
     }
 
 };
+
+template <typename T,
+          typename ConstructFunc = DefaultConstructFunc<T>,
+          typename DestructFunc = DefaultDestructFunc<T>>
+using PoolSList = SListBase<T, ConstructFunc, DestructFunc, true>;
+
+template <typename T,
+          typename ConstructFunc = DefaultConstructFunc<T>,
+          typename DestructFunc = DefaultDestructFunc<T>>
+using SList = SListBase<T, ConstructFunc, DestructFunc, false>;
+
+template <typename T,
+          typename ConstructFunc = DefaultConstructFunc<T*>,
+          typename DestructFunc = DefaultDestructFunc<T*>>
+using PoolPtrSList = SListBase<T*, ConstructFunc, DestructFunc, true>;
+
+template <typename T,
+          typename ConstructFunc = DefaultConstructFunc<T*>,
+          typename DestructFunc = DefaultDestructFunc<T*>>
+using PtrSList = SListBase<T*, ConstructFunc, DestructFunc, false>;
+
+typedef PoolSList<u08> u08PoolSList;
+typedef PoolSList<u16> u16PoolSList;
+typedef PoolSList<u32> u32PoolSList;
+typedef PoolSList<u64> u64PoolSList;
+typedef PoolSList<i08> i08PoolSList;
+typedef PoolSList<i16> i16PoolSList;
+typedef PoolSList<i32> i32PoolSList;
+typedef PoolSList<i64> i64PoolSList;
+
+typedef SList<u08> u08SList;
+typedef SList<u16> u16SList;
+typedef SList<u32> u32SList;
+typedef SList<u64> u64SList;
+typedef SList<i08> i08SList;
+typedef SList<i16> i16SList;
+typedef SList<i32> i32SList;
+typedef SList<i64> i64SList;
+
+// forward declaration
+class String;
+
+typedef SList<String> StringSList;
+typedef PoolSList<String> StringPoolSList;
 
 } /* end namespace containers */
 } /* end namespace kinara */

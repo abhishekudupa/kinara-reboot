@@ -861,15 +861,17 @@ template <typename T,
 using Vector = VectorBase<T, detail::MultiplicativeIncrementer<3, 2, 8>,
                           2, ConstructFunc, DestructFunc>;
 
-template <typename T>
+template <typename T,
+          typename ConstructFunc = DefaultConstructFunc<T*>,
+          typename DestructFunc = DefaultDestructFunc<T*>>
 using PtrVector = VectorBase<T*, detail::MultiplicativeIncrementer<3, 2, 8>,
-                             2, DefaultConstructFunc<T*>,
-                             DefaultDestructFunc<T*>>;
+                             2, ConstructFunc, DestructFunc>;
 
-template <typename T>
+template <typename T,
+          typename ConstructFunc = DefaultConstructFunc<T*>,
+          typename DestructFunc = DefaultDestructFunc<T*>>
 using CompactPtrVector = VectorBase<T*, detail::AdditiveIncrementer<16>, 1,
-                                    DefaultConstructFunc<T*>,
-                                    DefaultDestructFunc<T*>>;
+                                    ConstructFunc, DestructFunc>;
 
 class String;
 

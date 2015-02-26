@@ -54,7 +54,7 @@ class PoolAllocator
 private:
     static constexpr u32 sc_default_num_objects = 32;
     static constexpr u32 sc_alignment = 3;
-    static constexpr u32 sc_chunk_overhead = sizeof(void*);
+    static constexpr u32 sc_chunk_overhead = (2 * sizeof(void*));
 
     // number of objects in a page of allocation
     u32 m_num_objects;
@@ -75,17 +75,28 @@ private:
     struct Chunk
     {
         Chunk* m_next_chunk;
-        inline Chunk()
-            : m_next_chunk(nullptr)
+        u08* m_current_ptr;
+
+        inline Chunk(u32 chunk_size, u32 chunk_overhead)
+            : m_next_chunk(nullptr),
+              m_current_ptr(static_cast<u08*>(static_cast<void*>(this)) + chunk_overhead)
         {
             // Nothing here
+        }
+
+        inline u08* get_cur_ptr() const
+        {
+            return m_current_ptr;
+        }
+
+        inline u08* get_end_ptr(u32 page_size) const
+        {
+            return (static_cast<u08*>(static_cast<void*>(const_cast<Chunk*>(this))) + page_size);
         }
     };
 
     Block* m_free_list;
     Chunk* m_chunk_list;
-    u08* m_current_chunk_ptr;
-    u08* m_current_chunk_end_ptr;
     u64 m_bytes_claimed;
     u64 m_bytes_allocated;
 
@@ -99,8 +110,16 @@ public:
 
     void* allocate();
     void deallocate(void* block_ptr);
+
     void reset();
     void garbage_collect();
+
+    // merges the other pool allocator's
+    // blocks, i.e., takes ownership
+    // of the other pool allocator's memory
+    // The other allocator is left as though
+    // only just constructed
+    void merge(PoolAllocator* other, bool collect_garbage = false);
 
     u64 get_bytes_allocated() const;
     u64 get_objects_allocated() const;

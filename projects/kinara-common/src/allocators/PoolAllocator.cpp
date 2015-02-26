@@ -37,6 +37,8 @@
 
 #include <functional>
 
+#include "../basetypes/KinaraTypes.hpp"
+
 #include "MemoryManager.hpp"
 #include "PoolAllocator.hpp"
 
@@ -46,7 +48,6 @@ namespace allocators {
 PoolAllocator::PoolAllocator(u32 object_size, u32 num_objects)
     : m_num_objects(num_objects), m_object_size(object_size),
       m_page_size(0), m_free_list(nullptr), m_chunk_list(nullptr),
-      m_current_chunk_ptr(nullptr), m_current_chunk_end_ptr(nullptr),
       m_bytes_claimed(0), m_bytes_allocated(0)
 {
     KINARA_ASSERT(object_size > 0);
@@ -82,25 +83,29 @@ void* PoolAllocator::allocate()
         return retval;
     }
     // no free blocks
-    if (m_current_chunk_ptr != nullptr &&
-        less_func(m_current_chunk_ptr + m_object_size, m_current_chunk_end_ptr)) {
-        void* retval = static_cast<void*>(m_current_chunk_ptr);
-        m_current_chunk_ptr += m_object_size;
-        m_bytes_allocated += m_object_size;
-        return retval;
+    auto head_chunk = m_chunk_list;
+    if (head_chunk != nullptr) {
+        auto cur_chunk_ptr = head_chunk->get_cur_ptr();
+        auto const has_space =
+            less_func(cur_chunk_ptr + m_object_size,
+                      head_chunk->get_end_ptr(m_page_size));
+
+        if (has_space) {
+            void* retval = static_cast<void*>(cur_chunk_ptr);
+            head_chunk->m_current_ptr += m_object_size;
+            m_bytes_allocated += m_object_size;
+            return retval;
+        }
     }
 
     // no free chunks either, allocate one
-    auto new_chunk = new (allocate_raw(m_page_size)) Chunk();
+    auto new_chunk = new (allocate_raw(m_page_size)) Chunk(m_page_size, sc_chunk_overhead);
     m_bytes_claimed += m_page_size;
     new_chunk->m_next_chunk = m_chunk_list;
     m_chunk_list = new_chunk;
 
-    m_current_chunk_ptr = get_data_ptr_from_chunk_ptr(new_chunk);
-    m_current_chunk_end_ptr = m_current_chunk_ptr + (m_object_size * m_num_objects);
-
-    void* retval = static_cast<void*>(m_current_chunk_ptr);
-    m_current_chunk_ptr += m_object_size;
+    void* retval = static_cast<void*>(new_chunk->m_current_ptr);
+    new_chunk->m_current_ptr += m_object_size;
     m_bytes_allocated += m_object_size;
     return retval;
 }
@@ -126,10 +131,61 @@ void PoolAllocator::reset()
     }
     m_free_list = nullptr;
     m_chunk_list = nullptr;
-    m_current_chunk_ptr = nullptr;
-    m_current_chunk_end_ptr = nullptr;
     m_bytes_allocated = 0;
     m_bytes_claimed = 0;
+}
+
+void PoolAllocator::merge(PoolAllocator* other, bool collect_garbage)
+{
+    // we need the other pool to have the same
+    // object size
+    if (other->m_object_size != m_object_size) {
+        throw KinaraException("Object sizes must match for pools to be merged");
+    }
+
+    // empty out the first chunk
+    auto first_chunk_ptr = other->m_chunk_list->get_cur_ptr();
+    auto first_chunk_end = other->m_chunk_list->get_end_ptr(other->m_page_size);
+    while (first_chunk_ptr != first_chunk_end) {
+        auto block_ptr = static_cast<Block*>(static_cast<void*>(first_chunk_ptr));
+        block_ptr->m_next_block = m_free_list;
+        m_free_list = block_ptr;
+    }
+    // Push these chunks after all of my chunks
+    if (m_chunk_list == nullptr) {
+        m_chunk_list = other->m_chunk_list;
+    } else {
+        auto my_last_chunk = m_chunk_list;
+        auto my_cur_chunk = m_chunk_list;
+        while (my_cur_chunk != nullptr) {
+            my_last_chunk = my_cur_chunk;
+            my_cur_chunk = my_cur_chunk->m_next_chunk;
+        }
+        my_last_chunk->m_next_chunk = other->m_chunk_list;
+    }
+
+    // merge all the free blocks
+    if (m_free_list == nullptr) {
+        m_free_list = other->m_free_list;
+    } else {
+        auto my_last_block = m_free_list;
+        auto my_cur_block = m_free_list;
+        while (my_cur_block != nullptr) {
+            my_last_block = my_cur_block;
+            my_cur_block = my_cur_block->m_next_block;
+        }
+        my_last_block->m_next_block = other->m_free_list;
+    }
+
+    // adjust sizes and such
+    m_bytes_claimed += other->m_bytes_claimed;
+    m_bytes_allocated += other->m_bytes_allocated;
+
+    other->reset();
+
+    if (collect_garbage) {
+        garbage_collect();
+    }
 }
 
 inline u64 PoolAllocator::count_blocks_in_range(void* range_low, void* range_high) const
