@@ -181,6 +181,9 @@ void PoolAllocator::merge(PoolAllocator* other, bool collect_garbage)
     m_bytes_claimed += other->m_bytes_claimed;
     m_bytes_allocated += other->m_bytes_allocated;
 
+    other->m_free_list = nullptr;
+    other->m_chunk_list = nullptr;
+
     other->reset();
 
     if (collect_garbage) {

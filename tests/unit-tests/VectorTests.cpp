@@ -217,6 +217,7 @@ TEST(Vector, IteratorCompat)
     }
 }
 
+// TODO: Add tests for relational operators
 
 //
 // VectorTests.cpp ends here

@@ -53,12 +53,29 @@ using kinara::containers::u32SList;
 TEST(SList, Constructor)
 {
     u32SList u32_list1;
-    // EXPECT_EQ((u64)0, u32_list1.size());
+    EXPECT_EQ((u64)0, u32_list1.size());
+
     u32SList u32_list2((u64)10, (u32)42);
-    // EXPECT_EQ((u64)10, u32_list2.size());
+    EXPECT_EQ((u64)10, u32_list2.size());
+
     u32SList u32_list3(u32_list2.begin(), u32_list2.end());
-    // EXPECT_EQ((u64)10, u32_list3.size());
+    EXPECT_EQ((u64)10, u32_list3.size());
+
+    // TODO: Add tests for rest of constructors
 }
+
+// TODO
+// 1. Add tests for assignment operators
+// 2. Add tests for insertions and emplacements and push_*
+// 3. Add tests for pop_* and erase methods
+// 4. Add test for resize
+// 5. Add tests for splice_* methods
+// 6. Add tests for remove_*
+// 7. Add tests for unique
+// 8. Add tests for merge and sort
+// 9. Add tests for reverse
+// 10. Add tests for relational operators
+// 11. Add tests for RefCountable objects
 
 //
 // SListTests.cpp ends here
