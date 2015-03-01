@@ -114,6 +114,8 @@ class IteratorBase :
 {
     friend class SListBase<T, ConstructFunc, DestructFunc, true>;
     friend class SListBase<T, ConstructFunc, DestructFunc, false>;
+    friend class IteratorBase<T, ConstructFunc, DestructFunc, true>;
+    friend class IteratorBase<T, ConstructFunc, DestructFunc, false>;
 
 private:
     typedef SListNode<T, ConstructFunc, DestructFunc> NodeType;
@@ -132,7 +134,7 @@ private:
         return m_node;
     }
 
-protected:
+    // The only member
     NodeBaseType* m_node;
 
 public:

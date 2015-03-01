@@ -50,26 +50,450 @@ using kinara::u64;
 using kinara::containers::SList;
 using kinara::containers::u32SList;
 
-TEST(SList, Constructor)
+using kinara::containers::PoolSList;
+using kinara::containers::u32PoolSList;
+
+using testing::Types;
+
+template <typename u32SListType>
+class u32SListTest : public ::testing::Test
 {
-    u32SList u32_list1;
+protected:
+    u32SListTest() {}
+    virtual ~u32SListTest() {}
+};
+
+TYPED_TEST_CASE_P(u32SListTest);
+
+TYPED_TEST_P(u32SListTest, Constructor)
+{
+    typedef TypeParam u32ListType;
+    u32ListType u32_list1;
     EXPECT_EQ((u64)0, u32_list1.size());
 
-    u32SList u32_list2((u64)10, (u32)42);
+    u32ListType u32_list2((u64)10, (u32)42);
     EXPECT_EQ((u64)10, u32_list2.size());
 
-    u32SList u32_list3(u32_list2.begin(), u32_list2.end());
+    u32 i = 0;
+    for (auto it = u32_list2.begin(), last = u32_list2.end(); it != last; ++it) {
+        EXPECT_EQ((u32)42, *it);
+        ++i;
+    }
+
+    EXPECT_EQ((u32)10, i);
+
+    u32ListType u32_list3(u32_list2.begin(), u32_list2.end());
     EXPECT_EQ((u64)10, u32_list3.size());
 
-    // TODO: Add tests for rest of constructors
+    i = 0;
+    for (auto it = u32_list3.begin(), last = u32_list3.end(); it != last; ++it) {
+        EXPECT_EQ((u32)42, *it);
+        ++i;
+    }
+
+    EXPECT_EQ((u32)10, i);
+
+    u32ListType u32_list4({1, 2, 3, 4, 5});
+    EXPECT_EQ((u64)5, u32_list4.size());
+
+    i = 0;
+    for (auto it = u32_list4.begin(), last = u32_list4.end(); it != last; ++it) {
+        EXPECT_EQ(++i, *it);
+    }
+
+    EXPECT_EQ((u32)5, i);
+
+    u32ListType u32_list5(u32_list4);
+    i = 0;
+    for (auto it = u32_list5.begin(), last = u32_list5.end(); it != last; ++it) {
+        EXPECT_EQ(++i, *it);
+    }
+
+    EXPECT_EQ((u32)5, i);
+
+    u32ListType u32_list6(std::move(u32_list5));
+    i = 0;
+    for (auto it = u32_list6.begin(), last = u32_list6.end(); it != last; ++it) {
+        EXPECT_EQ(++i, *it);
+    }
+
+    EXPECT_EQ((u32)5, i);
+
+    EXPECT_EQ((u64)0, u32_list5.size());
 }
 
+TYPED_TEST_P(u32SListTest, Assignment)
+{
+    typedef TypeParam u32ListType;
+    u32ListType list1;
+    for (u32 i = 0; i < 1024; ++i) {
+        list1.push_back(i);
+    }
+
+    EXPECT_EQ((u64)1024, list1.size());
+    auto list2 = list1;
+    EXPECT_EQ((u64)1024, list1.size());
+
+    u32 i = 0;
+    for (auto const& num : list1) {
+        EXPECT_EQ(i++, num);
+    }
+    EXPECT_EQ((u32)1024, i);
+
+    i = 0;
+    for (auto const& num : list2) {
+        EXPECT_EQ(i++, num);
+    }
+    EXPECT_EQ((u32)1024, i);
+
+    auto list3 = std::move(list1);
+    i = 0;
+    for (auto const& num : list3) {
+        EXPECT_EQ(i++, num);
+    }
+
+    EXPECT_EQ((u32)1024, i);
+    EXPECT_EQ((u64)0, list1.size());
+}
+
+TYPED_TEST_P(u32SListTest, Insertions)
+{
+    typedef TypeParam u32ListType;
+
+    u32ListType list1;
+    list1.push_back(2);
+    list1.push_front(1);
+
+    EXPECT_EQ((u64)2, list1.size());
+
+    auto it = list1.begin();
+    EXPECT_EQ((u32)1, *it);
+    ++it;
+    EXPECT_EQ((u32)2, *it);
+
+    list1.emplace_back(2);
+    list1.emplace_front(1);
+
+    EXPECT_EQ((u64)4, list1.size());
+
+    it = list1.begin();
+    EXPECT_EQ((u32)1, *it);
+    ++it;
+    EXPECT_EQ((u32)1, *it);
+    ++it;
+    EXPECT_EQ((u32)2, *it);
+    ++it;
+    EXPECT_EQ((u32)2, *it);
+
+    list1.pop_back();
+    list1.pop_front();
+
+    EXPECT_EQ((u64)2, list1.size());
+
+    it = list1.begin();
+    EXPECT_EQ((u32)1, *it);
+    ++it;
+    EXPECT_EQ((u32)2, *it);
+
+    list1.clear();
+
+    EXPECT_EQ((u64)0, list1.size());
+    EXPECT_TRUE(list1.begin() == list1.end());
+
+    list1.push_front(1);
+    list1.push_back(2);
+
+    list1.erase_after(list1.begin());
+
+    EXPECT_EQ((u64)1, list1.size());
+    EXPECT_EQ((u64)1, list1.front());
+    EXPECT_EQ((u64)1, list1.back());
+
+    list1.erase((list1.begin()));
+
+    EXPECT_EQ((u64)0, list1.size());
+    EXPECT_TRUE(list1.begin() == list1.end());
+
+    // insertions
+    list1.clear();
+    list1 = { 1, 2, 3, 4, 5 };
+    auto position = list1.begin();
+    ++position;
+    ++position;
+    auto ins_pos = list1.insert_after(position, 42);
+
+    EXPECT_EQ((u32)42, *ins_pos);
+    EXPECT_EQ((u64)6, list1.size());
+    EXPECT_EQ((u32)5, list1.back());
+
+    ++position;
+    ++position;
+    ++position;
+    ins_pos = list1.insert_after(position, 84);
+
+    EXPECT_EQ((u32)84, *ins_pos);
+    EXPECT_EQ((u64)7, list1.size());
+    EXPECT_EQ((u32)84, list1.back());
+
+    list1.clear();
+    list1 = { 1, 2, 3, 4, 5 };
+    position = list1.begin();
+    ++position;
+    ++position;
+    ins_pos = list1.insert(position, 42);
+
+    EXPECT_EQ((u32)42, *ins_pos);
+    EXPECT_EQ((u64)6, list1.size());
+    EXPECT_EQ((u32)5, list1.back());
+
+    ++position;
+    ++position;
+    ins_pos = list1.insert(position, 84);
+
+    EXPECT_EQ((u32)84, *ins_pos);
+    EXPECT_EQ((u32)5, *position);
+    EXPECT_EQ((u64)7, list1.size());
+    EXPECT_EQ((u32)5, list1.back());
+
+}
+
+TYPED_TEST_P(u32SListTest, Resize)
+{
+    typedef TypeParam u32ListType;
+
+    u32ListType list1;
+    list1 = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
+    list1.resize(5);
+
+    u32 i = 0;
+    for (auto num : list1) {
+        EXPECT_EQ((u32)(++i), num);
+    }
+    EXPECT_EQ((u32)5, i);
+
+    list1.resize(10);
+    EXPECT_EQ((u64)10, list1.size());
+
+    i = 0;
+    for (auto num : list1) {
+        if (i < 5) {
+            EXPECT_EQ((u32)(++i), num);
+        } else {
+            EXPECT_EQ((u32)0, num);
+            ++i;
+        }
+    }
+    EXPECT_EQ((u32)10, i);
+    list1.resize(0);
+    EXPECT_EQ((u64)0, list1.size());
+}
+
+TYPED_TEST_P(u32SListTest, Splice)
+{
+    typedef TypeParam u32ListType;
+
+    u32ListType list1, list2;
+    list1 = { 1, 2, 3, 9, 10 };
+    list2 = { 4, 5, 6, 7, 8 };
+
+    auto pos = list1.begin();
+    ++pos;
+    ++pos;
+
+    list1.splice_after(pos, list2);
+
+    EXPECT_EQ((u64)10, list1.size());
+    EXPECT_EQ((u64)0, list2.size());
+    EXPECT_TRUE(list2.begin() == list2.end());
+
+    u32 i = 0;
+    for (auto num : list1) {
+        EXPECT_EQ((u32)(++i), num);
+    }
+
+    EXPECT_EQ((u32)10, i);
+
+    list1.clear();
+    list2.clear();
+
+    list1 = { 1, 2, 3, 9, 10 };
+    list2 = { 4, 5, 6, 7, 8 };
+
+    pos = list1.begin();
+    ++pos;
+    ++pos;
+    ++pos;
+
+    list1.splice(pos, list2);
+    EXPECT_EQ((u64)10, list1.size());
+    EXPECT_EQ((u64)0, list2.size());
+    EXPECT_TRUE(list2.begin() == list2.end());
+
+    i = 0;
+    for (auto num : list1) {
+        EXPECT_EQ((u32)(++i), num);
+    }
+
+    EXPECT_EQ((u32)10, i);
+
+    list1.clear();
+    list2.clear();
+
+    list1 = { 1, 2, 4, 5 };
+    list2 = { 6, 7, 3, 8, 9, 10 };
+
+    auto opos = list2.begin();
+    ++opos;
+
+    pos = list1.begin();
+    ++pos;
+
+    list1.splice_after(pos, list2, opos);
+    EXPECT_EQ((u64)5, list1.size());
+    EXPECT_EQ((u64)5, list2.size());
+
+    i = 0;
+    for (auto num : list1) {
+        EXPECT_EQ((u32)(++i), num);
+    }
+    EXPECT_EQ((u64)5, i);
+    for (auto num : list2) {
+        EXPECT_EQ((u32)(++i), num);
+    }
+    EXPECT_EQ((u64)10, i);
+
+    list1.clear();
+    list2.clear();
+
+    list1 = { 1, 2, 4, 5 };
+    list2 = { 6, 7, 3, 8, 9, 10 };
+
+    opos = list2.begin();
+    ++opos;
+    ++opos;
+
+    pos = list1.begin();
+    ++pos;
+    ++pos;
+
+    list1.splice_element(pos, list2, opos);
+    EXPECT_EQ((u64)5, list1.size());
+    EXPECT_EQ((u64)5, list2.size());
+
+    i = 0;
+    for (auto num : list1) {
+        EXPECT_EQ((u32)(++i), num);
+    }
+    EXPECT_EQ((u64)5, i);
+    for (auto num : list2) {
+        EXPECT_EQ((u32)(++i), num);
+    }
+    EXPECT_EQ((u64)10, i);
+
+    list1.clear();
+    list2.clear();
+
+    list1 = { 1, 2, 5 };
+    list2 = { 3, 4, 6, 7, 8, 9, 10 };
+
+    pos = list1.begin();
+    ++pos;
+
+    auto opos_begin = list2.before_begin();
+    auto opos_end = list2.begin();
+    ++opos_end;
+    ++opos_end;
+
+    list1.splice_after(pos, list2, opos_begin, opos_end);
+    EXPECT_EQ((u64)5, list1.size());
+    EXPECT_EQ((u64)5, list2.size());
+
+    i = 0;
+    for (auto num : list1) {
+        EXPECT_EQ((u32)(++i), num);
+    }
+
+    EXPECT_EQ((u64)5, i);
+    for (auto num : list2) {
+        EXPECT_EQ((u32)(++i), num);
+    }
+    EXPECT_EQ((u64)10, i);
+
+    list1.clear();
+    list2.clear();
+
+    list1 = { 1, 2, };
+    list2 = { 3, 4, 5, 6, 7, 8, 9, 10 };
+
+    pos = list1.begin();
+    ++pos;
+
+    opos_begin = list2.before_begin();
+    opos_end = list2.begin();
+    ++opos_end;
+    ++opos_end;
+    ++opos_end;
+
+    list1.splice_after(pos, list2, opos_begin, opos_end);
+    EXPECT_EQ((u64)5, list1.size());
+    EXPECT_EQ((u64)5, list2.size());
+
+    i = 0;
+    for (auto num : list1) {
+        EXPECT_EQ((u32)(++i), num);
+    }
+
+    EXPECT_EQ((u64)5, i);
+    for (auto num : list2) {
+        EXPECT_EQ((u32)(++i), num);
+    }
+    EXPECT_EQ((u64)10, i);
+
+    list1.clear();
+    list2.clear();
+
+    list1 = { 1, 2, };
+    list2 = { 3, 4, 5, 6, 7, 8, 9, 10 };
+
+    pos = list1.end();
+    opos_begin = list2.before_begin();
+    opos_end = list2.begin();
+    ++opos_end;
+    ++opos_end;
+    ++opos_end;
+
+    list1.splice(pos, list2, opos_begin, opos_end);
+    EXPECT_EQ((u64)5, list1.size());
+    EXPECT_EQ((u64)5, list2.size());
+
+    i = 0;
+    for (auto num : list1) {
+        EXPECT_EQ((u32)(++i), num);
+    }
+
+    EXPECT_EQ((u64)5, i);
+    for (auto num : list2) {
+        EXPECT_EQ((u32)(++i), num);
+    }
+    EXPECT_EQ((u64)10, i);
+
+    list1.clear();
+    list2.clear();
+}
+
+REGISTER_TYPED_TEST_CASE_P(u32SListTest,
+                           Constructor,
+                           Assignment,
+                           Insertions,
+                           Resize,
+                           Splice);
+
+typedef Types<u32SList, u32PoolSList> u32SListImplementations;
+
+INSTANTIATE_TYPED_TEST_CASE_P(NonPoolAndPool,
+                              u32SListTest, u32SListImplementations);
+
 // TODO
-// 1. Add tests for assignment operators
-// 2. Add tests for insertions and emplacements and push_*
-// 3. Add tests for pop_* and erase methods
-// 4. Add test for resize
-// 5. Add tests for splice_* methods
 // 6. Add tests for remove_*
 // 7. Add tests for unique
 // 8. Add tests for merge and sort

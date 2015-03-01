@@ -146,10 +146,11 @@ void PoolAllocator::merge(PoolAllocator* other, bool collect_garbage)
     // empty out the first chunk
     auto first_chunk_ptr = other->m_chunk_list->get_cur_ptr();
     auto first_chunk_end = other->m_chunk_list->get_end_ptr(other->m_page_size);
-    while (first_chunk_ptr != first_chunk_end) {
+    while (first_chunk_ptr + m_object_size < first_chunk_end) {
         auto block_ptr = static_cast<Block*>(static_cast<void*>(first_chunk_ptr));
         block_ptr->m_next_block = m_free_list;
         m_free_list = block_ptr;
+        first_chunk_ptr += m_object_size;
     }
     // Push these chunks after all of my chunks
     if (m_chunk_list == nullptr) {

@@ -204,20 +204,36 @@ TEST(Vector, IteratorCompat)
 {
     u32Vector test_vector = {9, 8, 7, 6, 5, 4, 3, 2, 1, 0};
     std::sort(test_vector.begin(), test_vector.end());
-    for (u64 i = 0, last = test_vector.size(); i < last; ++i) {
-        for (u64 j = i + 1; j < last; ++j) {
-            EXPECT_LE(test_vector[i], test_vector[j]);
-        }
-    }
+    EXPECT_EQ((u64)10, (u64)std::distance(test_vector.begin(), test_vector.end()));
+    EXPECT_EQ((u64)10, test_vector.size());
 
-    u32 i = 0;
-    for (auto elem : test_vector) {
-        EXPECT_EQ(i, elem);
+    u64 i = 0;
+    for (auto it1 = test_vector.begin(), last1 = test_vector.end(); it1 != last1; ++it1) {
+        for (auto it2 = std::next(it1); it2 != last1; ++it2) {
+            EXPECT_LE(*it1, *it2);
+        }
         ++i;
     }
+
+    EXPECT_EQ((u64)10, i);
+
+    i = 0;
+    for (auto elem : test_vector) {
+        EXPECT_EQ((u32)i, elem);
+        ++i;
+    }
+
+    EXPECT_EQ((u64)10, i);
 }
 
-// TODO: Add tests for relational operators
+// TODO:
+// Add tests for erase*
+// Add tests for clear*
+// Add tests for reset
+// Add tests for swap
+// Add tests for find
+// Add tests for sort
+// Add tests for relational operators
 
 //
 // VectorTests.cpp ends here

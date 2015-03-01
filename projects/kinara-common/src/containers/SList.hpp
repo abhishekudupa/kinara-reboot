@@ -205,12 +205,16 @@ class SListBase final
         KINARA_ASSERT (first != last);
 
         auto last_inserted = position;
+        auto next_of_position = position->m_next;
         for (auto it = first; it != last; ++it) {
             auto node = allocate_block(*it);
             last_inserted->m_next = node;
             last_inserted = node;
             increment_size();
         }
+
+        last_inserted->m_next = next_of_position;
+
         if (m_tail == nullptr || position == m_tail) {
             m_tail = static_cast<NodeType*>(last_inserted);
         }
@@ -225,6 +229,9 @@ class SListBase final
         node->m_next = position->m_next;
         position->m_next = node;
         increment_size();
+        if (m_tail == nullptr || position == m_tail) {
+            m_tail = node;
+        }
         return Iterator(node);
     }
 
@@ -234,8 +241,8 @@ class SListBase final
              cur_node != nullptr;
              cur_node = cur_node->m_next) {
 
-            if (cur_node->m_next = position) {
-                return cur_node;
+            if (cur_node->m_next == position) {
+                return const_cast<NodeBaseType*>(cur_node);
             }
         }
         return nullptr;
@@ -328,7 +335,7 @@ class SListBase final
     inline void assign(InputIterator first, InputIterator last)
     {
         reset();
-        construct_core(m_node_before_head, first, last);
+        construct_core(&m_node_before_head, first, last);
     }
 
     template <bool OUSEPOOLS>
@@ -389,6 +396,7 @@ class SListBase final
     inline SListBase& operator = (std::initializer_list<ValueType> init_list)
     {
         assign(std::move(init_list));
+        return *this;
     }
 
     Iterator before_begin() noexcept
@@ -398,7 +406,7 @@ class SListBase final
 
     ConstIterator before_begin() const noexcept
     {
-        return ConstIterator(&m_node_before_head);
+        return ConstIterator(const_cast<NodeBaseType*>(&m_node_before_head));
     }
 
     Iterator begin() noexcept
@@ -438,7 +446,7 @@ class SListBase final
 
     bool empty() const noexcept
     {
-        return (m_node_before_head.m_next == nullptr);
+        return (m_tail == nullptr);
     }
 
     u64 max_size() const noexcept
@@ -472,6 +480,9 @@ class SListBase final
         auto new_node = allocate_block(std::forward<ArgTypes>(args)...);
         new_node->m_next = m_node_before_head.m_next;
         m_node_before_head.m_next = new_node;
+        if (m_tail == nullptr) {
+            m_tail = new_node;
+        }
         increment_size();
     }
 
@@ -479,7 +490,11 @@ class SListBase final
     void emplace_back(ArgTypes&&... args)
     {
         auto new_node = allocate_block(std::forward<ArgTypes>(args)...);
-        m_tail->m_next = new_node;
+        if (m_tail != nullptr) {
+            m_tail->m_next = new_node;
+        } else {
+            m_node_before_head.m_next = new_node;
+        }
         m_tail = new_node;
         increment_size();
     }
@@ -489,6 +504,9 @@ class SListBase final
         auto new_node = allocate_block(value);
         new_node->m_next = m_node_before_head.m_next;
         m_node_before_head.m_next = new_node;
+        if (m_tail == nullptr) {
+            m_tail = new_node;
+        }
         increment_size();
     }
 
@@ -497,13 +515,20 @@ class SListBase final
         auto new_node = allocate_block(std::move(value));
         new_node->m_next = m_node_before_head.m_next;
         m_node_before_head.m_next = new_node;
+        if (m_tail == nullptr) {
+            m_tail = new_node;
+        }
         increment_size();
     }
 
     void push_back(const ValueType& value)
     {
         auto new_node = allocate_block(value);
-        m_tail->m_next = new_node;
+        if (m_tail != nullptr) {
+            m_tail->m_next = new_node;
+        } else {
+            m_node_before_head.m_next = new_node;
+        }
         m_tail = new_node;
         increment_size();
     }
@@ -511,7 +536,11 @@ class SListBase final
     void push_back(ValueType&& value)
     {
         auto new_node = allocate_block(std::move(value));
-        m_tail->m_next = new_node;
+        if (m_tail != nullptr) {
+            m_tail->m_next = new_node;
+        } else {
+            m_node_before_head.m_next = new_node;
+        }
         m_tail = new_node;
         increment_size();
     }
@@ -519,34 +548,38 @@ class SListBase final
     void pop_front()
     {
         auto node = m_node_before_head.m_next;
+        if (node == nullptr) {
+            return;
+        }
         m_node_before_head.m_next = node->m_next;
         deallocate_block(static_cast<NodeType*>(node));
+        if (m_node_before_head.m_next == nullptr) {
+            m_tail = nullptr;
+        }
         decrement_size();
     }
 
     // This is linear in the length of the list!
     void pop_back()
     {
-        auto cur_ptr = m_node_before_head.m_next;
-        if (cur_ptr == nullptr) {
+        if (m_tail == nullptr) {
             return;
         }
-
-        auto prev_ptr = cur_ptr;
-        while (cur_ptr != m_tail) {
-            cur_ptr = cur_ptr->m_next;
-            prev_ptr = cur_ptr;
+        auto node_before_last = find_node_before(m_tail);
+        deallocate_block(static_cast<NodeType*>(m_tail));
+        node_before_last->m_next = nullptr;
+        if (node_before_last == &m_node_before_head) {
+            m_tail = nullptr;
+        } else {
+            m_tail = static_cast<NodeType*>(node_before_last);
         }
-
-        deallocate_block(cur_ptr);
-        m_tail = prev_ptr;
         decrement_size();
     }
 
     template <typename... ArgTypes>
     Iterator emplace_after(ConstIterator position, ArgTypes&&... args)
     {
-        return construct_after(position->get_node(), std::forward<ArgTypes>(args)...);
+        return construct_after(position.get_node(), std::forward<ArgTypes>(args)...);
     }
 
     // linear time operation!
@@ -557,32 +590,28 @@ class SListBase final
             throw KinaraException("Cannot emplace before the beginning of an SList");
         }
         auto node_before = find_node_before(position);
-        auto new_node = allocate_block(std::forward<ArgTypes>(args)...);
-        new_node->m_next = node_before;
-        node_before->m_next = new_node;
-        increment_size();
-        return Iterator(new_node);
+        return construct_after(node_before, std::forward<ArgTypes>(args)...);
     }
 
     Iterator insert_after(ConstIterator position, const ValueType& value)
     {
-        return construct_after(position->get_node(), value);
+        return construct_after(position.get_node(), value);
     }
 
     Iterator insert_after(ConstIterator position, ValueType&& value)
     {
-        return construct_after(position->get_node(), std::move(value));
+        return construct_after(position.get_node(), std::move(value));
     }
 
     Iterator insert_after(ConstIterator position, u64 n, const ValueType& value)
     {
-        return construct_fill(position->get_node(), n, value);
+        return construct_fill(position.get_node(), n, value);
     }
 
     template <typename InputIterator>
     Iterator insert_after(ConstIterator position, InputIterator first, InputIterator last)
     {
-        return construct_core(position->get_node(), first, last);
+        return construct_core(position.get_node(), first, last);
     }
 
     Iterator insert_after(ConstIterator position, std::initializer_list<ValueType> init_list)
@@ -595,7 +624,7 @@ class SListBase final
         if (position == cbefore_begin()) {
             throw KinaraException("Cannot insert before the beginning of an SList");
         }
-        auto node_before = find_node_before(position->get_node());
+        auto node_before = find_node_before(position.get_node());
         return construct_after(node_before, value);
     }
 
@@ -605,7 +634,7 @@ class SListBase final
             throw KinaraException("Cannot insert before the beginning of an SList");
         }
 
-        auto node_before = find_node_before(position->get_node());
+        auto node_before = find_node_before(position.get_node());
         return construct_after(node_before, std::move(value));
     }
 
@@ -615,7 +644,7 @@ class SListBase final
             throw KinaraException("Cannot insert before the beginning of an SList");
         }
 
-        auto node_before = find_node_before(position->get_node());
+        auto node_before = find_node_before(position.get_node());
         return construct_fill(node_before, n, value);
     }
 
@@ -626,7 +655,7 @@ class SListBase final
             throw KinaraException("Cannot insert before the beginning of an SList");
         }
 
-        auto node_before = find_node_before(position->get_node());
+        auto node_before = find_node_before(position.get_node());
         return construct_core(node_before, first, last);
     }
 
@@ -641,24 +670,49 @@ class SListBase final
 
     Iterator erase_after(ConstIterator position)
     {
-        auto node = position->get_node();
+        auto node = position.get_node();
         auto node_to_erase = node->m_next;
+        if (node_to_erase == nullptr) {
+            return end();
+        }
         node->m_next = node_to_erase->m_next;
         deallocate_block(static_cast<NodeType*>(node_to_erase));
         decrement_size();
+
+        if (node_to_erase == m_tail) {
+            m_tail = static_cast<NodeType*>(node);
+        }
+        if (m_node_before_head.m_next == nullptr) {
+            m_tail = nullptr;
+        }
         return Iterator(node->m_next);
     }
 
     Iterator erase_after(ConstIterator first, ConstIterator last)
     {
-        auto node = first->get_node();
-        for (auto it = first; it != last; ++it) {
-            auto node_to_erase = node->m_next;
-            node->m_next = node_to_erase->m_next;
+        auto node_before_first = first.get_node();
+        auto last_node = last.get_node();
+
+        for (auto node = node_before_first->m_next; node != last_node; ) {
+            auto node_to_erase = node;
+            if (node_to_erase == nullptr) {
+                break;
+            }
+            node = node->m_next;
             deallocate_block(static_cast<NodeType*>(node_to_erase));
             decrement_size();
+
+            if (node_to_erase == m_tail) {
+                m_tail = static_cast<NodeType*>(node);
+            }
         }
-        return Iterator(last->get_node());
+
+        node_before_first->m_next = last_node;
+
+        if (m_node_before_head.m_next == nullptr) {
+            m_tail = nullptr;
+        }
+        return Iterator(last.get_node());
     }
 
     Iterator erase(ConstIterator position)
@@ -667,12 +721,8 @@ class SListBase final
             throw KinaraException("Cannot erase before the beginning of an SList");
         }
 
-        auto node_before = find_node_before(position->get_node());
-        auto node_to_erase = node_before->m_next;
-        node_before->m_next = node_to_erase->m_next;
-        deallocate_block(static_cast<NodeType*>(node_to_erase));
-        decrement_size();
-        return Iterator(node_before->m_next);
+        auto node_before = find_node_before(position.get_node());
+        return erase_after(ConstIterator(node_before));
     }
 
     Iterator erase(ConstIterator first, ConstIterator last)
@@ -681,15 +731,8 @@ class SListBase final
             throw KinaraException("Cannot erase before the beginning of an SList");
         }
 
-        auto node_before = find_node_before(first->get_node());
-
-        for (auto it = first; it != last; ++it) {
-            auto node_to_erase = node_before->m_next;
-            node_before->m_next = node_to_erase->m_next;
-            deallocate_block(static_cast<NodeType*>(node_to_erase));
-            decrement_size();
-        }
-        return Iterator(last->get_node());
+        auto node_before = find_node_before(first.get_node());
+        return erase_after(ConstIterator(node_before), last);
     }
 
     void swap(SListBase& other)
@@ -706,24 +749,34 @@ class SListBase final
     void resize(u64 n, const ValueType& value = ValueType())
     {
         auto orig_size = get_size();
+        if (n == orig_size) {
+            return;
+        }
         if (n > orig_size) {
-            construct_fill(m_tail, orig_size - n, value);
+            construct_fill(m_tail, n - orig_size, value);
+            return;
+        }
+        if (n == 0) {
+            reset();
             return;
         }
         // advance to the nth element
         auto first_node_to_erase = m_node_before_head.m_next;
         auto node_before_first_node = &m_node_before_head;
         for (u64 i = 0; i < n; ++i) {
-            first_node_to_erase = first_node_to_erase->m_next;
             node_before_first_node = first_node_to_erase;
+            first_node_to_erase = first_node_to_erase->m_next;
         }
         while(first_node_to_erase != nullptr) {
             auto node = first_node_to_erase;
+            if (node == nullptr) {
+                break;
+            }
             first_node_to_erase = node->m_next;
             deallocate_block(static_cast<NodeType*>(node));
         }
         node_before_first_node->m_next = nullptr;
-        m_tail = node_before_first_node;
+        m_tail = static_cast<NodeType*>(node_before_first_node);
         set_size(n);
     }
 
@@ -755,11 +808,25 @@ class SListBase final
         if (&other == this) {
             throw KinaraException("Cannot splice an SListBase onto itself");
         }
+        if (other.size() == 0) {
+            return;
+        }
 
-        auto node_to_splice_after = position->get_node();
+        auto osize = other.size();
+        auto node_to_splice_after = position.get_node();
         other.m_tail->m_next = node_to_splice_after->m_next;
-        node_to_splice_after->m_next = other.m_head.m_next;
-        m_pool_or_size.m_pool_allocator->merge(other.m_pool_or_size.m_pool_allocator);
+        node_to_splice_after->m_next = other.m_node_before_head.m_next;
+        if (node_to_splice_after == m_tail) {
+            m_tail = other.m_tail;
+        }
+
+        // merge the pool allocator if we're using pools
+        if (USEPOOLS) {
+            m_pool_or_size.m_pool_allocator->merge(other.m_pool_or_size.m_pool_allocator);
+        } else {
+            add_to_size(osize);
+        }
+
         other.m_node_before_head.m_next = nullptr;
         other.m_tail = nullptr;
         other.reset();
@@ -840,7 +907,7 @@ class SListBase final
         if (first == other.cbefore_begin()) {
             throw KinaraException("Cannot splice from before begin of SListBase");
         }
-        if (first == other.begin() && last == other.end()) {
+        if (first == other.cbegin() && last == other.cend()) {
             splice_after(position, other);
             return;
         }
@@ -868,11 +935,22 @@ class SListBase final
         if (position == cbefore_begin()) {
             throw KinaraException("Cannot splice before beginning of list");
         }
+        if (other.size() == 0) {
+            return;
+        }
 
-        auto node_to_splice_after = find_node_before(position->get_node());
+        auto osize = other.size();
+        auto node_to_splice_after = find_node_before(position.get_node());
         other.m_tail->m_next = node_to_splice_after->m_next;
-        node_to_splice_after->m_next = other.m_head.m_next;
-        m_pool_or_size.m_pool_allocator->merge(other.m_pool_or_size.m_pool_allocator);
+        node_to_splice_after->m_next = other.m_node_before_head.m_next;
+        if (node_to_splice_after == m_tail) {
+            m_tail = other.m_tail;
+        }
+        if (USEPOOLS) {
+            m_pool_or_size.m_pool_allocator->merge(other.m_pool_or_size.m_pool_allocator);
+        } else {
+            add_to_size(osize);
+        }
         other.m_node_before_head.m_next = nullptr;
         other.m_tail = nullptr;
         other.reset();
@@ -987,10 +1065,15 @@ class SListBase final
         while(cur_node != nullptr) {
             if (static_cast<NodeType*>(cur_node)->m_value == value) {
                 prev_node->m_next = cur_node->m_next;
+                if (cur_node == m_tail) {
+                    m_tail = prev_node;
+                }
                 deallocate_block(cur_node);
                 decrement_size();
                 return;
             }
+            prev_node = cur_node;
+            cur_node = cur_node->m_next;
         }
         // not found
         return;
@@ -1005,10 +1088,15 @@ class SListBase final
         while(cur_node != nullptr) {
             if (pred(static_cast<NodeType*>(cur_node)->m_value)) {
                 prev_node->m_next = cur_node->m_next;
+                if (cur_node == m_tail) {
+                    m_tail = prev_node;
+                }
                 deallocate_block(cur_node);
                 decrement_size();
                 return;
             }
+            prev_node = cur_node;
+            cur_node = cur_node->m_next;
         }
         // not found
         return;
