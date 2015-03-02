@@ -676,7 +676,8 @@ public:
         DestructFunc the_destruct_func;
         the_destruct_func(*position);
 
-        memmove(position, position + 1, sizeof(T) * std::distance(position + 1, cend()));
+        memmove(const_cast<ValueType*>(position),
+                position + 1, sizeof(T) * std::distance(position + 1, cend()));
 
         set_size(get_size() - 1);
         compact();

@@ -226,14 +226,57 @@ TEST(Vector, IteratorCompat)
     EXPECT_EQ((u64)10, i);
 }
 
-// TODO:
-// Add tests for erase*
-// Add tests for clear*
-// Add tests for reset
-// Add tests for swap
-// Add tests for find
-// Add tests for sort
-// Add tests for relational operators
+TEST(Vector, Erase)
+{
+    u32Vector vec = { 1, 2, 3, 4, 5 };
+    vec.erase(vec.begin());
+    vec.erase(vec.end() - 1);
+
+    EXPECT_EQ(3ull, vec.size());
+    auto it = vec.begin();
+    EXPECT_EQ(2u, *it);
+    ++it;
+    EXPECT_EQ(3u, *it);
+    ++it;
+    EXPECT_EQ(4u, *it);
+    ++it;
+    EXPECT_EQ(vec.end(), it);
+}
+
+TEST(Vector, Find)
+{
+    u32Vector vec = { 1, 2, 3, 4, 5 };
+    auto it = vec.find(3);
+    EXPECT_EQ(3u, *it);
+    EXPECT_EQ(4u, *(++it));
+}
+
+TEST(Vector, Sort)
+{
+    u32Vector vec = { 9, 7, 10, 2, 4, 1, 3, 6, 8, 5 };
+    vec.sort();
+    EXPECT_EQ(10ull, vec.size());
+
+    u32 i = 0;
+    for (auto it = vec.begin(); it != vec.end(); ++it) {
+        EXPECT_EQ(++i, *it);
+    }
+    EXPECT_EQ(10u, i);
+}
+
+TEST(Vector, RelationalOps)
+{
+    u32Vector vec1 = { 1, 2, 3, 4, 5 };
+    u32Vector vec2 = { 9, 10 };
+    u32Vector vec3 = { 1, 2, 3, 4, 5 };
+    u32Vector vec4 = { 6, 7, 8, 9, 10 };
+
+    EXPECT_LT(vec2, vec1);
+    EXPECT_GT(vec1, vec2);
+    EXPECT_EQ(vec1, vec3);
+    EXPECT_LT(vec1, vec4);
+    EXPECT_GT(vec4, vec1);
+}
 
 //
 // VectorTests.cpp ends here
