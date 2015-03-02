@@ -39,7 +39,6 @@
 #define KINARA_KINARA_COMMON_CONTAINERS_SLIST_HPP_
 
 #include <initializer_list>
-#include <iterator>
 
 #include "../basetypes/KinaraTypes.hpp"
 #include "../allocators/MemoryManager.hpp"
@@ -85,7 +84,8 @@ class SListBase final
     typedef slist_detail_::SListNode<T, ConstructFunc, DestructFunc> NodeType;
     typedef slist_detail_::SListNodeBase NodeBaseType;
 
-    union PoolSizeUnionType {
+    union PoolSizeUnionType
+    {
         ka::PoolAllocator* m_pool_allocator;
         u64 m_size;
 
@@ -299,6 +299,23 @@ class SListBase final
         }
         std::swap(m_node_before_head, other.m_node_before_head);
         std::swap(m_tail, other.m_tail);
+    }
+
+    template <bool OUSEPOOLS>
+    SListBase(const kc::SListBase<T, ConstructFunc, DestructFunc, OUSEPOOLS>& other)
+        : SListBase(std::move(other))
+    {
+        // Nothing here
+    }
+
+    template <bool OUSEPOOLS>
+    SListBase(kc::SListBase<T, ConstructFunc, DestructFunc, OUSEPOOLS>&& other)
+        : SListBase()
+    {
+        if (other.size() == 0) {
+            return;
+        }
+        construct_core(&m_node_before_head, other.begin(), other.end());
     }
 
     SListBase(std::initializer_list<ValueType> init_list)
@@ -1303,6 +1320,27 @@ class SListBase final
         }
 
         m_node_before_head.m_next = old_tail;
+    }
+
+    // Functions/methods not part of stl
+    Iterator find(const ValueType& value)
+    {
+        for (auto it = begin(), last = end(); it != last; ++it) {
+            if (*it == value) {
+                return it;
+            }
+        }
+        return end();
+    }
+
+    ConstIterator find(const ValueType& value) const
+    {
+        for (auto it = begin(), last = end(); it != last; ++it) {
+            if (*it == value) {
+                return it;
+            }
+        }
+        return end();
     }
 };
 

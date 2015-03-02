@@ -35,7 +35,73 @@
 
 // Code:
 
+#if !defined KINARA_KINARA_COMMON_CONTAINERS_DLIST_HPP_
+#define KINARA_KINARA_COMMON_CONTAINERS_DLIST_HPP_
 
+#include <initializer_list>
+
+#include "../basetypes/KinaraTypes.hpp"
+#include "../allocators/MemoryManager.hpp"
+#include "../allocators/PoolAllocator.hpp"
+
+#include "DListTypes.hpp"
+
+namespace kinara {
+namespace containers {
+
+namespace ka = kinara::allocators;
+namespace kc = kinara::containers;
+
+template <typename T, typename ConstructFunc,
+          typename DestructFunc, bool USEPOOLS>
+class DListBase final
+{
+public:
+    typedef T ValueType;
+    typedef T* PtrType;
+    typedef const T* ConstPtrType;
+    typedef T& RefType;
+    typedef const T& ConstRefType;
+
+    typedef slist_detail_::Iterator<T, ConstructFunc, DestructFunc> Iterator;
+    typedef Iterator iterator;
+    typedef slist_detail_::ConstIterator<T, ConstructFunc, DestructFunc> ConstIterator;
+    typedef ConstIterator const_iterator;
+    typedef std::reverse_iterator<iterator> ReverseIterator;
+    typedef ReverseIterator reverse_iterator;
+    typedef std::reverse_iterator<const_iterator> ConstReverseIterator;
+    typedef ConstReverseIterator const_reverse_iterator;
+
+private:
+    typedef dlist_detail_::DListNode NodeType;
+
+    union PoolSizeUnionType
+    {
+        ka::PoolAllocator* m_pool_allocator;
+        u64 m_size;
+
+        PoolSizeUnionType()
+            : m_size(0)
+        {
+            // Nothing here
+        }
+
+        ~PoolSizeUnionType()
+        {
+            // Nothing here
+        }
+    };
+
+    PoolSizeUnionType m_pool_or_size;
+    NodeType* m_head;
+    NodeType* m_tail;
+
+};
+
+} /* end namespace containers */
+} /* end namespace kinara */
+
+#endif /* KINARA_KINARA_COMMON_CONTAINERS_DLIST_HPP_ */
 
 //
 // DList.hpp ends here

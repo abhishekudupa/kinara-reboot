@@ -1,8 +1,8 @@
-// SListTypes.hpp ---
+// DListTypes.hpp ---
 //
-// Filename: SListTypes.hpp
+// Filename: DListTypes.hpp
 // Author: Abhishek Udupa
-// Created: Thu Feb 26 15:51:00 2015 (-0500)
+// Created: Mon Mar  2 17:47:59 2015 (-0500)
 //
 //
 // Copyright (c) 2015, Abhishek Udupa, University of Pennsylvania
@@ -37,8 +37,8 @@
 
 // Code:
 
-#if !defined KINARA_KINARA_COMMON_CONTAINERS_SLIST_TYPES_HPP_
-#define KINARA_KINARA_COMMON_CONTAINERS_SLIST_TYPES_HPP_
+#if !defined KINARA_KINARA_COMMON_CONTAINERS_DLIST_TYPES_HPP_
+#define KINARA_KINARA_COMMON_CONTAINERS_DLIST_TYPES_HPP_
 
 #include <iterator>
 
@@ -48,60 +48,38 @@
 namespace kinara {
 namespace containers {
 
-// forward declaration of list class
 template <typename T, typename ConstructFunc, typename DestructFunc, bool USEPOOLS>
-class SListBase;
+class DListBase;
 
-namespace slist_detail_ {
+namespace dlist_detail_ {
 
 namespace kc = kinara::containers;
 
-// Just a pointer to the next node
-struct SListNodeBase
+template <typename T, typename ConstructFunc, typename DestructFunc>
+struct DListNode
 {
-    SListNodeBase* m_next;
-
-    inline SListNodeBase()
-        : m_next(nullptr)
-    {
-        // Nothing here
-    }
-
-    inline SListNodeBase(SListNodeBase* next)
-        : m_next(next)
-    {
-        // Nothing here
-    }
-
-    inline ~SListNodeBase()
-    {
-        // Nothing here
-    }
-};
-
-template <typename T, typename ConstructFunc,
-          typename DestructFunc>
-struct SListNode : public SListNodeBase
-{
+    DListNode* m_next;
+    DListNode* m_prev;
     T m_value;
 
-    inline SListNode() = delete;
-    inline SListNode(const SListNode& other) = delete;
-    inline SListNode(SListNode&& other) = delete;
-    inline SListNode& operator = (const SListNode& other) = delete;
-    inline SListNode& operator = (SListNode&& other) = delete;
+    inline DListNode() = delete();
+    inline DListNode(const DListNode& other) = delete;
+    inline DListNode(DListNode&& other) = delete;
+    inline DListNode& operator = (const DListNode& other) = delete;
+    inline DListNode& operator = (DListNode&& other) = delete;
 
-    inline ~SListNode()
+    inline ~DListNode()
     {
         DestructFunc the_destructor;
         the_destructor(m_value);
     }
 
     template <typename... ArgTypes>
-    static inline SListNode* construct(void* mem_ptr, ArgTypes&&... args)
+    static inline DListNode* construct(void* mem_ptr, ArgTypes&&... args)
     {
-        SListNode* node_ptr = static_cast<SListNode*>(mem_ptr);
+        DListNode* node_ptr = static_cast<DListNode*>(mem_ptr);
         node_ptr->m_next = nullptr;
+        node_ptr->m_prev = nullptr;
         ConstructFunc the_constructor;
         the_constructor(&(node_ptr->m_value), std::forward<ArgTypes>(args)...);
         return node_ptr;
@@ -109,35 +87,32 @@ struct SListNode : public SListNodeBase
 };
 
 template <typename T, typename ConstructFunc, typename DestructFunc, bool ISCONST>
-class IteratorBase :
-        public std::iterator<std::forward_iterator_tag, T, u64,
-                             typename std::conditional<ISCONST, const T*, T*>::type,
-                             typename std::conditional<ISCONST, const T&, T&>::type>
+class IteratorBase
+    : public std::iterator<std::bidirectional_iterator_tag, T, u64,
+                           typename std::conditional<ISCONST, const T*, T*>::type,
+                           typename std::conditional<ISCONST, const T&, T&>::type>
 {
-    friend class SListBase<T, ConstructFunc, DestructFunc, true>;
-    friend class SListBase<T, ConstructFunc, DestructFunc, false>;
-    friend class IteratorBase<T, ConstructFunc, DestructFunc, true>;
-    friend class IteratorBase<T, ConstructFunc, DestructFunc, false>;
+    friend class DListBase<T, ConstructFunc, DestructFunc, true>;
+    friend class DListBase<T, ConstructFunc, DestructFunc, false>;
+    friend class IteratorBase<T, ConstructFunc, DestructFunc true>;
+    friend class IteratorBase<T, ConstructFunc, DestructFunc false>;
 
 private:
-    typedef SListNode<T, ConstructFunc, DestructFunc> NodeType;
-    typedef SListNodeBase NodeBaseType;
-    typedef typename std::conditional<ISCONST, const T*, T*>::type ValPtrType;
+    typedef DListNode<T, ConstructFunc, DestructFunc> NodeType;
     typedef typename std::conditional<ISCONST, const T&, T&>::type ValRefType;
+    typedef typename std::conditional<ISCONST, const T*, T*>::type ValPtrType;
 
-    // helper to get the node
-    inline NodeBaseType* get_node() const
+    inline NodeType* get_node() const
     {
         return m_node;
     }
 
-    inline operator NodeBaseType () const
+    inline operator NodeType () const
     {
         return m_node;
     }
 
-    // The only member
-    NodeBaseType* m_node;
+    NodeType* m_node;
 
 public:
     inline IteratorBase()
@@ -146,7 +121,7 @@ public:
         // Nothing here
     }
 
-    inline IteratorBase(NodeBaseType* node)
+    inline IteratorBase(NodeType* node)
         : m_node(node)
     {
         // Nothing here
@@ -159,16 +134,14 @@ public:
     }
 
     template <bool OISCONST>
-    inline
-    IteratorBase(const kc::slist_detail_::IteratorBase<T, ConstructFunc, DestructFunc, OISCONST>&
-                 other)
+    inline IteratorBase(const kc::dlist_detail_::IteratorBase<T, ConstructFunc,
+                                                              DestructFunc, OISCONST>& other)
         : m_node(other.m_node)
     {
         static_assert(((!OISCONST) || ISCONST),
                       "Cannot construct const iterator "
                       "from non-const iterator");
     }
-
 
     inline ~IteratorBase()
     {
@@ -186,15 +159,13 @@ public:
 
     template <bool OISCONST>
     inline IteratorBase&
-    operator = (const kc::slist_detail_::IteratorBase<T, ConstructFunc, DestructFunc, OISCONST>&
-                other)
+    operator = (const kc::dlist_detail_::IteratorBase<T, ConstructFunc,
+                                                      DestructFunc, OISCONST>& other)
     {
-        static_assert(((!OISCONST) || ISCONST),
-                      "Cannot assign const iterator to non-const iterator");
-
         if (&other == this) {
             return *this;
         }
+
         m_node = other.m_node;
         return *this;
     }
@@ -202,7 +173,6 @@ public:
     inline IteratorBase& operator ++ ()
     {
         m_node = m_node->m_next;
-        return *this;
     }
 
     inline IteratorBase operator ++ (int unused)
@@ -212,29 +182,32 @@ public:
         return retval;
     }
 
+    inline IteratorBase& operator -- ()
+    {
+        m_node = m_node->m_prev;
+    }
+
+    inline IteratorBase operator -- (int unused)
+    {
+        auto retval = *this;
+        m_node = m_node->m_prev;
+        return retval;
+    }
+
     inline ValRefType operator * () const
     {
-        return (static_cast<NodeType*>(m_node))->m_value;
+        return m_node->m_value;
     }
 
     inline ValPtrType operator -> () const
     {
-        return (&((static_cast<NodeType*>(m_node))->m_value));
+        return (&(m_node->m_value));
     }
 
     inline bool operator == (const IteratorBase& other) const
     {
         return (m_node == other.m_node);
     }
-
-    template <bool OISCONST>
-    inline bool
-    operator == (const kc::slist_detail_::IteratorBase<T, ConstructFunc, DestructFunc, OISCONST>&
-                 other) const
-    {
-        return (m_node == other.m_node);
-    }
-
 
     inline bool operator != (const IteratorBase& other) const
     {
@@ -243,8 +216,16 @@ public:
 
     template <bool OISCONST>
     inline bool
-    operator != (const kc::slist_detail_::IteratorBase<T, ConstructFunc, DestructFunc, OISCONST>&
-                 other) const
+    operator == (const kc::dlist_detail_::IteratorBase<T, ConstructFunc,
+                                                       DestructFunc, OISCONST>& other)
+    {
+        return (m_node == other.m_node);
+    }
+
+    template <bool OISCONST>
+    inline bool
+    operator != (const kc::dlist_detail_::IteratorBase<T, ConstructFunc,
+                                                       DestructFunc, OISCONST>& other)
     {
         return (m_node != other.m_node);
     }
@@ -256,11 +237,11 @@ using Iterator = IteratorBase<T, ConstructFunc, DestructFunc, false>;
 template <typename T, typename ConstructFunc, typename DestructFunc>
 using ConstIterator = IteratorBase<T, ConstructFunc, DestructFunc, true>;
 
-} /* end namespace slist_detail_ */
+} /* end namespace dlist_detail_ */
 } /* end namespace containers */
 } /* end namespace kinara */
 
-#endif /* KINARA_KINARA_COMMON_CONTAINERS_SLIST_TYPES_HPP_ */
+#endif /* KINARA_KINARA_COMMON_CONTAINERS_DLIST_TYPES_HPP_ */
 
 //
-// SListTypes.hpp ends here
+// DListTypes.hpp ends here
