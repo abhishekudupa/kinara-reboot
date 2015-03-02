@@ -49,9 +49,12 @@ using kinara::u32;
 using kinara::u64;
 using kinara::containers::SList;
 using kinara::containers::u32SList;
+using kinara::containers::PtrSList;
+using kinara::containers::PoolPtrSList;
 
 using kinara::containers::PoolSList;
 using kinara::containers::u32PoolSList;
+using kinara::memory::RefCountable;
 
 using testing::Types;
 
@@ -63,7 +66,51 @@ protected:
     virtual ~u32SListTest() {}
 };
 
+class RCClass : public RefCountable
+{
+private:
+    int m_data;
+
+public:
+    RCClass()
+        : RefCountable(), m_data(0)
+    {
+        // nothing here
+    }
+
+    RCClass(int data)
+        : RefCountable(), m_data(data)
+    {
+        // nothing here
+    }
+
+    RCClass(const RCClass& Other)
+        : RefCountable(), m_data(Other.m_data)
+    {
+        // nothing here
+    }
+
+    inline operator int () const
+    {
+        return m_data;
+    }
+
+    virtual ~RCClass()
+    {
+        // nothing here
+    }
+};
+
+template <typename RCSListType>
+class RCListTest : public ::testing::Test
+{
+protected:
+    RCListTest() {}
+    virtual ~RCListTest() {}
+};
+
 TYPED_TEST_CASE_P(u32SListTest);
+TYPED_TEST_CASE_P(RCListTest);
 
 TYPED_TEST_P(u32SListTest, Constructor)
 {
@@ -479,6 +526,202 @@ TYPED_TEST_P(u32SListTest, Splice)
 
     list1.clear();
     list2.clear();
+
+    list1 = { 2, 3, 4, 5 };
+    list2 = { 6, 7, 8, 9, 10, 1 };
+
+    pos = list1.before_begin();
+    opos = list2.begin();
+    ++opos;
+    ++opos;
+    ++opos;
+    ++opos;
+    ++opos;
+
+    list1.splice_element_after(pos, list2, opos);
+
+    EXPECT_EQ((u64)5, list1.size());
+    EXPECT_EQ((u64)5, list2.size());
+
+    i = 0;
+    for (auto num : list1) {
+        EXPECT_EQ((u32)(++i), num);
+    }
+
+    EXPECT_EQ((u64)5, i);
+    for (auto num : list2) {
+        EXPECT_EQ((u32)(++i), num);
+    }
+    EXPECT_EQ((u64)10, i);
+
+    list1 = { 2, 3, 4, 5 };
+    list2 = { 6, 7, 8, 9, 10, 1 };
+
+    pos = list1.begin();
+    opos = list2.begin();
+    ++opos;
+    ++opos;
+    ++opos;
+    ++opos;
+    ++opos;
+
+    list1.splice_element(pos, list2, opos);
+
+    EXPECT_EQ((u64)5, list1.size());
+    EXPECT_EQ((u64)5, list2.size());
+
+    i = 0;
+    for (auto num : list1) {
+        EXPECT_EQ((u32)(++i), num);
+    }
+
+    EXPECT_EQ((u64)5, i);
+    for (auto num : list2) {
+        EXPECT_EQ((u32)(++i), num);
+    }
+    EXPECT_EQ((u64)10, i);
+}
+
+TYPED_TEST_P(u32SListTest, Remove)
+{
+    typedef TypeParam u32ListType;
+
+    u32ListType list1;
+
+    list1 = { 1, 2, 3, 4, 5 };
+    list1.remove(3);
+    EXPECT_EQ((u64)4, list1.size());
+    auto it = list1.begin();
+    EXPECT_EQ(1u, *it);
+    ++it;
+    EXPECT_EQ(2u, *it);
+    ++it;
+    EXPECT_EQ(4u, *it);
+    ++it;
+    EXPECT_EQ(5u, *it);
+    ++it;
+    EXPECT_EQ(list1.end(), it);
+}
+
+TYPED_TEST_P(u32SListTest, Unique)
+{
+    typedef TypeParam u32ListType;
+    u32ListType list = { 1, 2, 2, 3, 4, 4 };
+    list.unique();
+
+    EXPECT_EQ(4ull, list.size());
+    auto it = list.begin();
+
+    EXPECT_EQ(1u, *it);
+    ++it;
+    EXPECT_EQ(2u, *it);
+    ++it;
+    EXPECT_EQ(3u, *it);
+    ++it;
+    EXPECT_EQ(4u, *it);
+    ++it;
+    EXPECT_EQ(list.end(), it);
+}
+
+TYPED_TEST_P(u32SListTest, SortMerge)
+{
+    typedef TypeParam u32ListType;
+    u32ListType list1 = { 5, 10, 9, 1, 2 };
+    u32ListType list2 = { 4, 6, 8, 7, 3 };
+    list1.sort();
+    list2.sort();
+
+    EXPECT_EQ(5u, list1.size());
+    EXPECT_EQ(5u, list2.size());
+
+    auto it = list1.begin();
+    EXPECT_EQ(1u, *it);
+    ++it;
+    EXPECT_EQ(2u, *it);
+    ++it;
+    EXPECT_EQ(5u, *it);
+    ++it;
+    EXPECT_EQ(9u, *it);
+    ++it;
+    EXPECT_EQ(10u, *it);
+    ++it;
+
+    EXPECT_EQ(list1.end(), it);
+
+    it = list2.begin();
+    EXPECT_EQ(3u, *it);
+    ++it;
+    EXPECT_EQ(4u, *it);
+    ++it;
+    EXPECT_EQ(6u, *it);
+    ++it;
+    EXPECT_EQ(7u, *it);
+    ++it;
+    EXPECT_EQ(8u, *it);
+    ++it;
+
+    EXPECT_EQ(list2.end(), it);
+
+    // test merge
+    list1.merge(list2);
+    EXPECT_EQ(10ull, list1.size());
+    EXPECT_EQ(0ull, list2.size());
+
+    u32 i = 0;
+    for (auto num : list1) {
+        EXPECT_EQ(++i, num);
+    }
+
+    EXPECT_EQ(10u, i);
+}
+
+TYPED_TEST_P(u32SListTest, Reverse)
+{
+    typedef TypeParam u32ListType;
+    u32ListType list;
+    list = { 5, 4, 3, 2, 1 };
+    list.reverse();
+    EXPECT_EQ(5ull, list.size());
+    u32 i = 0;
+    for (auto num : list) {
+        EXPECT_EQ(++i, num);
+    }
+    EXPECT_EQ(5u, i);
+}
+
+TYPED_TEST_P(u32SListTest, Relational)
+{
+    typedef TypeParam u32ListType;
+    u32ListType list1, list2, list3, list4, list5;
+    list1 = { 1, 2, 3, 4, 5 };
+    list5 = { 1, 2, 3, 4, 5 };
+    list2 = { 9, 10 };
+    list3 = { 1, 2, 3, 4, 6 };
+    list4 = { 1, 2, 3, 4 };
+
+
+    EXPECT_LT(list2, list1);
+    EXPECT_GT(list1, list2);
+    EXPECT_LT(list1, list3);
+    EXPECT_EQ(list1, list5);
+    EXPECT_LT(list4, list3);
+    EXPECT_GT(list3, list4);
+}
+
+TYPED_TEST_P(RCListTest, RefCountableTests)
+{
+    typedef TypeParam ListType;
+
+    ListType list1;
+    for (u32 i = 0; i < 128; ++i) {
+        list1.push_back(new RCClass(i));
+    }
+
+    list1.emplace_front(new RCClass(128));
+    list1.emplace_back(new RCClass(129));
+
+    list1.resize(10);
+    list1.clear();
 }
 
 REGISTER_TYPED_TEST_CASE_P(u32SListTest,
@@ -486,20 +729,22 @@ REGISTER_TYPED_TEST_CASE_P(u32SListTest,
                            Assignment,
                            Insertions,
                            Resize,
-                           Splice);
+                           Splice,
+                           Remove,
+                           Unique,
+                           SortMerge,
+                           Reverse,
+                           Relational);
+
+REGISTER_TYPED_TEST_CASE_P(RCListTest, RefCountableTests);
 
 typedef Types<u32SList, u32PoolSList> u32SListImplementations;
+typedef Types<PtrSList<RCClass>, PoolPtrSList<RCClass>> RCListImplementations;
 
 INSTANTIATE_TYPED_TEST_CASE_P(NonPoolAndPool,
                               u32SListTest, u32SListImplementations);
-
-// TODO
-// 6. Add tests for remove_*
-// 7. Add tests for unique
-// 8. Add tests for merge and sort
-// 9. Add tests for reverse
-// 10. Add tests for relational operators
-// 11. Add tests for RefCountable objects
+INSTANTIATE_TYPED_TEST_CASE_P(NonPoolAndPoolRC,
+                              RCListTest, RCListImplementations);
 
 //
 // SListTests.cpp ends here

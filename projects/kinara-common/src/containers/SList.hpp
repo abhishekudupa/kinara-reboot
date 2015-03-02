@@ -128,7 +128,7 @@ class SListBase final
         if (USEPOOLS) {
             ka::deallocate(*(m_pool_or_size.m_pool_allocator), node);
         } else {
-            ka::deallocate_raw(node, sizeof(NodeType));
+            ka::deallocate_object_raw(node, sizeof(NodeType));
         }
     }
 
@@ -679,11 +679,10 @@ class SListBase final
         deallocate_block(static_cast<NodeType*>(node_to_erase));
         decrement_size();
 
-        if (node_to_erase == m_tail) {
-            m_tail = static_cast<NodeType*>(node);
-        }
         if (m_node_before_head.m_next == nullptr) {
             m_tail = nullptr;
+        } else if (node_to_erase == m_tail) {
+            m_tail = static_cast<NodeType*>(node);
         }
         return Iterator(node->m_next);
     }
@@ -692,6 +691,7 @@ class SListBase final
     {
         auto node_before_first = first.get_node();
         auto last_node = last.get_node();
+        NodeBaseType* new_tail = nullptr;
 
         for (auto node = node_before_first->m_next; node != last_node; ) {
             auto node_to_erase = node;
@@ -703,7 +703,7 @@ class SListBase final
             decrement_size();
 
             if (node_to_erase == m_tail) {
-                m_tail = static_cast<NodeType*>(node);
+                new_tail = node;
             }
         }
 
@@ -711,6 +711,8 @@ class SListBase final
 
         if (m_node_before_head.m_next == nullptr) {
             m_tail = nullptr;
+        } else if (new_tail != nullptr) {
+            m_tail = static_cast<NodeType*>(new_tail);
         }
         return Iterator(last.get_node());
     }
@@ -1065,10 +1067,12 @@ class SListBase final
         while(cur_node != nullptr) {
             if (static_cast<NodeType*>(cur_node)->m_value == value) {
                 prev_node->m_next = cur_node->m_next;
-                if (cur_node == m_tail) {
-                    m_tail = prev_node;
+                if (m_node_before_head.m_next == nullptr) {
+                    m_tail = nullptr;
+                } else if (cur_node == m_tail) {
+                    m_tail = static_cast<NodeType*>(prev_node);
                 }
-                deallocate_block(cur_node);
+                deallocate_block(static_cast<NodeType*>(cur_node));
                 decrement_size();
                 return;
             }
@@ -1088,7 +1092,9 @@ class SListBase final
         while(cur_node != nullptr) {
             if (pred(static_cast<NodeType*>(cur_node)->m_value)) {
                 prev_node->m_next = cur_node->m_next;
-                if (cur_node == m_tail) {
+                if (m_node_before_head.m_next == nullptr) {
+                    m_tail = nullptr;
+                } else if (cur_node == m_tail) {
                     m_tail = prev_node;
                 }
                 deallocate_block(cur_node);
@@ -1162,6 +1168,9 @@ class SListBase final
     {
         auto my_node = &m_node_before_head;
         auto& other_before_head = other.m_node_before_head;
+        if (size() == 0 && other.size() == 0) {
+            return;
+        }
 
         while (my_node->m_next != nullptr && other_before_head.m_next != nullptr) {
             if (comparator(static_cast<NodeType*>(other_before_head.m_next)->m_value,
@@ -1180,7 +1189,7 @@ class SListBase final
             other_before_head.m_next = nullptr;
             m_tail = other.m_tail;
         } else {
-            m_tail = my_node;
+            m_tail = static_cast<NodeType*>(my_node);
         }
         add_to_size(other.get_size());
         // merge the pools
@@ -1251,7 +1260,7 @@ class SListBase final
                     }
 
                     if (sorted_list_tail != nullptr) {
-                        sorted_list->m_next = node_to_merge;
+                        sorted_list_tail->m_next = node_to_merge;
                     } else {
                         sorted_list = node_to_merge;
                     }
@@ -1262,6 +1271,7 @@ class SListBase final
             }
 
             sorted_list_tail->m_next = nullptr;
+
             if (num_merges_done <= 1) {
                 this->m_node_before_head.m_next = sorted_list;
                 this->m_tail = sorted_list_tail;
@@ -1283,7 +1293,7 @@ class SListBase final
         auto prev_node = m_node_before_head.m_next;
         prev_node->m_next = nullptr;
         auto old_tail = m_tail;
-        m_tail = prev_node;
+        m_tail = static_cast<NodeType*>(prev_node);
 
         while (cur_node != nullptr) {
             auto next_node = cur_node->m_next;
@@ -1320,6 +1330,8 @@ static inline i64 compare(const SListBase<T, CF1, DF1, UP1>& list_a,
         } else if (*it2 < *it1) {
             return 1;
         }
+        ++it1;
+        ++it2;
     }
     return 0;
 }
