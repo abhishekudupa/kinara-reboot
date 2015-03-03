@@ -1,9 +1,11 @@
-// Deque.hpp ---
-// Filename: Deque.hpp
-// Author: Abhishek Udupa
-// Created: Mon Feb 16 02:09:37 2015 (-0500)
+// DequeTypes.hpp ---
 //
-// Copyright (c) 2013, Abhishek Udupa, University of Pennsylvania
+// Filename: DequeTypes.hpp
+// Author: Abhishek Udupa
+// Created: Tue Mar  3 17:46:22 2015 (-0500)
+//
+//
+// Copyright (c) 2015, Abhishek Udupa, University of Pennsylvania
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -35,38 +37,59 @@
 
 // Code:
 
-#if !defined KINARA_KINARA_COMMON_CONTAINERS_DEQUE_HPP_
-#define KINARA_KINARA_COMMON_CONTAINERS_DEQUE_HPP_
+#if !defined KINARA_KINARA_COMMON_CONTAINERS_DEQUE_TYPES_HPP_
+#define KINARA_KINARA_COMMON_CONTAINERS_DEQUE_TYPES_HPP_
 
-#include <initializer_list>
+#include <iterator>
 
-#include "../basetypes/KinaraTypes.hpp"
-#include "../allocators/MemoryManager.hpp"
-
-#include "DequeTypes.hpp"
+#include "../basetypes/KinaraBase.hpp"
+#include "ContainersBase.hpp"
 
 namespace kinara {
 namespace containers {
 
-namespace ka = kinara::allocators;
+template <typename T, typename ConstructFunc, typename DestructFunc>
+class DequeBase;
+
+namespace deque_detail_ {
+
 namespace kc = kinara::containers;
 
+// A class that represents a block of data
+// for a deque
 template <typename T, typename ConstructFunc, typename DestructFunc>
-class DequeBase final
+class DequeBlock
 {
-public:
-    typedef T ValueType;
-    typedef T* PtrType;
-    typedef T& RefType;
-    typedef const T* ConstPtrType;
-    typedef const T& ConstRefType;
+private:
+    // constants to control the block size
+    static constexpr u32 sc_elems_per_block = 128;
 
+public:
+    bool m_direction;
+    DequeBlock* m_next_block;
+    DequeBlock* m_prev_block;
+
+    T* m_cur_ptr;
+    T m_data[sc_elems_per_block];
+
+    DequeBlock(bool direction);
+    DequeBlock(bool direction, DequeBlock* next_block, DequeBlock* prev_block);
+    ~DequeBlock();
+
+    // requires that there's space in this block
+    template <typename... ArgTypes>
+    T* allocate_object(ArgTypes&&... args)
+    {
+
+    }
 };
+
+} /* end namespace deque_detail_ */
 
 } /* end namespace containers */
 } /* end namespace kinara */
 
-#endif /* KINARA_KINARA_COMMON_CONTAINERS_DEQUE_HPP_ */
+#endif /* KINARA_KINARA_COMMON_CONTAINERS_DEQUE_TYPES_HPP_ */
 
 //
-// Deque.hpp ends here
+// DequeTypes.hpp ends here
