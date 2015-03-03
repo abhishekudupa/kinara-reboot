@@ -43,6 +43,8 @@
 #include <cstdlib>
 #include <algorithm>
 
+#include "RCClass.hpp"
+
 #include "../../thirdparty/gtest/include/gtest/gtest.h"
 
 using kinara::u32;
@@ -54,7 +56,6 @@ using kinara::containers::PoolPtrSList;
 
 using kinara::containers::PoolSList;
 using kinara::containers::u32PoolSList;
-using kinara::memory::RefCountable;
 
 using testing::Types;
 
@@ -66,40 +67,6 @@ protected:
     virtual ~u32SListTest() {}
 };
 
-class RCClass : public RefCountable
-{
-private:
-    int m_data;
-
-public:
-    RCClass()
-        : RefCountable(), m_data(0)
-    {
-        // nothing here
-    }
-
-    RCClass(int data)
-        : RefCountable(), m_data(data)
-    {
-        // nothing here
-    }
-
-    RCClass(const RCClass& Other)
-        : RefCountable(), m_data(Other.m_data)
-    {
-        // nothing here
-    }
-
-    inline operator int () const
-    {
-        return m_data;
-    }
-
-    virtual ~RCClass()
-    {
-        // nothing here
-    }
-};
 
 template <typename RCSListType>
 class RCListTest : public ::testing::Test

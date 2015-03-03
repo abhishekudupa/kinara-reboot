@@ -618,11 +618,26 @@ public:
         increment_size();
     }
 
+    void push_front(const ValueType& value)
+    {
+        insert(begin(), value);
+    }
+
+    void push_front(ValueType&& value)
+    {
+        insert(begin(), std::move(value));
+    }
+
     void pop_back()
     {
         DestructFunc the_destruct_func;
         the_destruct_func(m_data[get_size() - 1]);
         set_size(get_size() - 1);
+    }
+
+    void pop_front()
+    {
+        erase(begin());
     }
 
     Iterator insert(ConstIterator position, const ValueType& value)
@@ -766,6 +781,25 @@ public:
     void stable_sort(const std::function<bool(const T&, const T&)>& compare_fun)
     {
         std::stable_sort(begin(), end(), compare_fun);
+    }
+
+    // in place reverse
+    void reverse()
+    {
+        auto right_mover = begin();
+        auto left_mover = end() - 1;
+
+        T temp_object;
+
+        std::less<T*> less_func;
+
+        while (less_func(right_mover, left_mover)) {
+            memcpy(&temp_object, right_mover, sizeof(T));
+            memcpy(right_mover, left_mover, sizeof(T));
+            memcpy(left_mover, &temp_object, sizeof(T));
+            ++right_mover;
+            --left_mover;
+        }
     }
 };
 

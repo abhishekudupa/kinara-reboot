@@ -41,50 +41,16 @@
 #include <cstdlib>
 #include <algorithm>
 
+#include "RCClass.hpp"
+
 #include "../../thirdparty/gtest/include/gtest/gtest.h"
 
 using kinara::containers::u32Vector;
 using kinara::containers::u32CompactVector;
 using kinara::containers::PtrVector;
-using kinara::memory::RefCountable;
 
 using kinara::u32;
 using kinara::u64;
-
-class RCClass : public RefCountable
-{
-private:
-    int m_data;
-
-public:
-    RCClass()
-        : RefCountable(), m_data(0)
-    {
-        // nothing here
-    }
-
-    RCClass(int data)
-        : RefCountable(), m_data(data)
-    {
-        // nothing here
-    }
-
-    RCClass(const RCClass& Other)
-        : RefCountable(), m_data(Other.m_data)
-    {
-        // nothing here
-    }
-
-    inline operator int () const
-    {
-        return m_data;
-    }
-
-    virtual ~RCClass()
-    {
-        // nothing here
-    }
-};
 
 TEST(Vector, EmptyIntVector)
 {
@@ -276,6 +242,26 @@ TEST(Vector, RelationalOps)
     EXPECT_EQ(vec1, vec3);
     EXPECT_LT(vec1, vec4);
     EXPECT_GT(vec4, vec1);
+}
+
+TEST(Vector, Reverse)
+{
+    u32Vector vec1 = { 5, 4, 3, 2, 1 };
+    u32Vector vec2 = { 10, 9, 8, 7, 6, 5, 4, 3, 2, 1 };
+
+    vec1.reverse();
+    vec2.reverse();
+
+    u32 i = 0;
+    for (auto num : vec1) {
+        EXPECT_EQ(++i, num);
+    }
+    EXPECT_EQ(5u, i);
+    i = 0;
+    for (auto num : vec2) {
+        EXPECT_EQ(++i, num);
+    }
+    EXPECT_EQ(10u, i);
 }
 
 //

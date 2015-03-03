@@ -63,9 +63,9 @@ public:
     typedef T& RefType;
     typedef const T& ConstRefType;
 
-    typedef slist_detail_::Iterator<T, ConstructFunc, DestructFunc> Iterator;
+    typedef dlist_detail_::Iterator<T, ConstructFunc, DestructFunc> Iterator;
     typedef Iterator iterator;
-    typedef slist_detail_::ConstIterator<T, ConstructFunc, DestructFunc> ConstIterator;
+    typedef dlist_detail_::ConstIterator<T, ConstructFunc, DestructFunc> ConstIterator;
     typedef ConstIterator const_iterator;
     typedef std::reverse_iterator<iterator> ReverseIterator;
     typedef ReverseIterator reverse_iterator;
@@ -73,7 +73,8 @@ public:
     typedef ConstReverseIterator const_reverse_iterator;
 
 private:
-    typedef dlist_detail_::DListNode NodeType;
+    typedef dlist_detail_::DListNodeBase NodeBaseType;
+    typedef dlist_detail_::DListNode<T, ConstructFunc, DestructFunc> NodeType;
 
     union PoolSizeUnionType
     {
@@ -93,10 +94,850 @@ private:
     };
 
     PoolSizeUnionType m_pool_or_size;
-    NodeType* m_head;
-    NodeType* m_tail;
+    NodeBaseType m_root;
+
+    template <typename... ArgTypes>
+    inline NodeType* allocate_block(ArgTypes&&... args)
+    {
+        if (USEPOOLS) {
+            if (m_pool_or_size.m_pool_allocator == nullptr) {
+                m_pool_or_size.m_pool_allocator =
+                    ka::allocate_object_raw<ka::PoolAllocator>(sizeof(NodeType));
+            }
+            auto ptr = m_pool_or_size.m_pool_allocator->allocate();
+            return NodeType::construct(ptr, std::forward<ArgTypes>(args)...);
+        } else {
+            auto ptr = ka::allocate_raw(sizeof(NodeType));
+            return NodeType::construct(ptr, std::forward<ArgTypes>(args)...);
+        }
+    }
+
+    inline void deallocate_block(NodeType* node)
+    {
+        if (USEPOOLS) {
+            ka::deallocate(*(m_pool_or_size.m_pool_allocator), node);
+        } else {
+            ka::deallocate_object_raw(node, sizeof(NodeType));
+        }
+    }
+
+    inline void increment_size()
+    {
+        if (!USEPOOLS) {
+            m_pool_or_size.m_size++;
+        }
+    }
+
+    inline void decrement_size()
+    {
+        if (!USEPOOLS) {
+            m_pool_or_size.m_size--;
+        }
+    }
+
+    inline void add_to_size(u64 addend)
+    {
+        if (!USEPOOLS) {
+            m_pool_or_size.m_size += addend;
+        }
+    }
+
+    inline void sub_from_size(u64 subend)
+    {
+        if (!USEPOOLS) {
+            m_pool_or_size.m_size -= subend;
+        }
+    }
+
+    inline u64 get_size() const
+    {
+        if (m_root.m_next == &m_root) {
+            return 0;
+        }
+        if (USEPOOLS) {
+            return m_pool_or_size.m_pool_allocator->get_objects_allocated();
+        } else {
+            return m_pool_or_size.m_size;
+        }
+    }
+
+    inline void set_size(u64 new_size)
+    {
+        if (!USEPOOLS) {
+            m_pool_or_size.m_size = new_size;
+        }
+    }
+
+    inline Iterator construct_fill(NodeBaseType* position, u64 n, const ValueType& value)
+    {
+        KINARA_ASSERT(n > 0);
+
+        auto prev_of_position = position->m_prev;
+        auto last_inserted = prev_of_position;
+
+        for (u64 i = 0; i < n; ++i) {
+            auto new_node = allocate_block(value);
+            last_inserted->m_next = new_node;
+            new_node->m_prev = last_inserted;
+            last_inserted = new_node;
+        }
+
+        position->m_prev = last_inserted;
+        last_inserted->m_next = position;
+
+        add_to_size(n);
+        return Iterator(prev_of_position->m_next);
+    }
+
+    template <typename InputIterator>
+    inline Iterator construct_range(NodeBaseType* position, InputIterator first, InputIterator last)
+    {
+        KINARA_ASSERT(first != last);
+
+        auto prev_of_position = position->m_prev;
+        auto last_inserted = prev_of_position;
+
+        for (auto it = first; it != last; ++it) {
+            auto new_node = allocate_block(*it);
+            last_inserted->m_next = new_node;
+            new_node->m_prev = last_inserted;
+            last_inserted = new_node;
+            increment_size();
+        }
+
+        position->m_prev = last_inserted;
+        last_inserted->m_next = position;
+
+        return Iterator(prev_of_position->m_next);
+    }
+
+    template <typename... ArgTypes>
+    inline Iterator construct_at(NodeBaseType* position, ArgTypes&&... args)
+    {
+        auto node = allocate_block(std::forward<ArgTypes>(args)...);
+
+        position->m_prev->m_next = node;
+        node->m_prev = position->m_prev;
+
+        node->m_next = position;
+        position->m_prev = node;
+
+        return Iterator(node);
+    }
+
+public:
+    explicit DListBase()
+        : m_root(&(this->m_root), &(this->m_root))
+    {
+        // Nothing here
+    }
+
+    explicit DListBase(u64 n)
+        : DListBase(n, ValueType())
+    {
+        // Nothing here
+    }
+
+    explicit DListBase(u64 n, const ValueType& value)
+        : DListBase()
+    {
+        if (n == 0) {
+            return;
+        }
+        construct_fill(&m_root, n, value);
+    }
+
+    template <typename InputIterator>
+    DListBase(InputIterator first, InputIterator last)
+        : DListBase()
+    {
+        if (first == last) {
+            return;
+        }
+        construct_range(&m_root, first, last);
+    }
+
+    DListBase(const DListBase& other)
+        : DListBase(other.begin(), other.end())
+    {
+        // Nothing here
+    }
+
+    DListBase(DListBase&& other)
+        : DListBase()
+    {
+        if (USEPOOLS) {
+            m_pool_or_size.m_pool_allocator = other.m_pool_or_size.m_pool_allocator;
+            other.m_pool_or_size.m_pool_allocator = nullptr;
+        } else {
+            m_pool_or_size.m_size = other.m_pool_or_size.m_size;
+            other.m_pool_or_size.m_size = 0;
+        }
+
+        m_root.m_next = other.m_root.m_next;
+        m_root.m_prev = other.m_root.m_prev;
+        other.m_root.m_next = &(other.m_root);
+        other.m_root.m_prev = &(other.m_root);
+    }
+
+    template <bool OUSEPOOLS>
+    DListBase(const kc::DListBase<T, ConstructFunc, DestructFunc, OUSEPOOLS>& other)
+        : DListBase(std::move(other))
+    {
+        // Nothing here
+    }
+
+    template <bool OUSEPOOLS>
+    DListBase(kc::DListBase<T, ConstructFunc, DestructFunc, OUSEPOOLS>&& other)
+        : DListBase(other.begin(), other.end())
+    {
+        // Nothing here
+    }
+
+    DListBase(std::initializer_list<ValueType> init_list)
+        : DListBase(init_list.begin(), init_list.end())
+    {
+        // Nothing here
+    }
+
+    inline void reset()
+    {
+        for (auto node = m_root.m_next; node != &m_root; ) {
+            auto next_node = node->m_next;
+            deallocate_block(static_cast<NodeType*>(node));
+            node = next_node;
+        }
+
+        if (USEPOOLS && m_pool_or_size.m_pool_allocator != nullptr) {
+            ka::deallocate_object_raw(m_pool_or_size.m_pool_allocator, sizeof(ka::PoolAllocator));
+            m_pool_or_size.m_pool_allocator = nullptr;
+        }
+
+        m_root.m_next = &m_root;
+        m_root.m_prev = &m_root;
+        set_size(0);
+    }
+
+    ~DListBase()
+    {
+        reset();
+    }
+
+    template <typename InputIterator>
+    inline void assign(InputIterator first, InputIterator last)
+    {
+        reset();
+        if (first == last) {
+            return;
+        }
+        construct_range(&m_root, first, last);
+    }
+
+    template <bool OUSEPOOLS>
+    inline void assign(const kc::DListBase<T, ConstructFunc, DestructFunc, OUSEPOOLS>& other)
+    {
+        assign(other.begin(), other.end());
+    }
+
+    void assign(u64 n, const ValueType& value)
+    {
+        reset();
+        if (n == 0) {
+            return;
+        }
+        construct_fill(&m_root, n, value);
+    }
+
+    void assign(std::initializer_list<ValueType> init_list)
+    {
+        assign(init_list.begin(), init_list.end());
+    }
+
+    inline DListBase& operator = (const DListBase& other)
+    {
+        if (&other == this) {
+            return *this;
+        }
+        assign(other);
+        return *this;
+    }
+
+    template <bool OUSEPOOLS>
+    inline DListBase&
+    operator = (const kc::DListBase<T, ConstructFunc, DestructFunc, OUSEPOOLS>& other)
+    {
+        if (&other == this) {
+            return *this;
+        }
+        assign(other);
+        return *this;
+    }
+
+    inline DListBase* operator = (DListBase&& other)
+    {
+        if (&other == this) {
+            return *this;
+        }
+        reset();
+
+        if (other.size() == 0) {
+            return *this;
+        }
+
+        if (USEPOOLS) {
+            m_pool_or_size.m_pool_allocator = other.m_pool_or_size.m_pool_allocator;
+            other.m_pool_or_size.m_pool_allocator = nullptr;
+        } else {
+            m_pool_or_size.m_size = other.m_pool_or_size.m_size;
+            other.m_pool_or_size.m_size = 0;
+        }
+
+        m_root.m_next = other.m_root.m_next;
+        m_root.m_prev = other.m_root.m_prev;
+        other.m_root.m_next = &(other.m_root);
+        other.m_root.m_prev = &(other.m_root);
+        return *this;
+    }
+
+    inline DListBase& operator = (std::initializer_list<ValueType> init_list)
+    {
+        assign(std::move(init_list));
+        return *this;
+    }
+
+    Iterator begin() noexcept
+    {
+        return Iterator(m_root.m_next);
+    }
+
+    ConstIterator begin() const noexcept
+    {
+        return ConstIterator(m_root.m_next);
+    }
+
+    Iterator end() noexcept
+    {
+        return Iterator(&m_root);
+    }
+
+    ConstIterator end() const noexcept
+    {
+        return ConstIterator(&m_root);
+    }
+
+    ConstIterator cbegin() const noexcept
+    {
+        return begin();
+    }
+
+    ConstIterator cend() const noexcept
+    {
+        return end();
+    }
+
+    ReverseIterator rbegin() noexcept
+    {
+        return ReverseIterator(end());
+    }
+
+    ReverseIterator rend() noexcept
+    {
+        return ReverseIterator(begin());
+    }
+
+    ConstReverseIterator rbegin() const noexcept
+    {
+        return ReverseIterator(begin());
+    }
+
+    ConstReverseIterator rend() const noexcept
+    {
+        return ReverseIterator(end());
+    }
+
+    ConstReverseIterator crbegin() const noexcept
+    {
+        return rbegin();
+    }
+
+    ConstReverseIterator crend() const noexcept
+    {
+        return rend();
+    }
+
+    bool empty() const noexcept
+    {
+        return (m_root.m_next == &m_root);
+    }
+
+    u64 size() const noexcept
+    {
+        return get_size();
+    }
+
+    u64 max_size() const noexcept
+    {
+        return UINT64_MAX;
+    }
+
+    RefType front()
+    {
+        return ((static_cast<NodeType*>(m_root.m_next))->m_value);
+    }
+
+    ConstRefType front() const
+    {
+        return ((static_cast<NodeType*>(m_root.m_next))->m_value);
+    }
+
+    RefType back()
+    {
+        return ((static_cast<NodeType*>(m_root.m_prev))->m_value);
+    }
+
+    ConstRefType back() const
+    {
+        return ((static_cast<NodeType*>(m_root.m_prev))->m_value);
+    }
+
+    template <typename... ArgTypes>
+    void emplace_front(ArgTypes&&... args)
+    {
+        construct_at(m_root.m_next, std::forward<ArgTypes>(args)...);
+    }
+
+    void push_front(const ValueType& value)
+    {
+        construct_at(m_root.m_next, value);
+    }
+
+    void push_front(ValueType&& value)
+    {
+        construct_at(m_root.m_next, std::move(value));
+    }
+
+    void pop_front()
+    {
+        auto node_to_delete = m_root.m_next;
+        if (node_to_delete == &m_root) {
+            return;
+        }
+
+        m_root.m_next = m_root.m_next->m_next;
+        m_root.m_next->m_prev = &m_root;
+        decrement_size();
+        deallocate_block(static_cast<NodeType*>(node_to_delete));
+        return;
+    }
+
+    template <typename... ArgTypes>
+    void emplace_back(ArgTypes&&... args)
+    {
+        construct_at(&m_root, std::forward<ArgTypes>(args)...);
+    }
+
+    void push_back(const ValueType& value)
+    {
+        construct_at(&m_root, value);
+    }
+
+    void push_back(ValueType&& value)
+    {
+        construct_at(&m_root, std::move(value));
+    }
+
+    void pop_back()
+    {
+        auto node_to_delete = m_root.m_prev;
+        if (node_to_delete == &m_root) {
+            return;
+        }
+        m_root.m_prev = m_root.m_prev->m_prev;
+        m_root.m_prev->m_next = &m_root;
+        decrement_size();
+        deallocate_block(static_cast<NodeType*>(node_to_delete));
+        return;
+    }
+
+    template <typename... ArgTypes>
+    Iterator emplace(ConstIterator position, ArgTypes&&... args)
+    {
+        return construct_at(position.get_node(), std::forward<ArgTypes>(args)...);
+    }
+
+    Iterator insert(ConstIterator position, const ValueType& value)
+    {
+        return construct_at(position.get_node(), value);
+    }
+
+    Iterator insert(ConstIterator position, u64 n, const ValueType& value)
+    {
+        if (n == 0) {
+            return Iterator(position.get_node());
+        }
+        return construct_fill(position.get_node(), n, value);
+    }
+
+    template <typename InputIterator>
+    Iterator insert(ConstIterator position, InputIterator first, InputIterator last)
+    {
+        if (first == last) {
+            return Iterator(position.get_node());
+        }
+        return construct_range(position.get_node(), first, last);
+    }
+
+    Iterator insert(ConstIterator position, ValueType&& value)
+    {
+        return construct_at(position.get_node(), std::move(value));
+    }
+
+    Iterator insert(ConstIterator position, std::initializer_list<ValueType> init_list)
+    {
+        if (init_list.size() == 0) {
+            return Iterator(position.get_node());
+        }
+        return construct_range(position.get_node(), init_list.begin(), init_list.end());
+    }
+
+    Iterator erase(ConstIterator position)
+    {
+        if (empty()) {
+            return begin();
+        }
+        auto pos_node = position.get_node();
+        pos_node->m_prev->m_next = pos_node->m_next;
+        pos_node->m_next->m_prev = pos_node->m_prev;
+        auto retval = pos_node->m_next;
+        deallocate_block(static_cast<NodeType*>(pos_node));
+        decrement_size();
+        return Iterator(retval);
+    }
+
+    Iterator erase(ConstIterator first, ConstIterator last)
+    {
+        if (empty()) {
+            return begin();
+        }
+        auto first_node = first.get_node();
+        auto before_first = first_node->m_prev;
+        auto last_node = last.get_node();
+
+        for (auto node = first_node; node != last_node; ) {
+            auto next_node = node->m_next;
+            deallocate_block(static_cast<NodeType*>(node));
+            decrement_size();
+            node = next_node;
+        }
+        before_first->m_next = last_node;
+        last_node->m_prev = before_first;
+        return Iterator(last_node);
+    }
+
+    void swap(DListBase& other)
+    {
+        auto const other_empty = other.empty();
+        auto const this_empty = empty();
+
+        if (USEPOOLS) {
+            std::swap(m_pool_or_size.m_pool_allocator, other.m_pool_or_size.m_pool_allocator);
+        } else {
+            std::swap(m_pool_or_size.m_size, other.m_pool_or_size.m_size);
+        }
+
+        std::swap(m_root.m_next, other.m_root.m_next);
+        std::swap(m_root.m_prev, other.m_root.m_prev);
+
+        if (other_empty) {
+            m_root.m_next = &m_root;
+            m_root.m_prev = &m_root;
+        }
+        if (this_empty) {
+            other.m_root.m_next = &(other.m_root);
+            other.m_root.m_prev = &(other.m_root);
+        }
+    }
+
+    void resize(u64 n)
+    {
+        resize(n, ValueType());
+    }
+
+    void resize(u64 n, const ValueType& value)
+    {
+        auto orig_size = get_size();
+        if (n == orig_size) {
+            return;
+        }
+        if (n == 0) {
+            reset();
+            return;
+        }
+        if (n < orig_size) {
+            auto it = begin();
+            for (u64 i = 0; i < n; ++i) {
+                ++it;
+            }
+            erase(it, end());
+        } else {
+            auto num_to_add = n - orig_size;
+            construct_fill(end(), num_to_add, value);
+        }
+    }
+
+    void clear()
+    {
+        reset();
+    }
+
+    void splice(ConstIterator position, DListBase& other)
+    {
+        splice(position, std::move(other));
+    }
+
+    void splice(ConstIterator position, DListBase&& other)
+    {
+        if (other.empty()) {
+            return;
+        }
+
+        auto position_node = position.get_node();
+        auto before_position_node = position_node->m_prev;
+        auto last_inserted = before_position_node;
+
+        for (auto node = other.m_root.m_next; node != &(other.m_root); ) {
+            auto next_node = node->m_next;
+            last_inserted->m_next = next_node;
+            next_node->m_prev = last_inserted;
+            node = next_node;
+        }
+
+        last_inserted->m_next = position_node;
+        position_node->m_prev = last_inserted;
+
+        add_to_size(other.size());
+
+        if (USEPOOLS) {
+            m_pool_or_size.m_pool_allocator->merge(other.m_pool_or_size.m_pool_allocator);
+        }
+        other.m_root.m_next = &(other.m_root);
+        other.m_root.m_prev = &(other.m_root);
+        other.reset();
+    }
+
+    void splice(ConstIterator position, DListBase& other,
+                ConstIterator element)
+    {
+        splice(position, std::move(other), element);
+    }
+
+    void splice(ConstIterator position, DListBase&& other,
+                ConstIterator element)
+    {
+        insert(position, *element);
+        other.erase(element);
+    }
+
+    void splice(ConstIterator position, DListBase& other,
+                ConstIterator first, ConstIterator last)
+    {
+        splice(position, std::move(other), first, last);
+    }
+
+    void splice(ConstIterator position, DListBase&& other,
+                ConstIterator first, ConstIterator last)
+    {
+        if (first == last || other.empty()) {
+            return;
+        }
+        if (first == other.begin() && last == other.end()) {
+            splice(position, std::move(other));
+            return;
+        }
+        insert(position, first, last);
+        other.erase(first, last);
+    }
+
+    void remove(const ValueType& value)
+    {
+        auto cur_node = m_root.m_next;
+        auto prev_node = &m_root;
+
+        while (cur_node != &m_root) {
+            auto next_node = cur_node->m_next;
+            if (static_cast<NodeType*>(cur_node)->m_value == value) {
+                prev_node->m_next = next_node;
+                next_node->m_prev = prev_node;
+                deallocate_block(static_cast<NodeType*>(cur_node));
+                decrement_size();
+            } else {
+                prev_node = cur_node;
+            }
+            cur_node = next_node;
+        }
+        return;
+    }
+
+    template <typename UnaryPredicate>
+    void remove_if(UnaryPredicate predicate)
+    {
+        auto cur_node = m_root.m_next;
+        auto prev_node = &m_root;
+
+        while (cur_node != &m_root) {
+            auto next_node = cur_node->m_next;
+            if (predicate(static_cast<NodeType*>(cur_node)->m_value)) {
+                prev_node->m_next = next_node;
+                next_node->m_prev = prev_node;
+                deallocate_block(static_cast<NodeType*>(cur_node));
+                decrement_size();
+            } else {
+                prev_node = cur_node;
+            }
+            cur_node = next_node;
+        }
+        return;
+    }
+
+    void unique()
+    {
+        std::equal_to<ValueType> equals_func;
+        unique(equals_func);
+    }
+
+    template <typename BinaryPredicate>
+    void unique(BinaryPredicate predicate)
+    {
+        auto first = begin();
+        auto last = end();
+        if (first == last) {
+            return;
+        }
+        auto next = first;
+        while (++next != last) {
+            if (predicate(*first, *next)) {
+                erase(next);
+                next = first;
+            } else {
+                first = next;
+            }
+        }
+    }
+
+    void merge(DListBase& other)
+    {
+        merge(std::move(other));
+    }
+
+    void merge(DListBase&& other)
+    {
+        std::less<ValueType> less_func;
+        merge(std::move(other), less_func);
+    }
+
+    template <typename Comparator>
+    void merge(DListBase& other, Comparator comparator)
+    {
+        merge(std::move(other), comparator);
+    }
+
+    template <typename Comparator>
+    void merge(DListBase&& other, Comparator comparator)
+    {
+        if (other.empty()) {
+            return;
+        }
+        if (empty()) {
+            (*this) = std::move(other);
+        }
+
+        auto other_size = other.size();
+        auto cur_node = m_root.m_next;
+        auto node_to_merge = other.m_root.m_next;
+
+        while (cur_node != &m_root && node_to_merge != &(other.m_root)) {
+            auto next_of_node_to_merge = node_to_merge->m_next;
+            auto next_of_cur_node = cur_node->m_next;
+
+            if (comparator(static_cast<NodeType*>(cur_node)->m_value,
+                           static_cast<NodeType*>(node_to_merge)->m_value)) {
+                cur_node->m_prev->m_next = node_to_merge;
+                node_to_merge->m_prev = cur_node->m_prev;
+                cur_node->m_prev = node_to_merge;
+                node_to_merge->m_next = cur_node;
+                node_to_merge = next_of_node_to_merge;
+            } else {
+                cur_node = next_of_cur_node;
+            }
+        }
+
+        // whatever remains in the other list goes to the end of this
+        if (node_to_merge != &(other.m_root)) {
+            m_root.m_prev->m_next = node_to_merge;
+            node_to_merge->m_prev = m_root.m_prev;
+
+            m_root.m_prev = other.m_root.m_prev;
+            other.m_root.m_prev = &m_root;
+        }
+
+        add_to_size(other_size);
+
+        // merge the pools
+        if (USEPOOLS) {
+            m_pool_or_size.m_pool_allocator->merge(other.m_pool_or_size.m_pool_allocator);
+        }
+        other.m_root.m_next = &(other.m_root);
+        other.m_root.m_prev = &(other.m_root);
+        other.reset();
+    }
 
 };
+
+// Some useful typedefs
+template <typename T,
+          typename ConstructFunc = DefaultConstructFunc<T>,
+          typename DestructFunc = DefaultDestructFunc<T>>
+using PoolDList = DListBase<T, ConstructFunc, DestructFunc, true>;
+
+template <typename T,
+          typename ConstructFunc = DefaultConstructFunc<T>,
+          typename DestructFunc = DefaultDestructFunc<T>>
+using DList = DListBase<T, ConstructFunc, DestructFunc, false>;
+
+template <typename T,
+          typename ConstructFunc = DefaultConstructFunc<T*>,
+          typename DestructFunc = DefaultDestructFunc<T*>>
+using PoolPtrDList = DListBase<T*, ConstructFunc, DestructFunc, true>;
+
+template <typename T,
+          typename ConstructFunc = DefaultConstructFunc<T*>,
+          typename DestructFunc = DefaultDestructFunc<T*>>
+using PtrDList = DListBase<T*, ConstructFunc, DestructFunc, false>;
+
+typedef PoolDList<u08> u08PoolDList;
+typedef PoolDList<u16> u16PoolDList;
+typedef PoolDList<u32> u32PoolDList;
+typedef PoolDList<u64> u64PoolDList;
+typedef PoolDList<i08> i08PoolDList;
+typedef PoolDList<i16> i16PoolDList;
+typedef PoolDList<i32> i32PoolDList;
+typedef PoolDList<i64> i64PoolDList;
+
+typedef DList<u08> u08DList;
+typedef DList<u16> u16DList;
+typedef DList<u32> u32DList;
+typedef DList<u64> u64DList;
+typedef DList<i08> i08DList;
+typedef DList<i16> i16DList;
+typedef DList<i32> i32DList;
+typedef DList<i64> i64DList;
+
+// forward declaration
+class String;
+
+typedef DList<String> StringDList;
+typedef PoolDList<String> StringPoolDList;
+
 
 } /* end namespace containers */
 } /* end namespace kinara */

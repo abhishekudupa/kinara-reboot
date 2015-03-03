@@ -185,11 +185,15 @@ class SListBase final
         KINARA_ASSERT(n > 0);
 
         auto last_inserted = position;
+        auto next_of_position = position->m_next;
         for (u64 i = 0; i < n; ++i) {
             auto node = allocate_block(value);
             last_inserted->m_next = node;
             last_inserted = node;
         }
+
+        last_inserted->m_next = next_of_position;
+
         if (m_tail == nullptr || position == m_tail) {
             m_tail = static_cast<NodeType*>(last_inserted);
         }
@@ -352,6 +356,9 @@ class SListBase final
     inline void assign(InputIterator first, InputIterator last)
     {
         reset();
+        if (last == first) {
+            return;
+        }
         construct_core(&m_node_before_head, first, last);
     }
 
@@ -364,6 +371,9 @@ class SListBase final
     void assign(u64 n, const ValueType& value)
     {
         reset();
+        if (n == 0) {
+            return;
+        }
         construct_fill(m_node_before_head, n, value);
     }
 
@@ -1082,6 +1092,7 @@ class SListBase final
         auto prev_node = &m_node_before_head;
 
         while(cur_node != nullptr) {
+            auto next_node = cur_node->m_next;
             if (static_cast<NodeType*>(cur_node)->m_value == value) {
                 prev_node->m_next = cur_node->m_next;
                 if (m_node_before_head.m_next == nullptr) {
@@ -1091,12 +1102,12 @@ class SListBase final
                 }
                 deallocate_block(static_cast<NodeType*>(cur_node));
                 decrement_size();
-                return;
+            } else {
+                prev_node = cur_node;
             }
-            prev_node = cur_node;
-            cur_node = cur_node->m_next;
+            cur_node = next_node;
         }
-        // not found
+
         return;
     }
 
@@ -1107,6 +1118,7 @@ class SListBase final
         auto prev_node = &m_node_before_head;
 
         while(cur_node != nullptr) {
+            auto next_node = cur_node->m_next;
             if (pred(static_cast<NodeType*>(cur_node)->m_value)) {
                 prev_node->m_next = cur_node->m_next;
                 if (m_node_before_head.m_next == nullptr) {
@@ -1116,10 +1128,10 @@ class SListBase final
                 }
                 deallocate_block(cur_node);
                 decrement_size();
-                return;
+            } else {
+                prev_node = cur_node;
             }
-            prev_node = cur_node;
-            cur_node = cur_node->m_next;
+            cur_node = next_node;
         }
         // not found
         return;
@@ -1155,7 +1167,7 @@ class SListBase final
 
         auto next = first;
         while (++next != last) {
-            if (predicate(*first, *last)) {
+            if (predicate(*first, *next)) {
                 erase_after(first);
                 next = first;
             } else {

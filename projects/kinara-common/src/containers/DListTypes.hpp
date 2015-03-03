@@ -55,14 +55,35 @@ namespace dlist_detail_ {
 
 namespace kc = kinara::containers;
 
-template <typename T, typename ConstructFunc, typename DestructFunc>
-struct DListNode
+struct DListNodeBase
 {
-    DListNode* m_next;
-    DListNode* m_prev;
+    DListNodeBase* m_next;
+    DListNodeBase* m_prev;
+
+    inline DListNodeBase()
+        : m_next(nullptr), m_prev(nullptr)
+    {
+        // Nothing here
+    }
+
+    inline DListNodeBase(DListNodeBase* next, DListNodeBase* prev)
+        : m_next(next), m_prev(prev)
+    {
+        // Nothing here
+    }
+
+    inline ~DListNodeBase()
+    {
+        // Nothing here
+    }
+};
+
+template <typename T, typename ConstructFunc, typename DestructFunc>
+struct DListNode : public DListNodeBase
+{
     T m_value;
 
-    inline DListNode() = delete();
+    inline DListNode() = delete;
     inline DListNode(const DListNode& other) = delete;
     inline DListNode(DListNode&& other) = delete;
     inline DListNode& operator = (const DListNode& other) = delete;
@@ -94,25 +115,26 @@ class IteratorBase
 {
     friend class DListBase<T, ConstructFunc, DestructFunc, true>;
     friend class DListBase<T, ConstructFunc, DestructFunc, false>;
-    friend class IteratorBase<T, ConstructFunc, DestructFunc true>;
-    friend class IteratorBase<T, ConstructFunc, DestructFunc false>;
+    friend class IteratorBase<T, ConstructFunc, DestructFunc, true>;
+    friend class IteratorBase<T, ConstructFunc, DestructFunc, false>;
 
 private:
     typedef DListNode<T, ConstructFunc, DestructFunc> NodeType;
+    typedef DListNodeBase NodeBaseType;
     typedef typename std::conditional<ISCONST, const T&, T&>::type ValRefType;
     typedef typename std::conditional<ISCONST, const T*, T*>::type ValPtrType;
 
-    inline NodeType* get_node() const
+    inline NodeBaseType* get_node() const
     {
         return m_node;
     }
 
-    inline operator NodeType () const
+    inline operator NodeBaseType () const
     {
         return m_node;
     }
 
-    NodeType* m_node;
+    NodeBaseType* m_node;
 
 public:
     inline IteratorBase()
@@ -121,7 +143,7 @@ public:
         // Nothing here
     }
 
-    inline IteratorBase(NodeType* node)
+    inline IteratorBase(NodeBaseType* node)
         : m_node(node)
     {
         // Nothing here
@@ -196,12 +218,12 @@ public:
 
     inline ValRefType operator * () const
     {
-        return m_node->m_value;
+        return static_cast<NodeType*>(m_node)->m_value;
     }
 
     inline ValPtrType operator -> () const
     {
-        return (&(m_node->m_value));
+        return (&(static_cast<NodeType*>(m_node)->m_value));
     }
 
     inline bool operator == (const IteratorBase& other) const
