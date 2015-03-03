@@ -69,15 +69,15 @@ protected:
 
 
 template <typename RCSListType>
-class RCListTest : public ::testing::Test
+class RCSListTest : public ::testing::Test
 {
 protected:
-    RCListTest() {}
-    virtual ~RCListTest() {}
+    RCSListTest() {}
+    virtual ~RCSListTest() {}
 };
 
 TYPED_TEST_CASE_P(u32SListTest);
-TYPED_TEST_CASE_P(RCListTest);
+TYPED_TEST_CASE_P(RCSListTest);
 
 TYPED_TEST_P(u32SListTest, Constructor)
 {
@@ -675,7 +675,7 @@ TYPED_TEST_P(u32SListTest, Relational)
     EXPECT_GT(list3, list4);
 }
 
-TYPED_TEST_P(RCListTest, RefCountableTests)
+TYPED_TEST_P(RCSListTest, RefCountableTests)
 {
     typedef TypeParam ListType;
 
@@ -703,15 +703,15 @@ REGISTER_TYPED_TEST_CASE_P(u32SListTest,
                            Reverse,
                            Relational);
 
-REGISTER_TYPED_TEST_CASE_P(RCListTest, RefCountableTests);
+REGISTER_TYPED_TEST_CASE_P(RCSListTest, RefCountableTests);
 
 typedef Types<u32SList, u32PoolSList> u32SListImplementations;
-typedef Types<PtrSList<RCClass>, PoolPtrSList<RCClass>> RCListImplementations;
+typedef Types<PtrSList<RCClass>, PoolPtrSList<RCClass>> RCSListImplementations;
 
-INSTANTIATE_TYPED_TEST_CASE_P(NonPoolAndPool,
+INSTANTIATE_TYPED_TEST_CASE_P(NonPoolAndPoolSList,
                               u32SListTest, u32SListImplementations);
-INSTANTIATE_TYPED_TEST_CASE_P(NonPoolAndPoolRC,
-                              RCListTest, RCListImplementations);
+INSTANTIATE_TYPED_TEST_CASE_P(NonPoolAndPoolSListRC,
+                              RCSListTest, RCSListImplementations);
 
 //
 // SListTests.cpp ends here

@@ -195,6 +195,7 @@ public:
     inline IteratorBase& operator ++ ()
     {
         m_node = m_node->m_next;
+        return *this;
     }
 
     inline IteratorBase operator ++ (int unused)
@@ -207,6 +208,7 @@ public:
     inline IteratorBase& operator -- ()
     {
         m_node = m_node->m_prev;
+        return *this;
     }
 
     inline IteratorBase operator -- (int unused)

@@ -222,6 +222,8 @@ private:
         node->m_next = position;
         position->m_prev = node;
 
+        increment_size();
+
         return Iterator(node);
     }
 
@@ -276,6 +278,9 @@ public:
 
         m_root.m_next = other.m_root.m_next;
         m_root.m_prev = other.m_root.m_prev;
+        m_root.m_next->m_prev = &m_root;
+        m_root.m_prev->m_next = &m_root;
+
         other.m_root.m_next = &(other.m_root);
         other.m_root.m_prev = &(other.m_root);
     }
@@ -373,7 +378,7 @@ public:
         return *this;
     }
 
-    inline DListBase* operator = (DListBase&& other)
+    inline DListBase& operator = (DListBase&& other)
     {
         if (&other == this) {
             return *this;
@@ -394,6 +399,9 @@ public:
 
         m_root.m_next = other.m_root.m_next;
         m_root.m_prev = other.m_root.m_prev;
+        m_root.m_next->m_prev = &m_root;
+        m_root.m_prev->m_next = &m_root;
+
         other.m_root.m_next = &(other.m_root);
         other.m_root.m_prev = &(other.m_root);
         return *this;
@@ -422,7 +430,7 @@ public:
 
     ConstIterator end() const noexcept
     {
-        return ConstIterator(&m_root);
+        return ConstIterator(const_cast<NodeBaseType*>(&m_root));
     }
 
     ConstIterator cbegin() const noexcept
@@ -681,7 +689,7 @@ public:
             erase(it, end());
         } else {
             auto num_to_add = n - orig_size;
-            construct_fill(end(), num_to_add, value);
+            construct_fill(&m_root, num_to_add, value);
         }
     }
 
@@ -706,10 +714,12 @@ public:
         auto last_inserted = before_position_node;
 
         for (auto node = other.m_root.m_next; node != &(other.m_root); ) {
-            auto next_node = node->m_next;
-            last_inserted->m_next = next_node;
-            next_node->m_prev = last_inserted;
-            node = next_node;
+
+            last_inserted->m_next = node;
+            node->m_prev = last_inserted;
+
+            last_inserted = node;
+            node = node->m_next;
         }
 
         last_inserted->m_next = position_node;
@@ -720,6 +730,7 @@ public:
         if (USEPOOLS) {
             m_pool_or_size.m_pool_allocator->merge(other.m_pool_or_size.m_pool_allocator);
         }
+
         other.m_root.m_next = &(other.m_root);
         other.m_root.m_prev = &(other.m_root);
         other.reset();
@@ -859,8 +870,9 @@ public:
             auto next_of_node_to_merge = node_to_merge->m_next;
             auto next_of_cur_node = cur_node->m_next;
 
-            if (comparator(static_cast<NodeType*>(cur_node)->m_value,
-                           static_cast<NodeType*>(node_to_merge)->m_value)) {
+            if (comparator(static_cast<NodeType*>(node_to_merge)->m_value,
+                           static_cast<NodeType*>(cur_node)->m_value)) {
+
                 cur_node->m_prev->m_next = node_to_merge;
                 node_to_merge->m_prev = cur_node->m_prev;
                 cur_node->m_prev = node_to_merge;
@@ -886,12 +898,225 @@ public:
         if (USEPOOLS) {
             m_pool_or_size.m_pool_allocator->merge(other.m_pool_or_size.m_pool_allocator);
         }
+
         other.m_root.m_next = &(other.m_root);
         other.m_root.m_prev = &(other.m_root);
         other.reset();
     }
 
+    void sort()
+    {
+        std::less<ValueType> less_func;
+        sort(less_func);
+    }
+
+    // an in place merge sort
+    template <typename Comparator>
+    void sort(Comparator comparator)
+    {
+        auto my_size = get_size();
+        if (my_size <= 1) {
+            return;
+        }
+
+        NodeBaseType sorted_list;
+
+        // move the list to be rooted at sorted_list
+        sorted_list.m_next = m_root.m_next;
+        sorted_list.m_prev = m_root.m_prev;
+        m_root.m_next->m_prev = &sorted_list;
+        m_root.m_prev->m_next = &sorted_list;
+
+        u64 current_size = 1;
+        while (true) {
+            auto list_p = sorted_list.m_next;
+
+            sorted_list.m_next = &sorted_list;
+            sorted_list.m_prev = &sorted_list;
+
+            u64 num_merges_done = 0;
+            while (list_p != &sorted_list) {
+                ++num_merges_done;
+                auto list_q = list_p;
+                u64 p_size = 0;
+                for (u64 i = 0; i < current_size; ++i) {
+                    ++p_size;
+                    list_q = list_q->m_next;
+                    if (list_q == &sorted_list) {
+                        break;
+                    }
+                }
+
+                u64 q_size = current_size;
+                while (p_size > 0 || (q_size > 0 && list_q != &sorted_list)) {
+                    NodeType* node_to_merge = nullptr;
+                    if (p_size == 0) {
+                        node_to_merge = static_cast<NodeType*>(list_q);
+                        list_q = list_q->m_next;
+                        --q_size;
+                    } else if (q_size == 0 || list_q == &sorted_list) {
+                        node_to_merge = static_cast<NodeType*>(list_p);
+                        list_p = list_p->m_next;
+                        --p_size;
+                    } else if (comparator(static_cast<NodeType*>(list_p)->m_value,
+                                          static_cast<NodeType*>(list_q)->m_value)) {
+                        node_to_merge = static_cast<NodeType*>(list_p);
+                        list_p = list_p->m_next;
+                        --p_size;
+                    } else {
+                        node_to_merge = static_cast<NodeType*>(list_q);
+                        list_q = list_q->m_next;
+                        --q_size;
+                    }
+
+                    if (sorted_list.m_next == &sorted_list) {
+                        // empty sorted list
+                        sorted_list.m_next = node_to_merge;
+                        sorted_list.m_prev = node_to_merge;
+                        node_to_merge->m_next = &sorted_list;
+                        node_to_merge->m_prev = &sorted_list;
+                    } else {
+                        // non-empty sorted list, add to end
+                        sorted_list.m_prev->m_next = node_to_merge;
+                        node_to_merge->m_prev = sorted_list.m_prev;
+                        node_to_merge->m_next = &sorted_list;
+                        sorted_list.m_prev = node_to_merge;
+                    }
+                }
+
+                list_p = list_q;
+            }
+
+            if (num_merges_done <= 1) {
+                m_root.m_next = sorted_list.m_next;
+                m_root.m_prev = sorted_list.m_prev;
+                m_root.m_next->m_prev = &m_root;
+                m_root.m_prev->m_next = &m_root;
+                return;
+            }
+
+            current_size *= 2;
+        }
+    }
+
+    void reverse() noexcept
+    {
+        auto my_size = get_size();
+        if (my_size <= 1) {
+            return;
+        }
+
+        auto cur_node = m_root.m_next;
+
+        while (cur_node != &m_root) {
+            auto next_node = cur_node->m_next;
+            std::swap(cur_node->m_next, cur_node->m_prev);
+            cur_node = next_node;
+        }
+
+        std::swap(m_root.m_next, m_root.m_prev);
+    }
+
+    // functions not part of stl
+    Iterator find(const ValueType& value)
+    {
+        for (auto it = begin(), last = end(); it != last; ++it) {
+            if (*it == value) {
+                return it;
+            }
+        }
+        return end();
+    }
+
+    ConstIterator find(const ValueType& value) const
+    {
+        for (auto it = cbegin(), last = cend(); it != last; ++it) {
+            if (*it == value) {
+                return it;
+            }
+        }
+        return cend();
+    }
 };
+
+namespace dlist_detail_ {
+
+template <typename T, typename CF1, typename DF1, bool UP1,
+          typename CF2, typename DF2, bool UP2>
+inline i32 compare(const DListBase<T, CF1, DF1, UP1>& list1,
+                   const DListBase<T, CF2, DF2, UP2>& list2)
+{
+    auto diff = list1.size() - list2.size();
+    if (diff != 0) {
+        return diff;
+    }
+    auto it1 = list1.begin();
+    auto it2 = list2.begin();
+    auto end1 = list1.end();
+    auto end2 = list2.end();
+
+    while (it1 != end1 && it2 != end2) {
+        if (*it1 < *it2) {
+            return -1;
+        } else if (*it2 < *it1) {
+            return 1;
+        }
+        ++it1;
+        ++it2;
+    }
+    return 0;
+}
+
+} /* end namespace dlist_detail_ */
+
+// relational operators for dlist
+template <typename T, typename CF1, typename DF1, bool UP1,
+          typename CF2, typename DF2, bool UP2>
+static inline bool operator == (const DListBase<T, CF1, DF1, UP1>& list1,
+                                const DListBase<T, CF2, DF2, UP2>& list2)
+{
+    return (dlist_detail_::compare(list1, list2) == 0);
+}
+
+template <typename T, typename CF1, typename DF1, bool UP1,
+          typename CF2, typename DF2, bool UP2>
+static inline bool operator != (const DListBase<T, CF1, DF1, UP1>& list1,
+                                const DListBase<T, CF2, DF2, UP2>& list2)
+{
+    return (dlist_detail_::compare(list1, list2) != 0);
+}
+
+template <typename T, typename CF1, typename DF1, bool UP1,
+          typename CF2, typename DF2, bool UP2>
+static inline bool operator < (const DListBase<T, CF1, DF1, UP1>& list1,
+                               const DListBase<T, CF2, DF2, UP2>& list2)
+{
+    return (dlist_detail_::compare(list1, list2) < 0);
+}
+
+template <typename T, typename CF1, typename DF1, bool UP1,
+          typename CF2, typename DF2, bool UP2>
+static inline bool operator <= (const DListBase<T, CF1, DF1, UP1>& list1,
+                                const DListBase<T, CF2, DF2, UP2>& list2)
+{
+    return (dlist_detail_::compare(list1, list2) <= 0);
+}
+
+template <typename T, typename CF1, typename DF1, bool UP1,
+          typename CF2, typename DF2, bool UP2>
+static inline bool operator > (const DListBase<T, CF1, DF1, UP1>& list1,
+                               const DListBase<T, CF2, DF2, UP2>& list2)
+{
+    return (dlist_detail_::compare(list1, list2) > 0);
+}
+
+template <typename T, typename CF1, typename DF1, bool UP1,
+          typename CF2, typename DF2, bool UP2>
+static inline bool operator >= (const DListBase<T, CF1, DF1, UP1>& list1,
+                                const DListBase<T, CF2, DF2, UP2>& list2)
+{
+    return (dlist_detail_::compare(list1, list2) >= 0);
+}
 
 // Some useful typedefs
 template <typename T,
