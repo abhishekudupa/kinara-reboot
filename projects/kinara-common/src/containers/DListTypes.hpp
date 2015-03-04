@@ -109,14 +109,14 @@ struct DListNode : public DListNodeBase
 
 template <typename T, typename ConstructFunc, typename DestructFunc, bool ISCONST>
 class IteratorBase
-    : public std::iterator<std::bidirectional_iterator_tag, T, u64,
+    : public std::iterator<std::bidirectional_iterator_tag, T, i64,
                            typename std::conditional<ISCONST, const T*, T*>::type,
                            typename std::conditional<ISCONST, const T&, T&>::type>
 {
     friend class DListBase<T, ConstructFunc, DestructFunc, true>;
     friend class DListBase<T, ConstructFunc, DestructFunc, false>;
-    friend class IteratorBase<T, ConstructFunc, DestructFunc, true>;
-    friend class IteratorBase<T, ConstructFunc, DestructFunc, false>;
+    friend class kc::dlist_detail_::IteratorBase<T, ConstructFunc, DestructFunc, true>;
+    friend class kc::dlist_detail_::IteratorBase<T, ConstructFunc, DestructFunc, false>;
 
 private:
     typedef DListNode<T, ConstructFunc, DestructFunc> NodeType;

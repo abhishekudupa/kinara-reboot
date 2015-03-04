@@ -55,33 +55,273 @@ namespace deque_detail_ {
 
 namespace kc = kinara::containers;
 
-// A class that represents a block of data
-// for a deque
-template <typename T, typename ConstructFunc, typename DestructFunc>
-class DequeBlock
+// A class representing a block in a deque
+// this class does not construct objects in manner
+template <typename T>
+class DequeBlock final
 {
 private:
-    // constants to control the block size
-    static constexpr u32 sc_elems_per_block = 128;
+    // configuration for how many elems go
+    // into a block
+    static constexpr u64 sc_num_elems_per_block = 64;
+
+    T m_object_array[sc_num_elems_per_block];
 
 public:
-    bool m_direction;
-    DequeBlock* m_next_block;
-    DequeBlock* m_prev_block;
+    inline DequeBlock() = delete;
+    inline DequeBlock(const DequeBlock& other) = delete;
+    inline DequeBlock(DequeBlock&& other) = delete;
+    inline DequeBlock& operator = (const DequeBlock& other) = delete;
+    inline DequeBlock& operator = (DequeBlock&& other) = delete;
 
-    T* m_cur_ptr;
-    T m_data[sc_elems_per_block];
-
-    DequeBlock(bool direction);
-    DequeBlock(bool direction, DequeBlock* next_block, DequeBlock* prev_block);
-    ~DequeBlock();
-
-    // requires that there's space in this block
-    template <typename... ArgTypes>
-    T* allocate_object(ArgTypes&&... args)
+    static inline DequeBlock* construct(void* mem_ptr, DequeBlockType block_type)
     {
-
+        return static_cast<DequeBlock*>(mem_ptr);
     }
+
+    inline ~DequeBlock()
+    {
+        // Nothing here
+    }
+
+    inline T* get_begin() const
+    {
+        return const_cast<T*>(m_object_array);
+    }
+
+    inline T* get_end() const
+    {
+        return (const_cast<T*>(m_object_array) + sc_num_elems_per_block);
+    }
+
+    static inline u64 get_block_size() const
+    {
+        return sc_num_elems_per_block;
+    }
+};
+
+// forward declaration of deque implementation
+template <typename T, typename ConstructFunc, typename DestructFunc>
+class DequeInternal;
+
+// iterator class for deques
+template <typename T, typename ConstructFunc,
+          typename DestructFunc, bool ISCONST>
+class IteratorBase :
+        public std::iterator<std::random_access_iterator_tag, T, i64,
+                             typename std::conditional<ISCONST, const T*, T*>::type,
+                             typename std::conditional<ISCONST, const T&, T&>::type>
+{
+    friend class kc::deque_detail_::IteratorBase<T, ConstructFunc, DestructFunc, true>;
+    friend class kc::deque_detail_::IteratorBase<T, ConstructFunc, DestructFunc, false>;
+    friend class kc::deque_detail_::DequeInternal<T, ConstructFunc, DestructFunc>;
+    friend class kc::DequeBase<T, ConstructFunc, DestructFunc>;
+
+private:
+    typedef typename std::conditional<ISCONST, const T*, T*>::type ValPtrType;
+    typedef typename std::conditional<ISCONST, const T&, T&>::type ValRefType;
+    typedef DequeBlock<T> BlockType;
+
+    T* m_current;
+    BlockType** m_block_array_ptr;
+
+public:
+    inline IteratorBase()
+        : m_current(nullptr), m_block_array_ptr(nullptr)
+    {
+        // Nothing here
+    }
+
+    inline IteratorBase(T* current, BlockType** block_array_ptr)
+        : m_current(current), m_block_array_ptr(block_array_ptr)
+    {
+        // Nothing here
+    }
+
+    inline IteratorBase(const IteratorBase& other)
+        : m_current(other.m_current), m_block_array_ptr(other.m_block_array_ptr)
+    {
+        // Nothing here
+    }
+
+    template <bool OISCONST>
+    inline IteratorBase(const kc::deque_detail_::IteratorBase<T, ConstructFunc,
+                                                              DestructFunc, OISCONST>& other)
+        : m_current(other.m_current), m_block_array_ptr(other.m_block_array_ptr)
+    {
+        static_assert(!OISCONST || ISCONST,
+                      "Cannot construct non-const iterator from const iterator");
+    }
+
+    inline ~IteratorBase()
+    {
+        // Nothing here
+    }
+
+    inline IteratorBase& operator = (const IteratorBase& other)
+    {
+        if (&other == this) {
+            return *this;
+        }
+        m_current = other.m_current;
+        m_block_array_ptr = other.m_block_array_ptr;
+        return *this;
+    }
+
+    template <bool OISCONST>
+    inline IteratorBase&
+    operator = (const kc::deque_detail_::IteratorBase<T, ConstructFunc,
+                                                      DestructFunc, OISCONST>& other)
+    {
+        static_assert(!OISCONST || ISCONST,
+                      "Cannot construct non-const iterator from const iterator");
+
+        if (&other == this) {
+            return *this;
+        }
+        m_current = other.m_current;
+        m_block_array_ptr = other.m_block_array_ptr;
+        return *this;
+    }
+
+    inline bool operator == (const IteratorBase& other) const
+    {
+        return (m_current == other.m_current);
+    }
+
+    template <bool OISCONST>
+    inline bool
+    operator == (const kc::deque_detail_::IteratorBase<T, ConstructFunc,
+                                                       DestructFunc, OISCONST>& other)
+    {
+        return (m_current == other.m_current);
+    }
+
+    inline bool operator != (const IteratorBase& other) const
+    {
+        return (!((*this) == other));
+    }
+
+    template <bool OISCONST>
+    inline bool
+    operator != (const kc::deque_detail_::IteratorBase<T, ConstructFunc,
+                                                       DestructFunc, OISCONST>& other)
+    {
+        return (!((*this) == other));
+    }
+
+    inline IteratorBase& operator ++ ()
+    {
+        auto block_end = (*m_block_array_ptr)->get_end();
+        if (m_current + 1 >= block_end) {
+            ++m_block_array_ptr;
+            m_current = (*m_block_array_ptr)->get_begin();
+        } else {
+            ++m_current;
+        }
+        return *this;
+    }
+
+    inline IteratorBase operator ++ (int unused)
+    {
+        auto retval = *this;
+        ++(*this);
+        return retval;
+    }
+
+    inline ValRefType operator * () const
+    {
+        return *m_current;
+    }
+
+    inline ValPtrType operator -> () const
+    {
+        return m_current;
+    }
+
+    inline IteratorBase& operator -- ()
+    {
+        auto block_begin = (*m_block_array_ptr)->get_begin();
+        if (m_current == block_begin) {
+            --m_block_array_ptr;
+            m_current = (*m_block_array_ptr)->get_end() - 1;
+        } else {
+            --m_current;
+        }
+        return *this;
+    }
+
+    inline IteratorBase operator -- (int unused)
+    {
+        auto retval = *this;
+        --(*this);
+        return retval;
+    }
+
+    inline IteratorBase operator + (i64 n) const
+    {
+        if (n == 0) {
+            return *this;
+        }
+        if (n < 0) {
+            return ((*this) - (-n));
+        }
+        auto retval = *this;
+        auto block_end = (*m_block_array_ptr)->get_end();
+        i64 offset_from_end = block_end - m_current;
+        if (n < offset_from_end) {
+            retval.m_current = m_current + n;
+        } else {
+            auto elems_per_block = BlockType::get_block_size();
+            auto left_of_n = n - offset_from_end;
+            auto num_blocks_to_advance = 1 + (left_of_n / elems_per_block);
+            auto num_objects_to_advance = left_of_n % elems_per_block;
+            retval.m_block_array_ptr += num_blocks_to_advance;
+            retval.m_current = (*(retval.m_block_array_ptr))->get_begin() + num_blocks_to_advance;
+        }
+        return retval;
+    }
+
+    inline IteratorBase operator - (i64 n) const
+    {
+        if (n == 0) {
+            return *this;
+        }
+        if (n < 0) {
+            return ((*this) + (-n));
+        }
+
+        auto retval = *this;
+        auto block_begin = (*m_block_array_ptr)->get_begin();
+        i64 offset_from_begin = m_current - block_begin;
+        if (n < offset_from_begin) {
+            retval.m_current = m_current - n;
+        } else {
+            auto elems_per_block = BlockType::get_block_size();
+            auto left_of_n = n - offset_from_begin;
+            auto num_blocks_to_retreat = 1 + (left_of_n / elems_per_block);
+            auto num_objects_to_retreat = left_of_n % elems_per_block;
+            retval.m_block_array_ptr -= num_blocks_to_retreat;
+            retval.m_current = (*(retval.m_block_array_ptr))->get_end() - num_blocks_to_retreat;
+        }
+        return retval;
+    }
+
+    inline i64 operator - (const IteratorBase& other) const
+    {
+        auto retval = 0;
+        auto block_size = BlockType::get_block_size();
+        retval += (m_block_array_ptr - other.m_block_array_ptr) * block_size;
+    }
+};
+
+
+// handle memory management (not initialization) for deques
+template <typename T, typename ConstructFunc, typename DestructFunc>
+class DequeInternal
+{
+protected:
+
 };
 
 } /* end namespace deque_detail_ */

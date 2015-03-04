@@ -110,14 +110,14 @@ struct SListNode : public SListNodeBase
 
 template <typename T, typename ConstructFunc, typename DestructFunc, bool ISCONST>
 class IteratorBase :
-        public std::iterator<std::forward_iterator_tag, T, u64,
+        public std::iterator<std::forward_iterator_tag, T, i64,
                              typename std::conditional<ISCONST, const T*, T*>::type,
                              typename std::conditional<ISCONST, const T&, T&>::type>
 {
     friend class SListBase<T, ConstructFunc, DestructFunc, true>;
     friend class SListBase<T, ConstructFunc, DestructFunc, false>;
-    friend class IteratorBase<T, ConstructFunc, DestructFunc, true>;
-    friend class IteratorBase<T, ConstructFunc, DestructFunc, false>;
+    friend class kc::slist_detail_::IteratorBase<T, ConstructFunc, DestructFunc, true>;
+    friend class kc::slist_detail_::IteratorBase<T, ConstructFunc, DestructFunc, false>;
 
 private:
     typedef SListNode<T, ConstructFunc, DestructFunc> NodeType;
