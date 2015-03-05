@@ -41,7 +41,6 @@
 #include <initializer_list>
 
 #include "../basetypes/KinaraTypes.hpp"
-#include "../allocators/MemoryManager.hpp"
 
 #include "DequeTypes.hpp"
 

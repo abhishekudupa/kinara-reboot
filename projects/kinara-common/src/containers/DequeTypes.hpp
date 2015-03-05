@@ -43,6 +43,8 @@
 #include <iterator>
 
 #include "../basetypes/KinaraBase.hpp"
+#include "../allocators/MemoryManager.hpp"
+
 #include "ContainersBase.hpp"
 
 namespace kinara {
@@ -54,6 +56,7 @@ class DequeBase;
 namespace deque_detail_ {
 
 namespace kc = kinara::containers;
+namespace ka = kinara::allocators;
 
 // A class representing a block in a deque
 // this class does not construct objects in manner
@@ -74,7 +77,7 @@ public:
     inline DequeBlock& operator = (const DequeBlock& other) = delete;
     inline DequeBlock& operator = (DequeBlock&& other) = delete;
 
-    static inline DequeBlock* construct(void* mem_ptr, DequeBlockType block_type)
+    static inline DequeBlock* construct(void* mem_ptr)
     {
         return static_cast<DequeBlock*>(mem_ptr);
     }
@@ -124,6 +127,17 @@ private:
 
     T* m_current;
     BlockType** m_block_array_ptr;
+
+    // helper functions
+    inline u64 get_offset_from_begin() const
+    {
+        return (m_current - (*m_block_array_ptr)->get_begin());
+    }
+
+    inline u64 get_offset_from_end() const
+    {
+        return (*(m_block_array_ptr)->get_end() - m_current);
+    }
 
 public:
     inline IteratorBase()
@@ -309,9 +323,124 @@ public:
 
     inline i64 operator - (const IteratorBase& other) const
     {
-        auto retval = 0;
-        auto block_size = BlockType::get_block_size();
-        retval += (m_block_array_ptr - other.m_block_array_ptr) * block_size;
+        i64 retval = (get_offset_from_begin() - other.get_offset_from_begin());
+        retval += ((m_block_array_ptr - other.m_block_array_ptr) * BlockType::get_block_size());
+        return retval;
+    }
+
+    template <bool OISCONST>
+    inline i64
+    operator - (const kc::deque_detail_::IteratorBase<T, ConstructFunc,
+                                                      DestructFunc, OISCONST>& other) const
+    {
+        i64 retval = (get_offset_from_begin() - other.get_offset_from_begin());
+        retval += ((m_block_array_ptr - other.m_block_array_ptr) * BlockType::get_block_size());
+        return retval;
+    }
+
+    inline bool operator < (const IteratorBase& other) const
+    {
+        return (((*this) - other) < 0);
+    }
+
+    inline bool operator <= (const IteratorBase& other) const
+    {
+        return (((*this) - other) <= 0);
+    }
+
+    inline bool operator > (const IteratorBase& other) const
+    {
+        return (((*this) - other) > 0);
+    }
+
+    inline bool operator >= (const IteratorBase& other) const
+    {
+        return (((*this) - other) >= 0);
+    }
+
+    template <bool OISCONST>
+    inline bool
+    operator < (const kc::deque_detail_::IteratorBase<T, ConstructFunc,
+                                                      DestructFunc, OISCONST>& other) const
+    {
+        return (((*this) - other) < 0);
+    }
+
+    template <bool OISCONST>
+    inline bool
+    operator <= (const kc::deque_detail_::IteratorBase<T, ConstructFunc,
+                                                       DestructFunc, OISCONST>& other) const
+    {
+        return (((*this) - other) <= 0);
+    }
+
+    template <bool OISCONST>
+    inline bool
+    operator > (const kc::deque_detail_::IteratorBase>T, ConstructFunc,
+                                                      DestructFunc, OISCONST>& other) const
+    {
+        return (((*this) - other) > 0);
+    }
+
+    template <bool OISCONST>
+    inline bool
+    operator >= (const kc::deque_detail_::IteratorBase>T, ConstructFunc,
+                                                       DestructFunc, OISCONST>& other) const
+    {
+        return (((*this) - other) >= 0);
+    }
+
+    IteratorBase& operator += (i64 n)
+    {
+        if (n == 0) {
+            return *this;
+        }
+        if (n < 0) {
+            return ((*this) -= (-n));
+        }
+        auto block_end = (*m_block_array_ptr)->get_end();
+        i64 offset_from_end = block_end - m_current;
+        if (n < offset_from_end) {
+            m_current += n;
+        } else {
+            auto elems_per_block = BlockType::get_block_size();
+            auto left_of_n = n - offset_from_end;
+            auto num_blocks_to_advance = 1 + (left_of_n / elems_per_block);
+            auto num_objects_to_advance = left_of_n % elems_per_block;
+            m_block_array_ptr += num_blocks_to_advance;
+            m_current = (*m_block_array_ptr)->get_begin() + num_blocks_to_advance;
+        }
+        return *this;
+    }
+
+    IteratorBase& operator -= (i64 n)
+    {
+        if (n == 0) {
+            return *this;
+        }
+        if (n < 0) {
+            return ((*this) += (-n));
+        }
+
+        auto block_begin = (*m_block_array_ptr)->get_begin();
+        i64 offset_from_begin = m_current - block_begin;
+        if (n < offset_from_begin) {
+            m_current -= n;
+        } else {
+            auto elems_per_block = BlockType::get_block_size();
+            auto left_of_n = n - offset_from_begin;
+            auto num_blocks_to_retreat = 1 + (left_of_n / elems_per_block);
+            auto num_objects_to_retreat = left_of_n % elems_per_block;
+            m_block_array_ptr -= num_blocks_to_retreat;
+            m_current = (*m_block_array_ptr)->get_end() - num_blocks_to_retreat;
+        }
+        return *this;
+    }
+
+    ValRefType operator [] (i64 index) const
+    {
+        auto new_iterator = (*this) + index;
+        return *new_iterator;
     }
 };
 
@@ -320,8 +449,76 @@ public:
 template <typename T, typename ConstructFunc, typename DestructFunc>
 class DequeInternal
 {
-protected:
+private:
+    typedef T ValueType;
+    typedef T* PtrType;
+    typedef T& RefType;
+    typedef const T* ConstPtrType;
+    typedef const T& ConstRefType;
+    typedef DequeBlock* BlockPtrType;
+    typedef const DequeBlock* BlockConstPtrType;
+    typedef IteratorBase<T, ConstructFunc, DestructFunc, false> Iterator;
+    typedef IteratorBase<T, ConstructFunc, DestructFunc, true> ConstIterator;
 
+protected:
+    BlockPtrType* m_block_array;
+    u64 m_block_array_size;
+    Iterator m_start;
+    Iterator m_finish;
+
+    static constexpr u64 sc_initial_block_array_size = 8;
+
+    inline void create_blocks(BlockPtrType* block_array_begin, BlockPtrType* block_array_end)
+    {
+        for (auto cur_ptr = block_array_begin; cur_ptr != block_array_end; ++cur_ptr) {
+            *cur_ptr =
+                DequeBlock::construct(ka::casted_allocate_raw<DequeBlock>(sizeof(DequeBlock)));
+        }
+    }
+
+    inline void destroy_blocks(BlockPtrType* block_array_begin, BlockPtrType* block_array_end)
+    {
+        for (auto cur_ptr = block_array_begin; cur_ptr != block_array_end; ++cur_ptr) {
+            (*cur_ptr)->~DequeBlock();
+            ka::deallocate_raw(*cur_ptr, sizeof(DequeBlock));
+            *cur_ptr = nullptr;
+        }
+    }
+
+    inline void initialize(u64 num_elements)
+    {
+        auto num_nodes = (num_elements / BlockType::get_block_size()) + 1;
+        // one node extra on either side
+        m_block_array_size = std::max(sc_initial_block_array_size, num_nodes + 2);
+        m_block_array =
+            ka::casted_allocate_raw_cleared<PtrType>(sizeof(PtrType) * m_block_array_size);
+        auto start_block_ptr = m_block_array + ((m_block_array_size - num_nodes) / 2);
+        auto finish_block_ptr = start_block + num_nodes;
+        create_blocks(start_block_ptr, finish_block_ptr);
+
+        m_start.m_block_array_ptr = start_block_ptr;
+        m_start.m_current = (*start_block_ptr)->get_begin();
+        m_finish.m_block_array_ptr = finish_block_ptr - 1;
+        m_finish.m_current =
+            (*finish_block_ptr)->get_begin() +
+            (num_elements % BlockType::get_block_size());
+    }
+
+    inline DequeInternal()
+        : m_block_array(nullptr), m_block_array_size(0)
+          m_start(), m_finish()
+    {
+        initialize(0);
+    }
+
+    inline DequeInternal(DequeInternal&& other)
+        : DequeInternal()
+    {
+        std::swap(m_block_array, other.m_block_array);
+        std::swap(m_block_array_size, other.m_block_array_size);
+        std::swap(m_start, other.m_start);
+        std::swap(m_finish, other.m_finish);
+    }
 };
 
 } /* end namespace deque_detail_ */
