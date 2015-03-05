@@ -294,10 +294,34 @@ private:
         set_capacity(size);
     }
 
-public:
-    // we define the assign functions first
+    template <typename ForwardIterator>
+    inline void insert_range(ConstIterator position,
+                             ForwardIterator first,
+                             ForwardIterator last,
+                             std::forward_iterator_tag unused)
+    {
+        auto num_elements = std::distance(first, last);
+        auto actual_pos = expand_with_hole(num_elements, position);
+        construct_core(actual_pos, first, last);
+        set_size(get_size() + num_elements);
+        return;
+    }
+
     template <typename InputIterator>
-    void assign(InputIterator first, InputIterator last)
+    inline void insert_range(ConstIterator position,
+                             InputIterator first,
+                             InputIterator last,
+                             std::input_iterator_tag unused)
+    {
+        for (auto it = first; it != last; ++it) {
+            this->insert(position, *it);
+            increment_size();
+        }
+    }
+
+    template <typename ForwardIterator>
+    inline void assign_range(ForwardIterator first, ForwardIterator last,
+                             std::forward_iterator_tag unused)
     {
         call_destructors();
         auto new_size = (u64)std::distance(first, last);
@@ -316,8 +340,34 @@ public:
             set_size(new_size);
         }
 
-        construct_core(m_data, std::move(first), std::move(last));
+        construct_core(m_data, first, last);
         compact();
+    }
+
+    template <typename InputIterator>
+    inline void assign_range(InputIterator first, InputIterator last,
+                             std::input_iterator_tag unused)
+    {
+        call_destructors();
+        if (first == last) {
+            deallocate_data();
+            return;
+        }
+
+        for (auto it = first; it != last; ++it) {
+            this->push_back(*it);
+        }
+        compact();
+        return;
+    }
+
+public:
+    // we define the assign functions first
+    template <typename InputIterator>
+    void assign(InputIterator first, InputIterator last)
+    {
+        typedef typename std::iterator_traits<InputIterator>::iterator_category IterCategory;
+        assign_range(first, last, IterCategory());
     }
 
     void assign(u64 n, const ValueType& value)
@@ -661,11 +711,10 @@ public:
     template <typename InputIterator>
     Iterator insert(ConstIterator position, InputIterator first, InputIterator last)
     {
-        auto num_elements = std::distance(first, last);
-        auto actual_pos = expand_with_hole(num_elements, position);
-        construct_core(actual_pos, first, last);
-        set_size(get_size() + num_elements);
-        return actual_pos;
+        typedef typename std::iterator_traits<InputIterator>::iterator_category IterCategory;
+        auto offset_from_begin = position - begin();
+        insert_range(position, first, last, IterCategory());
+        return (begin() + offset_from_begin);
     }
 
     Iterator insert(ConstIterator position, ValueType&& value)

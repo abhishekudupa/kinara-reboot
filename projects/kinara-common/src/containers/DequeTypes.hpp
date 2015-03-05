@@ -41,6 +41,7 @@
 #define KINARA_KINARA_COMMON_CONTAINERS_DEQUE_TYPES_HPP_
 
 #include <iterator>
+#include <cstring>
 
 #include "../basetypes/KinaraBase.hpp"
 #include "../allocators/MemoryManager.hpp"
@@ -97,7 +98,7 @@ public:
         return (const_cast<T*>(m_object_array) + sc_num_elems_per_block);
     }
 
-    static inline u64 get_block_size() const
+    static inline u64 get_block_size()
     {
         return sc_num_elems_per_block;
     }
@@ -376,7 +377,7 @@ public:
 
     template <bool OISCONST>
     inline bool
-    operator > (const kc::deque_detail_::IteratorBase>T, ConstructFunc,
+    operator > (const kc::deque_detail_::IteratorBase<T, ConstructFunc,
                                                       DestructFunc, OISCONST>& other) const
     {
         return (((*this) - other) > 0);
@@ -384,7 +385,7 @@ public:
 
     template <bool OISCONST>
     inline bool
-    operator >= (const kc::deque_detail_::IteratorBase>T, ConstructFunc,
+    operator >= (const kc::deque_detail_::IteratorBase<T, ConstructFunc,
                                                        DestructFunc, OISCONST>& other) const
     {
         return (((*this) - other) >= 0);
@@ -455,8 +456,9 @@ private:
     typedef T& RefType;
     typedef const T* ConstPtrType;
     typedef const T& ConstRefType;
-    typedef DequeBlock* BlockPtrType;
-    typedef const DequeBlock* BlockConstPtrType;
+    typedef DequeBlock<T> BlockType;
+    typedef BlockType* BlockPtrType;
+    typedef const BlockType* BlockConstPtrType;
     typedef IteratorBase<T, ConstructFunc, DestructFunc, false> Iterator;
     typedef IteratorBase<T, ConstructFunc, DestructFunc, true> ConstIterator;
 
@@ -471,8 +473,7 @@ protected:
     inline void create_blocks(BlockPtrType* block_array_begin, BlockPtrType* block_array_end)
     {
         for (auto cur_ptr = block_array_begin; cur_ptr != block_array_end; ++cur_ptr) {
-            *cur_ptr =
-                DequeBlock::construct(ka::casted_allocate_raw<DequeBlock>(sizeof(DequeBlock)));
+            *cur_ptr = BlockType::construct(ka::allocate_raw(sizeof(BlockType)));
         }
     }
 
@@ -480,8 +481,142 @@ protected:
     {
         for (auto cur_ptr = block_array_begin; cur_ptr != block_array_end; ++cur_ptr) {
             (*cur_ptr)->~DequeBlock();
-            ka::deallocate_raw(*cur_ptr, sizeof(DequeBlock));
+            ka::deallocate_raw(*cur_ptr, sizeof(BlockType));
             *cur_ptr = nullptr;
+        }
+    }
+
+    inline u64 get_size() const
+    {
+        return (m_finish - m_start);
+    }
+
+    // expands the block array towards the front
+    // all iterators are invalidated!
+    // of course, we fix up the m_start and m_finish
+    // iterators
+    // this routine only ensures that num_blocks
+    // pointers are available at the front,
+    // the actual blocks are not allocated
+    inline void expand_block_array(u64 num_blocks, bool expand_at_front = true)
+    {
+        if (num_blocks == 0) {
+            return;
+        }
+
+        BlockPtrType* new_block_array_start = nullptr;
+        auto old_num_blocks = ((m_finish.m_block_array_ptr - m_start.m_block_array_ptr) + 1);
+        auto new_num_blocks = old_num_blocks + num_blocks;
+        if (m_block_array_size > (2 * new_num_blocks)) {
+            new_block_array_start =
+                m_block_array + ((m_block_array_size - new_num_blocks) / 2);
+            if (expand_at_front) {
+                new_block_array_start += num_blocks;
+            }
+            memmove(new_block_array_start, m_start.m_block_array_ptr,
+                    old_num_blocks * sizeof(BlockPtrType));
+        } else {
+            // need to reallocate
+            auto new_block_array_size = m_block_array_size +
+                std::max(m_block_array_size, new_num_blocks) + 2;
+            auto new_block_array =
+                ka::casted_allocate_raw_cleared<BlockPtrType>(sizeof(BlockPtrType) *
+                                                              new_block_array_size);
+            new_block_array_start =
+                new_block_array + ((new_block_array_size - new_num_blocks) / 2);
+            if (expand_at_front) {
+                new_block_array_start += num_blocks;
+            }
+            memmove(new_block_array_start, m_start.m_block_array_ptr,
+                    old_num_blocks * sizeof(BlockPtrType));
+            ka::deallocate_raw(m_block_array, sizeof(BlockPtrType) * m_block_array_size);
+            m_block_array = new_block_array;
+            m_block_array_size = new_block_array_size;
+        }
+
+        // fixup the start and finish iterators
+        m_start.block_array_ptr = new_block_array_start;
+        m_finish.block_array_ptr = (new_block_array_start + old_num_blocks - 1);
+    }
+
+    inline void expand_block_array_at_front(u64 num_blocks)
+    {
+        expand_block_array(num_blocks);
+    }
+
+    inline void expand_block_array_at_back(u64 num_blocks)
+    {
+        expand_block_array(num_blocks, false);
+    }
+
+    // returns an iterator pointing to the NEW start location
+    inline Iterator expand_towards_front(u64 n)
+    {
+        auto const block_size = BlockType::get_block_size();
+        auto space_left_in_start_block =
+            m_start.m_current - ((*(m_start.m_block_array_ptr))->get_begin());
+        if (space_left_in_start_block >= n) {
+            return Iterator(m_start.m_current - n, m_start.m_block_array_ptr);
+        } else {
+            // need to allocate more blocks
+            auto num_blocks_to_create =
+                1 + ((n - space_left_in_start_block) / block_size);
+            expand_block_array_at_front(num_blocks_to_create);
+            auto new_start_block = m_start.m_block_array_ptr - num_blocks_to_create;
+            create_blocks(new_start_block, m_start.m_block_array_ptr);
+            auto new_current =
+                (*new_start_block)->get_begin() +
+                (block_size - 1) -
+                (n % block_size);
+            return Iterator(new_current, new_start_block);
+        }
+    }
+
+    // returns an iterator pointing at the NEW finish location
+    inline Iterator expand_towards_back(u64 n)
+    {
+        auto const block_size = BlockType::get_block_size();
+        auto end_of_finish_block = (*(m_finish.m_block_array_ptr))->get_end();
+        auto space_left_in_finish_block = end_of_finish_block - m_finish.m_current;
+        if (space_left_in_finish_block > n) {
+            return Iterator(m_finish.m_current + n, m_finish.m_block_array_ptr);
+        } else {
+            auto num_blocks_to_create =
+                1 + ((n - space_left_in_finish_block + 1) / block_size);
+            expand_block_array_at_back(num_blocks_to_create);
+            auto new_finish_block = m_finish.m_block_array_ptr + num_blocks_to_create;
+            create_blocks(m_finish.m_block_array_ptr + 1, new_finish_block + 1);
+            auto new_current =
+                (*new_finish_block)->get_begin() +
+                (n % block_size) + 1;
+            return Iterator(new_current, new_finish_block);
+        }
+    }
+
+    // Punches a hole of n elements just before position
+    // all iterators are invalidated, start and finish are fixed up
+    // The returned iterator points to position again
+    inline Iterator expand_at_position(ConstIterator position, u64 n)
+    {
+        auto offset_from_start = position - m_start;
+        auto offset_from_finish = m_finish - position;
+        if (offset_from_start < offset_from_finish) {
+            return expand_towards_front(position, n);
+        } else {
+            return expand_towards_back(position, n);
+        }
+    }
+
+    // moves num_elements objects from the locations starting at source
+    // to the corresponding locations starting at destination
+    inline void move_objects(Iterator destination, ConstIterator source, u64 num_elements)
+    {
+        u64 num_moved = 0;
+        while (num_moved > 0) {
+            auto dest_block_ptr = destination.m_block_array_ptr;
+            auto dest_num_left_in_block = (*dest_block_ptr)->get_end() - destination.m_current;
+            auto src_block_ptr = source.m_block_array_ptr;
+            auto src_num_left_in_block = (*src_block_ptr)->get_end() - source.m_current;
         }
     }
 
@@ -489,11 +624,15 @@ protected:
     {
         auto num_nodes = (num_elements / BlockType::get_block_size()) + 1;
         // one node extra on either side
-        m_block_array_size = std::max(sc_initial_block_array_size, num_nodes + 2);
+        auto const initial_size = sc_initial_block_array_size;
+        m_block_array_size = std::max(initial_size, num_nodes + 2);
+
         m_block_array =
-            ka::casted_allocate_raw_cleared<PtrType>(sizeof(PtrType) * m_block_array_size);
+            ka::casted_allocate_raw_cleared<BlockPtrType>(sizeof(BlockPtrType) *
+                                                          m_block_array_size);
+
         auto start_block_ptr = m_block_array + ((m_block_array_size - num_nodes) / 2);
-        auto finish_block_ptr = start_block + num_nodes;
+        auto finish_block_ptr = start_block_ptr + num_nodes;
         create_blocks(start_block_ptr, finish_block_ptr);
 
         m_start.m_block_array_ptr = start_block_ptr;
@@ -505,7 +644,7 @@ protected:
     }
 
     inline DequeInternal()
-        : m_block_array(nullptr), m_block_array_size(0)
+        : m_block_array(nullptr), m_block_array_size(0),
           m_start(), m_finish()
     {
         initialize(0);

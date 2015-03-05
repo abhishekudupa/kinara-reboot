@@ -1,7 +1,7 @@
-// Deque.hpp ---
-// Filename: Deque.hpp
+// DListTests.cpp ---
+// Filename: DListTests.cpp
 // Author: Abhishek Udupa
-// Created: Mon Feb 16 02:09:37 2015 (-0500)
+// Created: Mon Mar  2 22:42:15 2015 (-0500)
 //
 // Copyright (c) 2013, Abhishek Udupa, University of Pennsylvania
 // All rights reserved.
@@ -35,73 +35,23 @@
 
 // Code:
 
-#if !defined KINARA_KINARA_COMMON_CONTAINERS_DEQUE_HPP_
-#define KINARA_KINARA_COMMON_CONTAINERS_DEQUE_HPP_
+#include "../../projects/kinara-common/src/containers/Deque.hpp"
+#include <algorithm>
 
-#include <initializer_list>
+#include "RCClass.hpp"
 
-#include "../basetypes/KinaraTypes.hpp"
+#include "../../thirdparty/gtest/include/gtest/gtest.h"
 
-#include "DequeTypes.hpp"
+using kinara::u32;
+using kinara::u64;
+using kinara::containers::Deque;
+using kinara::containers::u32Deque;
+using kinara::containers::PtrDeque;
 
-namespace kinara {
-namespace containers {
-
-namespace ka = kinara::allocators;
-namespace kc = kinara::containers;
-
-template <typename T, typename ConstructFunc, typename DestructFunc>
-class DequeBase final :
-        protected deque_detail_::DequeInternal<T, ConstructFunc, DestructFunc>
+TEST(u32DequeTest, Constructor)
 {
-public:
-    typedef T ValueType;
-    typedef T* PtrType;
-    typedef T& RefType;
-    typedef const T* ConstPtrType;
-    typedef const T& ConstRefType;
-    typedef deque_detail_::DequeInternal<T, ConstructFunc, DestructFunc> BaseType;
-
-private:
-
-public:
-    explicit DequeBase()
-        : BaseType()
-    {
-        // Nothing here
-    }
-
-};
-
-// Some useful typedefs
-template <typename T,
-          typename ConstructFunc = DefaultConstructFunc<T>,
-          typename DestructFunc = DefaultDestructFunc<T>>
-using Deque = DequeBase<T, ConstructFunc, DestructFunc>;
-
-template <typename T,
-          typename ConstructFunc = DefaultConstructFunc<T*>,
-          typename DestructFunc = DefaultConstructFunc<T*>>
-using PtrDeque = DequeBase<T*, ConstructFunc, DestructFunc>;
-
-typedef Deque<u08> u08Deque;
-typedef Deque<u16> u16Deque;
-typedef Deque<u32> u32Deque;
-typedef Deque<u64> u64Deque;
-typedef Deque<i08> i08Deque;
-typedef Deque<i16> i16Deque;
-typedef Deque<i32> i32Deque;
-typedef Deque<i64> i64Deque;
-
-// forward declaration
-class String;
-
-typedef Deque<String> StringDeque;
-
-} /* end namespace containers */
-} /* end namespace kinara */
-
-#endif /* KINARA_KINARA_COMMON_CONTAINERS_DEQUE_HPP_ */
+    u32Deque deque1;
+}
 
 //
-// Deque.hpp ends here
+// DListTests.cpp ends here
