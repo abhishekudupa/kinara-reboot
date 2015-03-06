@@ -204,7 +204,9 @@ class SListBase final
 
     // constructs the objects in the range AFTER the position
     template <typename InputIterator>
-    inline Iterator construct_core(NodeBaseType* position, InputIterator first, InputIterator last)
+    inline Iterator construct_core(NodeBaseType* position,
+                                   const InputIterator& first,
+                                   const InputIterator& last)
     {
         KINARA_ASSERT (first != last);
 
@@ -276,7 +278,7 @@ class SListBase final
     }
 
     template <typename InputIterator>
-    SListBase(InputIterator first, InputIterator last)
+    SListBase(const InputIterator& first, const InputIterator& last)
         : SListBase()
     {
         if (first == last) {
@@ -353,7 +355,7 @@ class SListBase final
     }
 
     template <typename InputIterator>
-    inline void assign(InputIterator first, InputIterator last)
+    inline void assign(const InputIterator& first, const InputIterator& last)
     {
         reset();
         if (last == first) {
@@ -604,14 +606,14 @@ class SListBase final
     }
 
     template <typename... ArgTypes>
-    Iterator emplace_after(ConstIterator position, ArgTypes&&... args)
+    Iterator emplace_after(const ConstIterator& position, ArgTypes&&... args)
     {
         return construct_after(position.get_node(), std::forward<ArgTypes>(args)...);
     }
 
     // linear time operation!
     template <typename... ArgTypes>
-    Iterator emplace(ConstIterator position, ArgTypes&&... args)
+    Iterator emplace(const ConstIterator& position, ArgTypes&&... args)
     {
         if (position == cbefore_begin()) {
             throw KinaraException("Cannot emplace before the beginning of an SList");
@@ -620,33 +622,36 @@ class SListBase final
         return construct_after(node_before, std::forward<ArgTypes>(args)...);
     }
 
-    Iterator insert_after(ConstIterator position, const ValueType& value)
+    Iterator insert_after(const ConstIterator& position, const ValueType& value)
     {
         return construct_after(position.get_node(), value);
     }
 
-    Iterator insert_after(ConstIterator position, ValueType&& value)
+    Iterator insert_after(const ConstIterator& position, ValueType&& value)
     {
         return construct_after(position.get_node(), std::move(value));
     }
 
-    Iterator insert_after(ConstIterator position, u64 n, const ValueType& value)
+    Iterator insert_after(const ConstIterator& position, u64 n, const ValueType& value)
     {
         return construct_fill(position.get_node(), n, value);
     }
 
     template <typename InputIterator>
-    Iterator insert_after(ConstIterator position, InputIterator first, InputIterator last)
+    Iterator insert_after(const ConstIterator& position,
+                          const InputIterator& first,
+                          const InputIterator& last)
     {
         return construct_core(position.get_node(), first, last);
     }
 
-    Iterator insert_after(ConstIterator position, std::initializer_list<ValueType> init_list)
+    Iterator insert_after(const ConstIterator& position,
+                          const std::initializer_list<ValueType>& init_list)
     {
         return insert_after(position, init_list.begin(), init_list.end());
     }
 
-    Iterator insert(ConstIterator position, const ValueType& value)
+    Iterator insert(const ConstIterator& position, const ValueType& value)
     {
         if (position == cbefore_begin()) {
             throw KinaraException("Cannot insert before the beginning of an SList");
@@ -655,7 +660,7 @@ class SListBase final
         return construct_after(node_before, value);
     }
 
-    Iterator insert(ConstIterator position, ValueType&& value)
+    Iterator insert(const ConstIterator& position, ValueType&& value)
     {
         if (position == cbefore_begin()) {
             throw KinaraException("Cannot insert before the beginning of an SList");
@@ -665,7 +670,7 @@ class SListBase final
         return construct_after(node_before, std::move(value));
     }
 
-    Iterator insert(ConstIterator position, u64 n, const ValueType& value)
+    Iterator insert(const ConstIterator& position, u64 n, const ValueType& value)
     {
         if (position == cbefore_begin()) {
             throw KinaraException("Cannot insert before the beginning of an SList");
@@ -676,7 +681,9 @@ class SListBase final
     }
 
     template <typename InputIterator>
-    Iterator insert(ConstIterator position, InputIterator first, InputIterator last)
+    Iterator insert(const ConstIterator& position,
+                    const InputIterator& first,
+                    const InputIterator& last)
     {
         if (position == cbefore_begin()) {
             throw KinaraException("Cannot insert before the beginning of an SList");
@@ -686,7 +693,8 @@ class SListBase final
         return construct_core(node_before, first, last);
     }
 
-    Iterator insert(ConstIterator position, std::initializer_list<ValueType> init_list)
+    Iterator insert(const ConstIterator& position,
+                    const std::initializer_list<ValueType>& init_list)
     {
         if (position == cbefore_begin()) {
             throw KinaraException("Cannot insert before the beginning of an SList");
@@ -695,7 +703,7 @@ class SListBase final
         return insert(position, init_list.begin(), init_list.end());
     }
 
-    Iterator erase_after(ConstIterator position)
+    Iterator erase_after(const ConstIterator& position)
     {
         auto node = position.get_node();
         auto node_to_erase = node->m_next;
@@ -714,7 +722,7 @@ class SListBase final
         return Iterator(node->m_next);
     }
 
-    Iterator erase_after(ConstIterator first, ConstIterator last)
+    Iterator erase_after(const ConstIterator& first, const ConstIterator& last)
     {
         auto node_before_first = first.get_node();
         auto last_node = last.get_node();
@@ -744,7 +752,7 @@ class SListBase final
         return Iterator(last.get_node());
     }
 
-    Iterator erase(ConstIterator position)
+    Iterator erase(const ConstIterator& position)
     {
         if (position == cbefore_begin()) {
             throw KinaraException("Cannot erase before the beginning of an SList");
@@ -754,7 +762,7 @@ class SListBase final
         return erase_after(ConstIterator(node_before));
     }
 
-    Iterator erase(ConstIterator first, ConstIterator last)
+    Iterator erase(const ConstIterator& first, const ConstIterator& last)
     {
         if (first == cbefore_begin()) {
             throw KinaraException("Cannot erase before the beginning of an SList");
@@ -821,7 +829,7 @@ class SListBase final
 
     // Splices in the other list
     // into this list AFTER position
-    void splice_after(ConstIterator position, SListBase& other)
+    void splice_after(const ConstIterator& position, SListBase& other)
     {
         if (&other == this) {
             throw KinaraException("Cannot splice an SListBase onto itself");
@@ -832,7 +840,7 @@ class SListBase final
 
     // Splices in the other list
     // into this list AFTER position
-    void splice_after(ConstIterator position, SListBase&& other)
+    void splice_after(const ConstIterator& position, SListBase&& other)
     {
         if (&other == this) {
             throw KinaraException("Cannot splice an SListBase onto itself");
@@ -863,24 +871,24 @@ class SListBase final
 
     // Splices in the element AFTER other_position
     // into this list AFTER position
-    void splice_after(ConstIterator position, SListBase& other,
-                      ConstIterator other_position)
+    void splice_after(const ConstIterator& position, SListBase& other,
+                      const ConstIterator& other_position)
     {
         splice_after(position, std::move(other), other_position);
     }
 
     // Splices in element AT other_position
     // into this list AFTER position
-    void splice_element_after(ConstIterator position, SListBase& other,
-                              ConstIterator other_position)
+    void splice_element_after(const ConstIterator& position, SListBase& other,
+                              const ConstIterator& other_position)
     {
         splice_element_after(position, std::move(other), other_position);
     }
 
     // Splices in the element AFTER other_position
     // into this list AFTER position
-    void splice_after(ConstIterator position, SListBase&& other,
-                      ConstIterator other_position)
+    void splice_after(const ConstIterator& position, SListBase&& other,
+                      const ConstIterator& other_position)
     {
         insert_after(position, *(std::next(other_position)));
         other.erase_after(other_position);
@@ -888,8 +896,8 @@ class SListBase final
 
     // Splices in the element AT other_position
     // into this list AFTER position
-    void splice_element_after(ConstIterator position, SListBase&& other,
-                              ConstIterator other_position)
+    void splice_element_after(const ConstIterator& position, SListBase&& other,
+                              const ConstIterator& other_position)
     {
         if (other_position == other.cbefore_begin()) {
             throw KinaraException("Cannot splice from before begin of SListBase");
@@ -901,16 +909,16 @@ class SListBase final
 
     // Splices in the range (first, last)
     // into this list AFTER position
-    void splice_after(ConstIterator position, SListBase& other,
-                      ConstIterator first, ConstIterator last)
+    void splice_after(const ConstIterator& position, SListBase& other,
+                      const ConstIterator& first, const ConstIterator& last)
     {
         splice_after(position, std::move(other), first, last);
     }
 
     // Splices in the range (first, last)
     // into this last AFTER position
-    void splice_after(ConstIterator position, SListBase&& other,
-                      ConstIterator first, ConstIterator last)
+    void splice_after(const ConstIterator& position, SListBase&& other,
+                      const ConstIterator& first, const ConstIterator& last)
     {
         if (first == other.cbefore_begin() && last == other.end()) {
             splice_after(position, other);
@@ -922,16 +930,16 @@ class SListBase final
 
     // Splices in the range [first, last)
     // into this list AFTER position
-    void splice_range_after(ConstIterator position, SListBase& other,
-                            ConstIterator first, ConstIterator last)
+    void splice_range_after(const ConstIterator& position, SListBase& other,
+                            const ConstIterator& first, const ConstIterator& last)
     {
         splice_range_after(position, std::move(other), first, last);
     }
 
     // Splices in the range [first, last)
     // into this list AFTER position
-    void splice_range_after(ConstIterator position, SListBase&& other,
-                            ConstIterator first, ConstIterator last)
+    void splice_range_after(const ConstIterator& position, SListBase&& other,
+                            const ConstIterator& first, const ConstIterator& last)
     {
         if (first == other.cbefore_begin()) {
             throw KinaraException("Cannot splice from before begin of SListBase");
@@ -948,14 +956,14 @@ class SListBase final
 
     // Splices the other list into
     // this list AT position
-    void splice(ConstIterator position, SListBase& other)
+    void splice(const ConstIterator& position, SListBase& other)
     {
         splice(position, std::move(other));
     }
 
     // Splices other list
     // into this list AT position
-    void splice(ConstIterator position, SListBase&& other)
+    void splice(const ConstIterator& position, SListBase&& other)
     {
         if (&other == this) {
             throw KinaraException("Cannot splice an SListBase onto itself");
@@ -987,24 +995,24 @@ class SListBase final
 
     // Splices in the element AFTER other_position
     // into this list AT position
-    void splice(ConstIterator position, SListBase& other,
-                ConstIterator other_position)
+    void splice(const ConstIterator& position, SListBase& other,
+                const ConstIterator& other_position)
     {
         splice(position, std::move(other), other_position);
     }
 
     // Splices in element AT other_position
     // into this list AT position
-    void splice_element(ConstIterator position, SListBase& other,
-                        ConstIterator other_position)
+    void splice_element(const ConstIterator& position, SListBase& other,
+                        const ConstIterator& other_position)
     {
         splice_element(position, std::move(other), other_position);
     }
 
     // Splices in element AFTER other_position
     // into this list AT position
-    void splice(ConstIterator position, SListBase&& other,
-                ConstIterator other_position)
+    void splice(const ConstIterator& position, SListBase&& other,
+                const ConstIterator& other_position)
     {
         if (position == cbefore_begin()) {
             throw KinaraException("Cannot splice before beginning of list");
@@ -1019,8 +1027,8 @@ class SListBase final
 
     // Splices in element AT other_position
     // into this list AT position
-    void splice_element(ConstIterator position, SListBase&& other,
-                        ConstIterator other_position)
+    void splice_element(const ConstIterator& position, SListBase&& other,
+                        const ConstIterator& other_position)
     {
         if (position == cbefore_begin()) {
             throw KinaraException("Cannot splice before beginning of list");
@@ -1035,16 +1043,16 @@ class SListBase final
 
     // Splices in the range (first, last)
     // into this list AT position
-    void splice(ConstIterator position, SListBase& other,
-                ConstIterator first, ConstIterator last)
+    void splice(const ConstIterator& position, SListBase& other,
+                const ConstIterator& first, const ConstIterator& last)
     {
         splice(position, std::move(other), first, last);
     }
 
     // Splices in the range (first, last)
     // into this list AT position
-    void splice(ConstIterator position, SListBase&& other,
-                ConstIterator first, ConstIterator last)
+    void splice(const ConstIterator& position, SListBase&& other,
+                const ConstIterator& first, const ConstIterator& last)
     {
         if (position == cbefore_begin()) {
             throw KinaraException("Cannot splice before beginning of list");
@@ -1060,16 +1068,16 @@ class SListBase final
 
     // Splices in the range [first, last)
     // into this list AT position
-    void splice_range(ConstIterator position, SListBase& other,
-                      ConstIterator first, ConstIterator last)
+    void splice_range(const ConstIterator& position, SListBase& other,
+                      const ConstIterator& first, const ConstIterator& last)
     {
         splice_range(position, std::move(other), first, last);
     }
 
     // Splices in the range [first, last)
     // into this list AT position
-    void splice_range(ConstIterator position, SListBase&& other,
-                      ConstIterator first, ConstIterator last)
+    void splice_range(const ConstIterator& position, SListBase&& other,
+                      const ConstIterator& first, const ConstIterator& last)
     {
         if (position == cbefore_begin()) {
             throw KinaraException("Cannot splice before beginning of list");
@@ -1374,10 +1382,11 @@ static inline i64 compare(const SListBase<T, CF1, DF1, UP1>& list_a,
     auto end1 = list_a.end();
     auto end2 = list_b.end();
 
+    std::less<T> less_func;
     while (it1 != end1 && it2 != end2) {
-        if (*it1 < *it2) {
+        if (less_func(*it1, *it2)) {
             return -1;
-        } else if (*it2 < *it1) {
+        } else if (less_func(*it2, *it1)) {
             return 1;
         }
         ++it1;

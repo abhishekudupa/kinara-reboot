@@ -222,23 +222,12 @@ public:
         return (&((static_cast<NodeType*>(m_node))->m_value));
     }
 
-    inline bool operator == (const IteratorBase& other) const
-    {
-        return (m_node == other.m_node);
-    }
-
     template <bool OISCONST>
     inline bool
     operator == (const kc::slist_detail_::IteratorBase<T, ConstructFunc, DestructFunc, OISCONST>&
                  other) const
     {
         return (m_node == other.m_node);
-    }
-
-
-    inline bool operator != (const IteratorBase& other) const
-    {
-        return (m_node != other.m_node);
     }
 
     template <bool OISCONST>

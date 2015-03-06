@@ -190,7 +190,9 @@ private:
     }
 
     template <typename InputIterator>
-    inline Iterator construct_range(NodeBaseType* position, InputIterator first, InputIterator last)
+    inline Iterator construct_range(NodeBaseType* position,
+                                    const InputIterator& first,
+                                    const InputIterator& last)
     {
         KINARA_ASSERT(first != last);
 
@@ -250,7 +252,7 @@ public:
     }
 
     template <typename InputIterator>
-    DListBase(InputIterator first, InputIterator last)
+    DListBase(const InputIterator& first, const InputIterator& last)
         : DListBase()
     {
         if (first == last) {
@@ -329,7 +331,7 @@ public:
     }
 
     template <typename InputIterator>
-    inline void assign(InputIterator first, InputIterator last)
+    inline void assign(const InputIterator& first, const InputIterator& last)
     {
         reset();
         if (first == last) {
@@ -568,17 +570,17 @@ public:
     }
 
     template <typename... ArgTypes>
-    Iterator emplace(ConstIterator position, ArgTypes&&... args)
+    Iterator emplace(const ConstIterator& position, ArgTypes&&... args)
     {
         return construct_at(position.get_node(), std::forward<ArgTypes>(args)...);
     }
 
-    Iterator insert(ConstIterator position, const ValueType& value)
+    Iterator insert(const ConstIterator& position, const ValueType& value)
     {
         return construct_at(position.get_node(), value);
     }
 
-    Iterator insert(ConstIterator position, u64 n, const ValueType& value)
+    Iterator insert(const ConstIterator& position, u64 n, const ValueType& value)
     {
         if (n == 0) {
             return Iterator(position.get_node());
@@ -587,7 +589,9 @@ public:
     }
 
     template <typename InputIterator>
-    Iterator insert(ConstIterator position, InputIterator first, InputIterator last)
+    Iterator insert(const ConstIterator& position,
+                    const InputIterator& first,
+                    const InputIterator& last)
     {
         if (first == last) {
             return Iterator(position.get_node());
@@ -595,12 +599,13 @@ public:
         return construct_range(position.get_node(), first, last);
     }
 
-    Iterator insert(ConstIterator position, ValueType&& value)
+    Iterator insert(const ConstIterator& position, ValueType&& value)
     {
         return construct_at(position.get_node(), std::move(value));
     }
 
-    Iterator insert(ConstIterator position, std::initializer_list<ValueType> init_list)
+    Iterator insert(const ConstIterator& position,
+                    const std::initializer_list<ValueType>& init_list)
     {
         if (init_list.size() == 0) {
             return Iterator(position.get_node());
@@ -608,7 +613,7 @@ public:
         return construct_range(position.get_node(), init_list.begin(), init_list.end());
     }
 
-    Iterator erase(ConstIterator position)
+    Iterator erase(const ConstIterator& position)
     {
         if (empty()) {
             return begin();
@@ -622,7 +627,7 @@ public:
         return Iterator(retval);
     }
 
-    Iterator erase(ConstIterator first, ConstIterator last)
+    Iterator erase(const ConstIterator& first, const ConstIterator& last)
     {
         if (empty()) {
             return begin();
@@ -698,12 +703,12 @@ public:
         reset();
     }
 
-    void splice(ConstIterator position, DListBase& other)
+    void splice(const ConstIterator& position, DListBase& other)
     {
         splice(position, std::move(other));
     }
 
-    void splice(ConstIterator position, DListBase&& other)
+    void splice(const ConstIterator& position, DListBase&& other)
     {
         if (other.empty()) {
             return;
@@ -736,27 +741,27 @@ public:
         other.reset();
     }
 
-    void splice(ConstIterator position, DListBase& other,
-                ConstIterator element)
+    void splice(const ConstIterator& position, DListBase& other,
+                const ConstIterator& element)
     {
         splice(position, std::move(other), element);
     }
 
-    void splice(ConstIterator position, DListBase&& other,
-                ConstIterator element)
+    void splice(const ConstIterator& position, DListBase&& other,
+                const ConstIterator& element)
     {
         insert(position, *element);
         other.erase(element);
     }
 
-    void splice(ConstIterator position, DListBase& other,
-                ConstIterator first, ConstIterator last)
+    void splice(const ConstIterator& position, DListBase& other,
+                const ConstIterator& first, const ConstIterator& last)
     {
         splice(position, std::move(other), first, last);
     }
 
-    void splice(ConstIterator position, DListBase&& other,
-                ConstIterator first, ConstIterator last)
+    void splice(const ConstIterator& position, DListBase&& other,
+                const ConstIterator& first, const ConstIterator& last)
     {
         if (first == last || other.empty()) {
             return;
@@ -1055,10 +1060,11 @@ inline i32 compare(const DListBase<T, CF1, DF1, UP1>& list1,
     auto end1 = list1.end();
     auto end2 = list2.end();
 
+    std::less<T> less_func;
     while (it1 != end1 && it2 != end2) {
-        if (*it1 < *it2) {
+        if (less_func(*it1, *it2)) {
             return -1;
-        } else if (*it2 < *it1) {
+        } else if (less_func(*it2, *it1)) {
             return 1;
         }
         ++it1;

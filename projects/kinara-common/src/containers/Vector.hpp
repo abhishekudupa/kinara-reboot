@@ -167,7 +167,7 @@ private:
     }
 
     template <typename InputIterator>
-    inline void construct_core(T* dst_ptr, InputIterator first, InputIterator last)
+    inline void construct_core(T* dst_ptr, const InputIterator& first, const InputIterator& last)
     {
         ConstructFunc the_construct_func;
         InputIterator it = first;
@@ -241,7 +241,7 @@ private:
     }
 
     inline Iterator expand_with_hole(u64 hole_size,
-                                     ConstIterator hole_position)
+                                     const ConstIterator& hole_position)
     {
         auto capacity = get_capacity();
         auto array_size = get_array_size();
@@ -295,9 +295,9 @@ private:
     }
 
     template <typename ForwardIterator>
-    inline void insert_range(ConstIterator position,
-                             ForwardIterator first,
-                             ForwardIterator last,
+    inline void insert_range(const ConstIterator& position,
+                             const ForwardIterator& first,
+                             const ForwardIterator& last,
                              std::forward_iterator_tag unused)
     {
         auto num_elements = std::distance(first, last);
@@ -308,19 +308,20 @@ private:
     }
 
     template <typename InputIterator>
-    inline void insert_range(ConstIterator position,
-                             InputIterator first,
-                             InputIterator last,
+    inline void insert_range(const ConstIterator& position,
+                             const InputIterator& first,
+                             const InputIterator& last,
                              std::input_iterator_tag unused)
     {
+        Iterator actual_pos = position;
         for (auto it = first; it != last; ++it) {
-            this->insert(position, *it);
-            increment_size();
+            actual_pos = this->insert(actual_pos, *it);
+            ++actual_pos;
         }
     }
 
     template <typename ForwardIterator>
-    inline void assign_range(ForwardIterator first, ForwardIterator last,
+    inline void assign_range(const ForwardIterator& first, const ForwardIterator& last,
                              std::forward_iterator_tag unused)
     {
         call_destructors();
@@ -345,7 +346,7 @@ private:
     }
 
     template <typename InputIterator>
-    inline void assign_range(InputIterator first, InputIterator last,
+    inline void assign_range(const InputIterator& first, const InputIterator& last,
                              std::input_iterator_tag unused)
     {
         call_destructors();
@@ -364,7 +365,7 @@ private:
 public:
     // we define the assign functions first
     template <typename InputIterator>
-    void assign(InputIterator first, InputIterator last)
+    void assign(const InputIterator& first, const InputIterator& last)
     {
         typedef typename std::iterator_traits<InputIterator>::iterator_category IterCategory;
         assign_range(first, last, IterCategory());
@@ -403,7 +404,7 @@ public:
     }
 
     VectorBase(u64 size, const ValueType& value)
-        : VectorBase(size)
+        : VectorBase()
     {
         if (size == 0) {
             return;
@@ -412,7 +413,7 @@ public:
     }
 
     template <typename InputIterator>
-    VectorBase(InputIterator first, InputIterator last)
+    VectorBase(const InputIterator& first, const InputIterator& last)
         : m_data(nullptr)
     {
         auto size = distance(first, last);
@@ -690,7 +691,7 @@ public:
         erase(begin());
     }
 
-    Iterator insert(ConstIterator position, const ValueType& value)
+    Iterator insert(const ConstIterator& position, const ValueType& value)
     {
         auto actual_pos = expand_with_hole(1, position);
         ConstructFunc the_construct_func;
@@ -699,7 +700,7 @@ public:
         return actual_pos;
     }
 
-    Iterator insert(ConstIterator position, u64 n, const ValueType& value)
+    Iterator insert(const ConstIterator& position, u64 n, const ValueType& value)
     {
         auto actual_pos = expand_with_hole(n, position);
         ConstructFunc the_construct_func;
@@ -709,7 +710,9 @@ public:
     }
 
     template <typename InputIterator>
-    Iterator insert(ConstIterator position, InputIterator first, InputIterator last)
+    Iterator insert(const ConstIterator& position,
+                    const InputIterator& first,
+                    const InputIterator& last)
     {
         typedef typename std::iterator_traits<InputIterator>::iterator_category IterCategory;
         auto offset_from_begin = position - begin();
@@ -717,7 +720,7 @@ public:
         return (begin() + offset_from_begin);
     }
 
-    Iterator insert(ConstIterator position, ValueType&& value)
+    Iterator insert(const ConstIterator& position, ValueType&& value)
     {
         auto actual_pos = expand_with_hole(1, position);
         ConstructFunc the_construct_func;
@@ -726,7 +729,7 @@ public:
         return actual_pos;
     }
 
-    Iterator insert(ConstIterator position, std::initializer_list<ValueType> il)
+    Iterator insert(const ConstIterator& position, const std::initializer_list<ValueType>& il)
     {
         auto num_elements = il.size();
         auto actual_pos = expand_with_hole(num_elements, position);
@@ -735,7 +738,7 @@ public:
         return actual_pos;
     }
 
-    Iterator erase(ConstIterator position)
+    Iterator erase(const ConstIterator& position)
     {
         DestructFunc the_destruct_func;
         the_destruct_func(*position);
@@ -748,7 +751,7 @@ public:
         return (const_cast<T*>(position));
     }
 
-    Iterator erase(ConstIterator first, ConstIterator last)
+    Iterator erase(const ConstIterator& first, const ConstIterator& last)
     {
         auto num_deleted_elements = std::distance(first, last);
         DestructFunc the_destruct_func;
@@ -866,10 +869,11 @@ static inline i64 compare(const VectorBase<T, Inc1, MS1, CF1, DF1>& vector_1,
         return diff;
     }
     auto size = vector_1.size();
+    std::less<T> less_func;
     for (u64 i = 0; i < size; ++i) {
-        if (vector_1[i] < vector_2[i]) {
+        if (less_func(vector_1[i], vector_2[i])) {
             return -1;
-        } else if (vector_1[i] > vector_2[i]) {
+        } else if (less_func(vector_2[i], vector_1[i])) {
             return 1;
         }
     }
