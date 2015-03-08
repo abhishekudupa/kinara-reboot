@@ -45,6 +45,7 @@
 
 #include "../basetypes/KinaraBase.hpp"
 #include "../allocators/MemoryManager.hpp"
+#include "../basetypes/KinaraErrors.hpp"
 
 #include "ContainersBase.hpp"
 
@@ -272,19 +273,7 @@ public:
             return ((*this) - (-n));
         }
         auto retval = *this;
-        auto block_end = (*m_block_array_ptr)->get_end();
-        i64 offset_from_end = block_end - m_current;
-        if (n < offset_from_end) {
-            retval.m_current = m_current + n;
-        } else {
-            auto elems_per_block = BlockType::get_block_size();
-            auto left_of_n = n - offset_from_end;
-            auto num_blocks_to_advance = 1 + (left_of_n / elems_per_block);
-            auto num_objects_to_advance = left_of_n % elems_per_block;
-            retval.m_block_array_ptr += num_blocks_to_advance;
-            retval.m_current =
-                (*(retval.m_block_array_ptr))->get_begin() + num_objects_to_advance;
-        }
+        retval += n;
         return retval;
     }
 
@@ -296,21 +285,8 @@ public:
         if (n < 0) {
             return ((*this) + (-n));
         }
-
         auto retval = *this;
-        auto block_begin = (*m_block_array_ptr)->get_begin();
-        i64 offset_from_begin = m_current - block_begin;
-        if (n < offset_from_begin) {
-            retval.m_current = m_current - n;
-        } else {
-            auto elems_per_block = BlockType::get_block_size();
-            auto left_of_n = n - offset_from_begin;
-            auto num_blocks_to_retreat = 1 + (left_of_n / elems_per_block);
-            auto num_objects_to_retreat = left_of_n % elems_per_block;
-            retval.m_block_array_ptr -= num_blocks_to_retreat;
-            retval.m_current =
-                (*(retval.m_block_array_ptr))->get_end() - num_objects_to_retreat;
-        }
+        retval -= n;
         return retval;
     }
 
@@ -371,17 +347,18 @@ public:
         if (n < 0) {
             return ((*this) -= (-n));
         }
-        auto block_end = (*m_block_array_ptr)->get_end();
-        i64 offset_from_end = block_end - m_current;
-        if (n < offset_from_end) {
+
+        u64 new_offset = n + (m_current - (*m_block_array_ptr)->get_begin());
+        const u64 block_size = BlockType::get_block_size();
+
+        if (new_offset < block_size) {
             m_current += n;
         } else {
-            auto elems_per_block = BlockType::get_block_size();
-            auto left_of_n = n - offset_from_end;
-            auto num_blocks_to_advance = 1 + (left_of_n / elems_per_block);
-            auto num_objects_to_advance = left_of_n % elems_per_block;
+            u64 num_blocks_to_advance = new_offset / block_size;
             m_block_array_ptr += num_blocks_to_advance;
-            m_current = (*m_block_array_ptr)->get_begin() + num_objects_to_advance;
+            m_current =
+                (*m_block_array_ptr)->get_begin() +
+                (new_offset - (num_blocks_to_advance * block_size));
         }
         return *this;
     }
@@ -395,17 +372,20 @@ public:
             return ((*this) += (-n));
         }
 
-        auto block_begin = (*m_block_array_ptr)->get_begin();
-        i64 offset_from_begin = m_current - block_begin;
-        if (n < offset_from_begin) {
+        i64 new_offset = (m_current - (*m_block_array_ptr)->get_begin()) - n;
+        const u64 block_size = BlockType::get_block_size();
+
+        if (new_offset >= 0) {
             m_current -= n;
         } else {
-            auto elems_per_block = BlockType::get_block_size();
-            auto left_of_n = n - offset_from_begin;
-            auto num_blocks_to_retreat = 1 + (left_of_n / elems_per_block);
-            auto num_objects_to_retreat = left_of_n % elems_per_block;
+            u64 num_blocks_to_retreat = 1 + ((- new_offset - 1) / block_size);
+
+            KINARA_ASSERT(num_blocks_to_retreat != 0);
+
             m_block_array_ptr -= num_blocks_to_retreat;
-            m_current = (*m_block_array_ptr)->get_end() - num_objects_to_retreat;
+            m_current =
+                (*m_block_array_ptr)->get_begin() +
+                ((num_blocks_to_retreat * block_size) + new_offset);
         }
         return *this;
     }
@@ -452,7 +432,7 @@ protected:
     inline void destroy_blocks(BlockPtrType* block_array_begin, BlockPtrType* block_array_end)
     {
         for (auto cur_ptr = block_array_begin; cur_ptr != block_array_end; ++cur_ptr) {
-            (*cur_ptr)->~DequeBlock();
+            (*cur_ptr)->~BlockType();
             ka::deallocate_raw(*cur_ptr, sizeof(BlockType));
             *cur_ptr = nullptr;
         }
@@ -522,41 +502,47 @@ protected:
     }
 
     // ensure there's room for at least one more element in the front
+    // fixes up m_start as if an additional element was added
     inline void expand_towards_front()
     {
         auto space_left_in_start_block =
             m_start.m_current - ((*(m_start.m_block_array_ptr))->get_begin());
         if (space_left_in_start_block >= 1) {
+            --m_start;
             return;
         } else {
             expand_block_array_at_front(1);
             auto new_start_block = m_start.m_block_array_ptr - 1;
             create_blocks(new_start_block, m_start.m_block_array_ptr);
+            --m_start;
             return;
         }
     }
 
+    // Same as expand_towards_front, except that we fixup m_finish
     inline void expand_towards_back()
     {
         auto end_of_finish_block = ((*(m_finish.m_block_array_ptr))->get_end());
         auto space_left_in_finish_block = end_of_finish_block - m_finish.m_current;
         if (space_left_in_finish_block > 1) {
+            ++m_finish;
             return;
         } else {
             expand_block_array_at_back(1);
             auto new_finish_block = m_finish.m_block_array_ptr + 1;
             create_blocks(m_finish.m_block_array_ptr + 1, new_finish_block + 1);
+            ++m_finish;
             return;
         }
     }
 
-    // returns an iterator pointing to the NEW start location
     inline void expand_towards_front(u64 n)
     {
         auto const block_size = BlockType::get_block_size();
         auto space_left_in_start_block =
             m_start.m_current - ((*(m_start.m_block_array_ptr))->get_begin());
-        if (space_left_in_start_block >= n) {
+        if ((u64)space_left_in_start_block >= n) {
+            m_start -= n;
             return;
         } else {
             // need to allocate more blocks
@@ -565,17 +551,18 @@ protected:
             expand_block_array_at_front(num_blocks_to_create);
             auto new_start_block = m_start.m_block_array_ptr - num_blocks_to_create;
             create_blocks(new_start_block, m_start.m_block_array_ptr);
+            m_start -= n;
             return;
         }
     }
 
-    // returns an iterator pointing at the NEW finish location
     inline void expand_towards_back(u64 n)
     {
         auto const block_size = BlockType::get_block_size();
         auto end_of_finish_block = (*(m_finish.m_block_array_ptr))->get_end();
         auto space_left_in_finish_block = end_of_finish_block - m_finish.m_current;
         if ((u64)space_left_in_finish_block > n) {
+            m_finish += n;
             return;
         } else {
             auto num_blocks_to_create =
@@ -583,6 +570,7 @@ protected:
             expand_block_array_at_back(num_blocks_to_create);
             auto new_finish_block = m_finish.m_block_array_ptr + num_blocks_to_create;
             create_blocks(m_finish.m_block_array_ptr + 1, new_finish_block + 1);
+            m_finish += n;
             return;
         }
     }
@@ -608,31 +596,75 @@ protected:
         auto offset_from_start = position - m_start;
         auto offset_from_finish = m_finish - position;
         if (offset_from_start < offset_from_finish) {
-            expand_towards_front(position, hole_size);
-            // move objects in [ start, position ) hole_size elements up
-            Iterator new_start = m_start - hole_size;
-            move_objects(new_start, m_start, offset_from_start - 1);
-            m_start = new_start;
-            return (m_start + offset_from_start - 1);
+            expand_towards_front(hole_size);
+            // move objects in the original [ start, position ) hole_size elements up
+            Iterator destination = m_start;
+            Iterator source = destination + hole_size;
+            auto num_elements = (u64)offset_from_start;
+            move_objects(destination, source, num_elements);
+            return (destination + num_elements);
         } else {
-            expand_towards_back(position, hole_size);
-            // move objects in [position+1, finish) hole_size elements down
-            Iterator new_finish = m_finish + hole_size;
-            move_objects(new_finish - hole_size, position + 1, offset_from_finish);
-            m_finish = new_finish;
-            return (m_finish - (offset_from_finish + hole_size));
+            expand_towards_back(hole_size);
+            // move objects in the original [position, finish) hole_size elements down
+            Iterator destination = m_finish - offset_from_finish;
+            Iterator source = destination - hole_size;
+            auto num_elements = (u64)offset_from_finish;
+            move_objects(destination, source, num_elements);
+            return source;
         }
     }
 
     // moves num_elements objects from the locations starting at source
     // to the corresponding locations starting at destination
-    inline void move_objects(const Iterator& destination,
-                             const ConstIterator& source,
-                             u64 num_elements)
+    inline void move_objects_backward(const Iterator& destination,
+                                      const ConstIterator& source,
+                                      u64 num_elements)
     {
-        if (source == destination) {
-            return;
+        auto from = source + num_elements;
+        auto to = destination + num_elements;
+
+        u64 num_left_to_move = num_elements;
+
+        while (num_left_to_move > 0) {
+            auto from_block_ptr = from.m_block_array_ptr;
+            auto objs_left_in_from_block = from.m_current - (*from_block_ptr)->get_begin();
+            auto to_block_ptr = to.m_block_array_ptr;
+            auto objs_left_in_to_block = to.m_current - (*to_block_ptr)->get_begin();
+
+            objs_left_in_from_block = std::min((u64)objs_left_in_from_block, num_left_to_move);
+            objs_left_in_to_block = std::min((u64)objs_left_in_to_block, num_left_to_move);
+
+            u64 num_to_move = 0;
+            if (objs_left_in_from_block < objs_left_in_to_block) {
+                num_to_move = objs_left_in_from_block;
+            } else {
+                num_to_move = objs_left_in_to_block;
+            }
+
+            memmove(to.m_current - num_to_move,
+                    from.m_current - num_to_move,
+                    sizeof(T) * num_to_move);
+
+            from -= num_to_move;
+            to -= num_to_move;
+
+            if (from.m_current == (*from.m_block_array_ptr)->get_begin()) {
+                --from.m_block_array_ptr;
+                from.m_current = (*from.m_block_array_ptr)->get_end();
+            }
+            if (to.m_current == (*to.m_block_array_ptr)->get_begin()) {
+                --to.m_block_array_ptr;
+                to.m_current = (*to.m_block_array_ptr)->get_end();
+            }
+
+            num_left_to_move -= num_to_move;
         }
+    }
+
+    inline void move_objects_forward(const Iterator& destination,
+                                     const ConstIterator& source,
+                                     u64 num_elements)
+    {
         auto from = source;
         auto to = destination;
 
@@ -640,11 +672,12 @@ protected:
 
         while (num_left_to_move > 0) {
             auto from_block_ptr = from.m_block_array_ptr;
-            auto objs_left_in_from_block = (*from_block_ptr)->get_end() - from.m_current - 1;
+            auto objs_left_in_from_block = (*from_block_ptr)->get_end() - from.m_current;
             auto to_block_ptr = to.m_block_array_ptr;
-            auto objs_left_in_to_block = (*to_block_ptr)->get_end() - to.m_current - 1;
-            objs_left_in_from_block = std::min(objs_left_in_from_block, num_left_to_move);
-            objs_left_in_to_block = std::min(objs_left_in_to_block, num_left_to_move);
+            auto objs_left_in_to_block = (*to_block_ptr)->get_end() - to.m_current;
+
+            objs_left_in_to_block = std::min((u64)objs_left_in_to_block, num_left_to_move);
+            objs_left_in_from_block = std::min((u64)objs_left_in_from_block, num_left_to_move);
 
             u64 num_to_move = 0;
             if (objs_left_in_from_block < objs_left_in_to_block) {
@@ -654,9 +687,23 @@ protected:
             }
 
             memmove(to.m_current, from.m_current, sizeof(T) * num_to_move);
+
             from += num_to_move;
             to += num_to_move;
             num_left_to_move -= num_to_move;
+        }
+    }
+
+    inline void move_objects(const Iterator& destination,
+                             const ConstIterator& source,
+                             u64 num_elements)
+    {
+        // if moving the range backwards, then prefer
+        // moving objects from beginning to end
+        if (destination < source) {
+            move_objects_forward(destination, source, num_elements);
+        } else {
+            move_objects_backward(destination, source, num_elements);
         }
     }
 
@@ -685,6 +732,29 @@ protected:
 
     inline void compact(bool strict = false)
     {
+        for (auto block_ptr = m_start.m_block_array_ptr - 1;
+             block_ptr != m_block_array - 1;
+             --block_ptr) {
+            if (*block_ptr != nullptr) {
+                (*block_ptr)->~BlockType();
+                ka::deallocate_raw(*block_ptr, sizeof(BlockType));
+                (*block_ptr) = nullptr;
+            } else {
+                break;
+            }
+        }
+        for (auto block_ptr = m_finish.m_block_array_ptr + 1;
+             block_ptr != m_block_array + m_block_array_size;
+             ++block_ptr) {
+            if (*block_ptr != nullptr) {
+                (*block_ptr)->~BlockType();
+                ka::deallocate_raw(*block_ptr, sizeof(BlockType));
+                (*block_ptr) = nullptr;
+            } else {
+                break;
+            }
+        }
+
         auto blocks_in_use = m_finish.m_block_array_ptr - m_start.m_block_array_ptr + 1;
         auto init_block_array_size = sc_initial_block_array_size;
         const u64 block_limit =

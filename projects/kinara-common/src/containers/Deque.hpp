@@ -64,9 +64,9 @@ public:
     typedef deque_detail_::DequeInternal<T, ConstructFunc, DestructFunc> BaseType;
 
     // iterators
-    typedef deque_detail_::IteratorBase<T, ConstructFunc, DestructFunc, true> Iterator;
+    typedef deque_detail_::IteratorBase<T, ConstructFunc, DestructFunc, false> Iterator;
     typedef Iterator iterator;
-    typedef deque_detail_::IteratorBase<T, ConstructFunc, DestructFunc, false> ConstIterator;
+    typedef deque_detail_::IteratorBase<T, ConstructFunc, DestructFunc, true> ConstIterator;
     typedef ConstIterator const_iterator;
     typedef std::reverse_iterator<iterator> ReverseIterator;
     typedef ReverseIterator reverse_iterator;
@@ -82,7 +82,7 @@ private:
         }
     }
 
-    inline void destroy_range(Iterator first, Iterator last)
+    inline void destroy_range(const Iterator& first, const Iterator& last)
     {
         DestructFunc the_destructor;
         for (auto it = first; it != last; ++it) {
@@ -165,7 +165,7 @@ private:
                                  std::forward_iterator_tag unused)
     {
         auto num_elems = std::distance(first, last);
-        auto actual_position = this->make_hole_at_position(position);
+        auto actual_position = this->make_hole_at_position(position, num_elems);
         ConstructFunc the_constructor;
         for (auto it = first; it != last; ++it) {
             the_constructor(&(*actual_position), *it);
@@ -348,8 +348,8 @@ public:
         }
 
         if (new_size < orig_size) {
-            auto position = cbegin() + (new_size - 1);
-            destroy_range(position + 1, cend());
+            auto position = begin() + (new_size - 1);
+            destroy_range(position + 1, end());
             this->shrink_after(position);
         } else {
             auto num_elems_to_add = new_size - orig_size;
@@ -359,7 +359,6 @@ public:
             for (u64 i = 0; i < num_elems_to_add; ++i) {
                 the_constructor(&((*this)[orig_size + i]), value);
             }
-            this->m_finish += num_elems_to_add;
         }
     }
 
@@ -422,23 +421,20 @@ public:
     {
         this->expand_towards_back();
         ConstructFunc the_constructor;
-        the_constructor(&(*(this->m_finish)), value);
-        this->m_finish++;
+        the_constructor(&(*(this->m_finish - 1)), value);
     }
 
     void push_back(ValueType&& value)
     {
         this->expand_towards_back();
         ConstructFunc the_constructor;
-        the_constructor(&(*(this->m_finish)), std::move(value));
-        this->m_finish++;
+        the_constructor(&(*(this->m_finish - 1)), std::move(value));
     }
 
     void push_front(const ValueType& value)
     {
         this->expand_towards_front();
         ConstructFunc the_constructor;
-        --(this->m_start);
         the_constructor(&(*(this->m_start)), value);
     }
 
@@ -446,7 +442,6 @@ public:
     {
         this->expand_towards_front();
         ConstructFunc the_constructor;
-        --(this->m_start);
         the_constructor(&(*(this->m_start)), std::move(value));
     }
 
@@ -564,7 +559,6 @@ public:
     {
         this->expand_towards_front();
         ConstructFunc the_constructor;
-        --(this->m_start);
         the_constructor(&(*(this->m_start)), std::forward<ArgTypes>(args)...);
     }
 
@@ -573,8 +567,7 @@ public:
     {
         this->expand_towards_back();
         ConstructFunc the_constructor;
-        the_constructor(&(*(this->m_finish)), std::forward<ArgTypes>(args)...);
-        ++(this->m_finish);
+        the_constructor(&(*(this->m_finish - 1)), std::forward<ArgTypes>(args)...);
     }
 
     // functions not part of standard stl

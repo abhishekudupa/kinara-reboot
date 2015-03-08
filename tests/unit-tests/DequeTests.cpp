@@ -165,9 +165,9 @@ TEST(u32DequeTest, Assignment)
 
 // We compare against std::deque for correctness
 // caveat: assumes that std::deque is correct! :-)
-TEST(u32Deque, PushPop)
+TEST(u32DequeTest, PushPop)
 {
-    const u32 num_iterations = 65536;
+    const u32 num_iterations = 40;
 
     u32Deque deque1;
     std::deque<u32> std_deque;
@@ -176,7 +176,8 @@ TEST(u32Deque, PushPop)
     std::uniform_int_distribution<u32> distribution(0, (1 << 30));
 
     for (u32 i = 0; i < num_iterations; ++i) {
-        auto num_to_push_back = distribution(generator) % 32;
+
+        auto num_to_push_back = distribution(generator) % 256;
         for (u32 j = 0; j < num_to_push_back; ++j) {
             auto elem = distribution(generator) % (1 << 30);
             deque1.push_back(elem);
@@ -184,7 +185,7 @@ TEST(u32Deque, PushPop)
             EXPECT_EQ(std_deque.size(), deque1.size());
         }
 
-        auto num_to_push_front = distribution(generator) % 32;
+        auto num_to_push_front = distribution(generator) % 256;
         for (u32 j = 0; j < num_to_push_front; ++j) {
             auto elem = distribution(generator) % (1 << 30);
             deque1.push_front(elem);
@@ -240,9 +241,89 @@ TEST(u32Deque, PushPop)
     }
 }
 
-TEST(u32Deque, Insertions)
+TEST(u32DequeTest, Insertions)
 {
     u32Deque deque1;
+    std::deque<u32> std_deque;
+    std::vector<u32> insert_vector;
+
+    // test short insertions
+    deque1 = { 1, 2, 3, 9, 10 };
+    insert_vector = { 4, 5, 6, 7, 8 };
+    auto pos = deque1.begin();
+    ++pos;
+    ++pos;
+    ++pos;
+    deque1.insert(pos, insert_vector.begin(), insert_vector.end());
+    EXPECT_EQ(10ull, deque1.size());
+
+    u32 k = 0;
+    for (auto num : deque1) {
+        EXPECT_EQ(++k, num);
+    }
+    EXPECT_EQ(10u, k);
+
+    deque1.clear();
+    deque1 = { 1, 7, 8, 9, 10 };
+    insert_vector = { 2, 3, 4, 5, 6 };
+    pos = deque1.begin();
+    ++pos;
+    deque1.insert(pos, insert_vector.begin(), insert_vector.end());
+
+    EXPECT_EQ(10ull, deque1.size());
+
+    k = 0;
+    for (auto num : deque1) {
+        EXPECT_EQ(++k, num);
+    }
+    EXPECT_EQ(10u, k);
+
+
+    const u32 num_iterations = 16;
+    const u32 max_test_size = 8192;
+
+    std::default_random_engine generator;
+    std::uniform_int_distribution<u32> distribution(0, (1 << 30));
+
+    for (u32 j = 0; j < num_iterations; ++j) {
+        u32 test_size = distribution(generator) % max_test_size;
+        u32 insert_position = distribution(generator) % test_size;
+        u32 hole_size = distribution(generator) % (test_size - insert_position);
+
+        deque1.clear();
+        std_deque.clear();
+        insert_vector.clear();
+
+        for (u32 i = 0; i < insert_position; ++i) {
+            deque1.push_back(i);
+            std_deque.push_back(i);
+            EXPECT_EQ(std_deque.size(), deque1.size());
+        }
+
+        for (u32 i = insert_position; i < insert_position + hole_size; ++i) {
+            insert_vector.push_back(i);
+        }
+
+        for (u32 i = insert_position + hole_size; i < test_size; ++i) {
+            deque1.push_back(i);
+            std_deque.push_back(i);
+            EXPECT_EQ(std_deque.size(), deque1.size());
+        }
+
+        u32Deque::iterator insert_iterator = deque1.begin();
+        insert_iterator = insert_iterator + insert_position;
+
+        deque1.insert(insert_iterator, insert_vector.cbegin(), insert_vector.cend());
+        std_deque.insert(std_deque.begin() + insert_position, insert_vector.cbegin(), insert_vector.cend());
+
+        EXPECT_EQ(std_deque.size(), deque1.size());
+        for (u32 i = 0; i < test_size; ++i) {
+            EXPECT_EQ(i, std_deque[i]);
+            EXPECT_EQ(i, deque1[i]);
+        }
+        EXPECT_EQ(test_size, std_deque.end() - std_deque.begin());
+        EXPECT_EQ(test_size, deque1.end() - deque1.begin());
+    }
 }
 
 //
