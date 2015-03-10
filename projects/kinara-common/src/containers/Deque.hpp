@@ -204,6 +204,7 @@ public:
     explicit DequeBase(u64 n)
         : DequeBase(n, ValueType())
     {
+        // Nothing here
     }
 
     explicit DequeBase(u64 n, const ValueType& value)

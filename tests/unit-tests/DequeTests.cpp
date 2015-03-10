@@ -167,7 +167,7 @@ TEST(u32DequeTest, Assignment)
 // caveat: assumes that std::deque is correct! :-)
 TEST(u32DequeTest, PushPop)
 {
-    const u32 num_iterations = 40;
+    const u32 num_iterations = 65536;
 
     u32Deque deque1;
     std::deque<u32> std_deque;
@@ -279,14 +279,14 @@ TEST(u32DequeTest, Insertions)
     EXPECT_EQ(10u, k);
 
 
-    const u32 num_iterations = 16;
+    const u32 num_iterations = 65536;
     const u32 max_test_size = 8192;
 
     std::default_random_engine generator;
     std::uniform_int_distribution<u32> distribution(0, (1 << 30));
 
     for (u32 j = 0; j < num_iterations; ++j) {
-        u32 test_size = distribution(generator) % max_test_size;
+        u32 test_size = 1 + distribution(generator) % max_test_size;
         u32 insert_position = distribution(generator) % test_size;
         u32 hole_size = distribution(generator) % (test_size - insert_position);
 

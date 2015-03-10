@@ -40,6 +40,7 @@
 #if !defined KINARA_KINARA_COMMON_CONTAINERS_DEQUE_TYPES_HPP_
 #define KINARA_KINARA_COMMON_CONTAINERS_DEQUE_TYPES_HPP_
 
+#include <iostream>
 #include <iterator>
 #include <cstring>
 
@@ -378,9 +379,7 @@ public:
         if (new_offset >= 0) {
             m_current -= n;
         } else {
-            u64 num_blocks_to_retreat = 1 + ((- new_offset - 1) / block_size);
-
-            KINARA_ASSERT(num_blocks_to_retreat != 0);
+            i64 num_blocks_to_retreat = ((- new_offset) + (block_size - 1)) / block_size;
 
             m_block_array_ptr -= num_blocks_to_retreat;
             m_current =
@@ -422,18 +421,29 @@ protected:
 
     static constexpr u64 sc_initial_block_array_size = 8;
 
+    inline BlockPtrType allocate_block()
+    {
+        auto retval = BlockType::construct(ka::allocate_raw(sizeof(BlockType)));
+        return retval;
+    }
+
+    inline void deallocate_block(BlockPtrType block_ptr)
+    {
+        block_ptr->~BlockType();
+        ka::deallocate_raw(block_ptr, sizeof(BlockType));
+    }
+
     inline void create_blocks(BlockPtrType* block_array_begin, BlockPtrType* block_array_end)
     {
         for (auto cur_ptr = block_array_begin; cur_ptr != block_array_end; ++cur_ptr) {
-            *cur_ptr = BlockType::construct(ka::allocate_raw(sizeof(BlockType)));
+            *cur_ptr = allocate_block();
         }
     }
 
     inline void destroy_blocks(BlockPtrType* block_array_begin, BlockPtrType* block_array_end)
     {
         for (auto cur_ptr = block_array_begin; cur_ptr != block_array_end; ++cur_ptr) {
-            (*cur_ptr)->~BlockType();
-            ka::deallocate_raw(*cur_ptr, sizeof(BlockType));
+            deallocate_block(*cur_ptr);
             *cur_ptr = nullptr;
         }
     }
@@ -441,6 +451,22 @@ protected:
     inline u64 get_size() const
     {
         return (m_finish - m_start);
+    }
+
+    inline bool rep_ok() const
+    {
+        for (auto block_ptr = m_block_array, end_ptr = m_block_array + m_block_array_size;
+             block_ptr != end_ptr; ++block_ptr) {
+            for (auto other_block_ptr = block_ptr + 1; other_block_ptr != end_ptr;
+                 ++other_block_ptr) {
+                if (*block_ptr != nullptr) {
+                    if (*block_ptr == *other_block_ptr) {
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
     }
 
     // expands the block array towards the front
@@ -465,8 +491,17 @@ protected:
             if (expand_at_front) {
                 new_block_array_start += num_blocks;
             }
+
             memmove(new_block_array_start, m_start.m_block_array_ptr,
                     old_num_blocks * sizeof(BlockPtrType));
+            auto block_array_end = m_block_array + m_block_array_size;
+
+            // zero out the other blocks!
+            memset(m_block_array, 0, sizeof(BlockPtrType) * (new_block_array_start - m_block_array));
+            memset(new_block_array_start + old_num_blocks, 0,
+                   (sizeof(BlockPtrType) *
+                    (block_array_end - (new_block_array_start + old_num_blocks))));
+
         } else {
             // need to reallocate
             auto new_block_array_size = m_block_array_size +
@@ -489,6 +524,8 @@ protected:
         // fixup the start and finish iterators
         m_start.m_block_array_ptr = new_block_array_start;
         m_finish.m_block_array_ptr = (new_block_array_start + old_num_blocks - 1);
+
+        // KINARA_ASSERT(rep_ok());
     }
 
     inline void expand_block_array_at_front(u64 num_blocks)
@@ -720,7 +757,7 @@ protected:
              block_ptr != m_finish.m_block_array_ptr + 1;
              ++block_ptr) {
             --m_block_array_size;
-            ka::deallocate_raw(*block_ptr, sizeof(BlockType));
+            deallocate_block(*block_ptr);
             *block_ptr = nullptr;
         }
 
@@ -736,8 +773,7 @@ protected:
              block_ptr != m_block_array - 1;
              --block_ptr) {
             if (*block_ptr != nullptr) {
-                (*block_ptr)->~BlockType();
-                ka::deallocate_raw(*block_ptr, sizeof(BlockType));
+                deallocate_block(*block_ptr);
                 (*block_ptr) = nullptr;
             } else {
                 break;
@@ -747,15 +783,14 @@ protected:
              block_ptr != m_block_array + m_block_array_size;
              ++block_ptr) {
             if (*block_ptr != nullptr) {
-                (*block_ptr)->~BlockType();
-                ka::deallocate_raw(*block_ptr, sizeof(BlockType));
+                deallocate_block(*block_ptr);
                 (*block_ptr) = nullptr;
             } else {
                 break;
             }
         }
 
-        auto blocks_in_use = m_finish.m_block_array_ptr - m_start.m_block_array_ptr + 1;
+        auto blocks_in_use = (m_finish.m_block_array_ptr - m_start.m_block_array_ptr) + 1;
         auto init_block_array_size = sc_initial_block_array_size;
         const u64 block_limit =
             strict ? blocks_in_use : std::max((u64)(blocks_in_use * 2), init_block_array_size);
@@ -767,20 +802,18 @@ protected:
                 ka::casted_allocate_raw_cleared<BlockPtrType>(sizeof(BlockPtrType) *
                                                               new_block_array_size);
             auto start_block_ptr = new_block_array + ((new_block_array_size - blocks_in_use) / 2);
-            auto finish_block_ptr = start_block_ptr + blocks_in_use;
 
-            for (auto block_ptr = start_block_ptr, src_block_ptr = m_start.m_block_array_ptr;
-                 block_ptr != finish_block_ptr;
-                 ++block_ptr, ++src_block_ptr) {
-                *block_ptr = *src_block_ptr;
-            }
+            memcpy(start_block_ptr, m_start.m_block_array_ptr,
+                   sizeof(BlockPtrType) * blocks_in_use);
 
             ka::deallocate_raw(m_block_array, sizeof(BlockPtrType) * m_block_array_size);
             m_block_array = new_block_array;
             m_block_array_size = new_block_array_size;
             m_start.m_block_array_ptr = start_block_ptr;
-            m_finish.m_block_array_ptr = finish_block_ptr - 1;
+            m_finish.m_block_array_ptr = (start_block_ptr + blocks_in_use) - 1;
         }
+
+        // KINARA_ASSERT(rep_ok());
     }
 
     // initialize storage for num_elements
@@ -817,11 +850,13 @@ protected:
     // the default constructor
     inline void reset()
     {
-        for (auto block_ptr = m_start.m_block_array_ptr;
-             block_ptr != m_finish.m_block_array_ptr + 1;
-             ++block_ptr) {
-            ka::deallocate_raw(*block_ptr, sizeof(BlockType));
-            *block_ptr = nullptr;
+        for (auto block_ptr = m_block_array, end_ptr = m_block_array + m_block_array_size;
+             block_ptr != end_ptr; ++block_ptr) {
+
+            if (*block_ptr != nullptr) {
+                deallocate_block(*block_ptr);
+                *block_ptr = nullptr;
+            }
         }
         ka::deallocate_raw(m_block_array, sizeof(BlockPtrType) * m_block_array_size);
         initialize(0);
@@ -855,11 +890,12 @@ protected:
 
     inline ~DequeInternal()
     {
-        for (auto block_ptr = m_start.m_block_array_ptr;
-             block_ptr != m_finish.m_block_array_ptr + 1;
-             ++block_ptr) {
-            ka::deallocate_raw(*block_ptr, sizeof(BlockType));
-            *block_ptr = nullptr;
+        for (auto block_ptr = m_block_array, end_ptr = m_block_array + m_block_array_size;
+             block_ptr != end_ptr; ++block_ptr) {
+            if (*block_ptr != nullptr) {
+                deallocate_block(*block_ptr);
+                *block_ptr = nullptr;
+            }
         }
         ka::deallocate_raw(m_block_array, sizeof(BlockPtrType) * m_block_array_size);
     }
