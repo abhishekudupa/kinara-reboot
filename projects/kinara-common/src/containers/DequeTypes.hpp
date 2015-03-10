@@ -53,8 +53,7 @@
 namespace kinara {
 namespace containers {
 
-template <typename T, typename ConstructFunc, typename DestructFunc>
-class DequeBase;
+template <typename T> class DequeBase;
 
 namespace deque_detail_ {
 
@@ -62,7 +61,6 @@ namespace kc = kinara::containers;
 namespace ka = kinara::allocators;
 
 // A class representing a block in a deque
-// this class does not construct objects in manner
 template <typename T>
 class DequeBlock final
 {
@@ -80,6 +78,26 @@ public:
     inline DequeBlock& operator = (const DequeBlock& other) = delete;
     inline DequeBlock& operator = (DequeBlock&& other) = delete;
 
+    static inline DequeBlock* construct(void* mem_ptr,
+                                        std::true_type is_trivial_value)
+    {
+        auto block_ptr = static_cast<DequeBlock*>(mem_ptr);
+        memset(block_ptr->m_object_array, 0, sizeof(T) * sc_num_elems_per_block);
+        return block_ptr;
+    }
+
+    static inline DequeBlock* construct(void* mem_ptr,
+                                        std::false_type is_trivial_value)
+    {
+        auto block_ptr = static_cast<DequeBlock*>(mem_ptr);
+        for (auto cur_ptr = block_ptr->m_object_array,
+                 end_ptr = block_ptr->m_object_array + sc_num_elems_per_block;
+             cur_ptr != end_ptr; ++cur_ptr) {
+            new (cur_ptr) T();
+        }
+        return block_ptr;
+    }
+
     static inline DequeBlock* construct(void* mem_ptr)
     {
         return static_cast<DequeBlock*>(mem_ptr);
@@ -87,7 +105,7 @@ public:
 
     inline ~DequeBlock()
     {
-        // Nothing here
+        // the elements are destroyed automagically
     }
 
     inline T* get_begin() const
@@ -107,21 +125,20 @@ public:
 };
 
 // forward declaration of deque implementation
-template <typename T, typename ConstructFunc, typename DestructFunc>
+template <typename T>
 class DequeInternal;
 
 // iterator class for deques
-template <typename T, typename ConstructFunc,
-          typename DestructFunc, bool ISCONST>
+template <typename T, bool ISCONST>
 class IteratorBase :
         public std::iterator<std::random_access_iterator_tag, T, i64,
                              typename std::conditional<ISCONST, const T*, T*>::type,
                              typename std::conditional<ISCONST, const T&, T&>::type>
 {
-    friend class kc::deque_detail_::IteratorBase<T, ConstructFunc, DestructFunc, true>;
-    friend class kc::deque_detail_::IteratorBase<T, ConstructFunc, DestructFunc, false>;
-    friend class kc::deque_detail_::DequeInternal<T, ConstructFunc, DestructFunc>;
-    friend class kc::DequeBase<T, ConstructFunc, DestructFunc>;
+    friend class kc::deque_detail_::IteratorBase<T, true>;
+    friend class kc::deque_detail_::IteratorBase<T, false>;
+    friend class kc::deque_detail_::DequeInternal<T>;
+    friend class kc::DequeBase<T>;
 
 private:
     typedef typename std::conditional<ISCONST, const T*, T*>::type ValPtrType;
@@ -162,8 +179,7 @@ public:
     }
 
     template <bool OISCONST>
-    inline IteratorBase(const kc::deque_detail_::IteratorBase<T, ConstructFunc,
-                                                              DestructFunc, OISCONST>& other)
+    inline IteratorBase(const kc::deque_detail_::IteratorBase<T, OISCONST>& other)
         : m_current(other.m_current), m_block_array_ptr(other.m_block_array_ptr)
     {
         static_assert(!OISCONST || ISCONST,
@@ -187,8 +203,7 @@ public:
 
     template <bool OISCONST>
     inline IteratorBase&
-    operator = (const kc::deque_detail_::IteratorBase<T, ConstructFunc,
-                                                      DestructFunc, OISCONST>& other)
+    operator = (const kc::deque_detail_::IteratorBase<T, OISCONST>& other)
     {
         static_assert(!OISCONST || ISCONST,
                       "Cannot construct non-const iterator from const iterator");
@@ -203,16 +218,14 @@ public:
 
     template <bool OISCONST>
     inline bool
-    operator == (const kc::deque_detail_::IteratorBase<T, ConstructFunc,
-                                                       DestructFunc, OISCONST>& other) const
+    operator == (const kc::deque_detail_::IteratorBase<T, OISCONST>& other) const
     {
         return (m_current == other.m_current);
     }
 
     template <bool OISCONST>
     inline bool
-    operator != (const kc::deque_detail_::IteratorBase<T, ConstructFunc,
-                                                       DestructFunc, OISCONST>& other) const
+    operator != (const kc::deque_detail_::IteratorBase<T, OISCONST>& other) const
     {
         return (!((*this) == other));
     }
@@ -300,8 +313,7 @@ public:
 
     template <bool OISCONST>
     inline i64
-    operator - (const kc::deque_detail_::IteratorBase<T, ConstructFunc,
-                                                      DestructFunc, OISCONST>& other) const
+    operator - (const kc::deque_detail_::IteratorBase<T, OISCONST>& other) const
     {
         i64 retval = (get_offset_from_begin() - other.get_offset_from_begin());
         retval += ((m_block_array_ptr - other.m_block_array_ptr) * BlockType::get_block_size());
@@ -310,32 +322,28 @@ public:
 
     template <bool OISCONST>
     inline bool
-    operator < (const kc::deque_detail_::IteratorBase<T, ConstructFunc,
-                                                      DestructFunc, OISCONST>& other) const
+    operator < (const kc::deque_detail_::IteratorBase<T, OISCONST>& other) const
     {
         return (((*this) - other) < 0);
     }
 
     template <bool OISCONST>
     inline bool
-    operator <= (const kc::deque_detail_::IteratorBase<T, ConstructFunc,
-                                                       DestructFunc, OISCONST>& other) const
+    operator <= (const kc::deque_detail_::IteratorBase<T, OISCONST>& other) const
     {
         return (((*this) - other) <= 0);
     }
 
     template <bool OISCONST>
     inline bool
-    operator > (const kc::deque_detail_::IteratorBase<T, ConstructFunc,
-                                                      DestructFunc, OISCONST>& other) const
+    operator > (const kc::deque_detail_::IteratorBase<T, OISCONST>& other) const
     {
         return (((*this) - other) > 0);
     }
 
     template <bool OISCONST>
     inline bool
-    operator >= (const kc::deque_detail_::IteratorBase<T, ConstructFunc,
-                                                       DestructFunc, OISCONST>& other) const
+    operator >= (const kc::deque_detail_::IteratorBase<T, OISCONST>& other) const
     {
         return (((*this) - other) >= 0);
     }
@@ -398,7 +406,7 @@ public:
 
 
 // handle memory management (not initialization) for deques
-template <typename T, typename ConstructFunc, typename DestructFunc>
+template <typename T>
 class DequeInternal
 {
 private:
@@ -410,8 +418,8 @@ private:
     typedef DequeBlock<T> BlockType;
     typedef BlockType* BlockPtrType;
     typedef const BlockType* BlockConstPtrType;
-    typedef IteratorBase<T, ConstructFunc, DestructFunc, false> Iterator;
-    typedef IteratorBase<T, ConstructFunc, DestructFunc, true> ConstIterator;
+    typedef IteratorBase<T, false> Iterator;
+    typedef IteratorBase<T, true> ConstIterator;
 
 protected:
     BlockPtrType* m_block_array;
@@ -421,6 +429,7 @@ protected:
 
     static constexpr u64 sc_initial_block_array_size = 8;
 
+    // allocates and default constructs the block
     inline BlockPtrType allocate_block()
     {
         auto retval = BlockType::construct(ka::allocate_raw(sizeof(BlockType)));

@@ -52,8 +52,7 @@ namespace containers {
 namespace ka = kinara::allocators;
 namespace kc = kinara::containers;
 
-template <typename T, typename ConstructFunc,
-          typename DestructFunc, bool USEPOOLS>
+template <typename T,bool USEPOOLS>
 class DListBase final
 {
 public:
@@ -63,9 +62,9 @@ public:
     typedef T& RefType;
     typedef const T& ConstRefType;
 
-    typedef dlist_detail_::Iterator<T, ConstructFunc, DestructFunc> Iterator;
+    typedef dlist_detail_::Iterator<T> Iterator;
     typedef Iterator iterator;
-    typedef dlist_detail_::ConstIterator<T, ConstructFunc, DestructFunc> ConstIterator;
+    typedef dlist_detail_::ConstIterator<T> ConstIterator;
     typedef ConstIterator const_iterator;
     typedef std::reverse_iterator<iterator> ReverseIterator;
     typedef ReverseIterator reverse_iterator;
@@ -74,7 +73,7 @@ public:
 
 private:
     typedef dlist_detail_::DListNodeBase NodeBaseType;
-    typedef dlist_detail_::DListNode<T, ConstructFunc, DestructFunc> NodeType;
+    typedef dlist_detail_::DListNode<T> NodeType;
 
     union PoolSizeUnionType
     {
@@ -271,31 +270,24 @@ public:
         : DListBase()
     {
         if (USEPOOLS) {
-            m_pool_or_size.m_pool_allocator = other.m_pool_or_size.m_pool_allocator;
-            other.m_pool_or_size.m_pool_allocator = nullptr;
+            std::swap(m_pool_or_size.m_pool_allocator,
+                      other.m_pool_or_size.m_pool_allocator);
         } else {
-            m_pool_or_size.m_size = other.m_pool_or_size.m_size;
-            other.m_pool_or_size.m_size = 0;
+            std::swap(m_pool_or_size.m_size, other.m_pool_or_size.m_size);
         }
 
-        m_root.m_next = other.m_root.m_next;
-        m_root.m_prev = other.m_root.m_prev;
-        m_root.m_next->m_prev = &m_root;
-        m_root.m_prev->m_next = &m_root;
-
-        other.m_root.m_next = &(other.m_root);
-        other.m_root.m_prev = &(other.m_root);
+        std::swap(m_root, other.m_root);
     }
 
     template <bool OUSEPOOLS>
-    DListBase(const kc::DListBase<T, ConstructFunc, DestructFunc, OUSEPOOLS>& other)
+    DListBase(const kc::DListBase<T, OUSEPOOLS>& other)
         : DListBase(std::move(other))
     {
         // Nothing here
     }
 
     template <bool OUSEPOOLS>
-    DListBase(kc::DListBase<T, ConstructFunc, DestructFunc, OUSEPOOLS>&& other)
+    DListBase(kc::DListBase<T, OUSEPOOLS>&& other)
         : DListBase(other.begin(), other.end())
     {
         // Nothing here
@@ -341,7 +333,7 @@ public:
     }
 
     template <bool OUSEPOOLS>
-    inline void assign(const kc::DListBase<T, ConstructFunc, DestructFunc, OUSEPOOLS>& other)
+    inline void assign(const kc::DListBase<T, OUSEPOOLS>& other)
     {
         assign(other.begin(), other.end());
     }
@@ -371,7 +363,7 @@ public:
 
     template <bool OUSEPOOLS>
     inline DListBase&
-    operator = (const kc::DListBase<T, ConstructFunc, DestructFunc, OUSEPOOLS>& other)
+    operator = (const kc::DListBase<T, OUSEPOOLS>& other)
     {
         if (&other == this) {
             return *this;
@@ -385,27 +377,16 @@ public:
         if (&other == this) {
             return *this;
         }
-        reset();
-
-        if (other.size() == 0) {
-            return *this;
-        }
 
         if (USEPOOLS) {
-            m_pool_or_size.m_pool_allocator = other.m_pool_or_size.m_pool_allocator;
-            other.m_pool_or_size.m_pool_allocator = nullptr;
+            std::swap(m_pool_or_size.m_pool_allocator, other.m_pool_or_size.m_pool_allocator);
         } else {
-            m_pool_or_size.m_size = other.m_pool_or_size.m_size;
-            other.m_pool_or_size.m_size = 0;
+            std::swap(m_pool_or_size.m_size, other.m_pool_or_size.m_size);
         }
 
-        m_root.m_next = other.m_root.m_next;
-        m_root.m_prev = other.m_root.m_prev;
-        m_root.m_next->m_prev = &m_root;
-        m_root.m_prev->m_next = &m_root;
+        std::swap(m_root, other.m_root);
+        std::swap(m_root, other.m_root);
 
-        other.m_root.m_next = &(other.m_root);
-        other.m_root.m_prev = &(other.m_root);
         return *this;
     }
 
@@ -658,17 +639,8 @@ public:
             std::swap(m_pool_or_size.m_size, other.m_pool_or_size.m_size);
         }
 
-        std::swap(m_root.m_next, other.m_root.m_next);
-        std::swap(m_root.m_prev, other.m_root.m_prev);
-
-        if (other_empty) {
-            m_root.m_next = &m_root;
-            m_root.m_prev = &m_root;
-        }
-        if (this_empty) {
-            other.m_root.m_next = &(other.m_root);
-            other.m_root.m_prev = &(other.m_root);
-        }
+        std::swap(m_root, other.m_root);
+        std::swap(m_root, other.m_root);
     }
 
     void resize(u64 n)
@@ -1042,108 +1014,148 @@ public:
         }
         return cend();
     }
+
+    template <typename UnaryPredicate>
+    Iterator find(UnaryPredicate predicate)
+    {
+        for (auto it = begin(), last = end(); it != last; ++it) {
+            if (predicate(*it)) {
+                return it;
+            }
+        }
+        return end();
+    }
+
+    template <typename UnaryPredicate>
+    ConstIterator find(UnaryPredicate predicate) const
+    {
+        for (auto it = begin(), last = end(); it != last; ++it) {
+            if (predicate(*it)) {
+                return it;
+            }
+        }
+        return end();
+    }
+
+    template <bool OUSEPOOLS>
+    inline i64 compare(const DListBase<T, OUSEPOOLS>& other) const
+    {
+        return compare(other, std::less<T>());
+    }
+
+    template <bool OUSEPOOLS, typename BinaryPredicate>
+    inline i64 compare(const DListBase<T, OUSEPOOLS>& other,
+                       BinaryPredicate predicate) const
+    {
+        auto diff = size() - other.size();
+        if (diff != 0) {
+            return diff;
+        }
+
+        auto it1 = begin();
+        auto it2 = other.begin();
+
+        auto end1 = end();
+        auto end2 = other.end();
+
+        while (it1 != end1 && it2 != end2) {
+            if (predicate(*it1, *it2)) {
+                return -1;
+            } else if (predicate(*it2, *it1)) {
+                return 1;
+            }
+
+            ++it1;
+            ++it2;
+        }
+
+        return 0;
+    }
 };
 
-namespace dlist_detail_ {
-
-template <typename T, typename CF1, typename DF1, bool UP1,
-          typename CF2, typename DF2, bool UP2>
-inline i32 compare(const DListBase<T, CF1, DF1, UP1>& list1,
-                   const DListBase<T, CF2, DF2, UP2>& list2)
-{
-    auto diff = list1.size() - list2.size();
-    if (diff != 0) {
-        return diff;
-    }
-    auto it1 = list1.begin();
-    auto it2 = list2.begin();
-    auto end1 = list1.end();
-    auto end2 = list2.end();
-
-    std::less<T> less_func;
-    while (it1 != end1 && it2 != end2) {
-        if (less_func(*it1, *it2)) {
-            return -1;
-        } else if (less_func(*it2, *it1)) {
-            return 1;
-        }
-        ++it1;
-        ++it2;
-    }
-    return 0;
-}
-
-} /* end namespace dlist_detail_ */
-
 // relational operators for dlist
-template <typename T, typename CF1, typename DF1, bool UP1,
-          typename CF2, typename DF2, bool UP2>
-static inline bool operator == (const DListBase<T, CF1, DF1, UP1>& list1,
-                                const DListBase<T, CF2, DF2, UP2>& list2)
+template <typename T, bool UP1, bool UP2>
+static inline bool operator == (const DListBase<T, UP1>& list1,
+                                const DListBase<T, UP2>& list2)
 {
-    return (dlist_detail_::compare(list1, list2) == 0);
+    return (list1.compare(list2) == 0);
 }
 
-template <typename T, typename CF1, typename DF1, bool UP1,
-          typename CF2, typename DF2, bool UP2>
-static inline bool operator != (const DListBase<T, CF1, DF1, UP1>& list1,
-                                const DListBase<T, CF2, DF2, UP2>& list2)
+template <typename T, bool UP1, bool UP2>
+static inline bool operator != (const DListBase<T, UP1>& list1,
+                                const DListBase<T, UP2>& list2)
 {
-    return (dlist_detail_::compare(list1, list2) != 0);
+    return (list1.compare(list2) != 0);
 }
 
-template <typename T, typename CF1, typename DF1, bool UP1,
-          typename CF2, typename DF2, bool UP2>
-static inline bool operator < (const DListBase<T, CF1, DF1, UP1>& list1,
-                               const DListBase<T, CF2, DF2, UP2>& list2)
+template <typename T, bool UP1, bool UP2>
+static inline bool operator < (const DListBase<T, UP1>& list1,
+                               const DListBase<T, UP2>& list2)
 {
-    return (dlist_detail_::compare(list1, list2) < 0);
+    return (list1.compare(list2) < 0);
 }
 
-template <typename T, typename CF1, typename DF1, bool UP1,
-          typename CF2, typename DF2, bool UP2>
-static inline bool operator <= (const DListBase<T, CF1, DF1, UP1>& list1,
-                                const DListBase<T, CF2, DF2, UP2>& list2)
+template <typename T, bool UP1, bool UP2>
+static inline bool operator > (const DListBase<T, UP1>& list1,
+                               const DListBase<T, UP2>& list2)
 {
-    return (dlist_detail_::compare(list1, list2) <= 0);
+    return (list1.compare(list2) > 0);
 }
 
-template <typename T, typename CF1, typename DF1, bool UP1,
-          typename CF2, typename DF2, bool UP2>
-static inline bool operator > (const DListBase<T, CF1, DF1, UP1>& list1,
-                               const DListBase<T, CF2, DF2, UP2>& list2)
+template <typename T, bool UP1, bool UP2>
+static inline bool operator <= (const DListBase<T, UP1>& list1,
+                                const DListBase<T, UP2>& list2)
 {
-    return (dlist_detail_::compare(list1, list2) > 0);
+    return (list1.compare(list2) <= 0);
 }
 
-template <typename T, typename CF1, typename DF1, bool UP1,
-          typename CF2, typename DF2, bool UP2>
-static inline bool operator >= (const DListBase<T, CF1, DF1, UP1>& list1,
-                                const DListBase<T, CF2, DF2, UP2>& list2)
+template <typename T, bool UP1, bool UP2>
+static inline bool operator >= (const DListBase<T, UP1>& list1,
+                                const DListBase<T, UP2>& list2)
 {
-    return (dlist_detail_::compare(list1, list2) >= 0);
+    return (list1.compare(list2) >= 0);
 }
 
 // Some useful typedefs
-template <typename T,
-          typename ConstructFunc = DefaultConstructFunc<T>,
-          typename DestructFunc = DefaultDestructFunc<T>>
-using PoolDList = DListBase<T, ConstructFunc, DestructFunc, true>;
+template <typename T>
+using PoolDList = DListBase<T, true>;
 
-template <typename T,
-          typename ConstructFunc = DefaultConstructFunc<T>,
-          typename DestructFunc = DefaultDestructFunc<T>>
-using DList = DListBase<T, ConstructFunc, DestructFunc, false>;
+template <typename T>
+using DList = DListBase<T, false>;
 
-template <typename T,
-          typename ConstructFunc = DefaultConstructFunc<T*>,
-          typename DestructFunc = DefaultDestructFunc<T*>>
-using PoolPtrDList = DListBase<T*, ConstructFunc, DestructFunc, true>;
+template <typename T>
+using PoolPtrDList = DListBase<T*, true>;
 
-template <typename T,
-          typename ConstructFunc = DefaultConstructFunc<T*>,
-          typename DestructFunc = DefaultDestructFunc<T*>>
-using PtrDList = DListBase<T*, ConstructFunc, DestructFunc, false>;
+template <typename T>
+using PtrDList = DListBase<T*, false>;
+
+template <typename T>
+using ConstPtrDList = DListBase<const T*, false>;
+
+template <typename T>
+using PoolConstPtrDList = DListBase<const T*, true>;
+
+template <typename T>
+using MPtrDList =
+    DListBase<typename std::conditional<std::is_base_of<memory::RefCountable, T>::value,
+                                        memory::ManagedPointer<T>, T*>::type, false>;
+
+template <typename T>
+using PoolMPtrDList =
+    DListBase<typename std::conditional<std::is_base_of<memory::RefCountable, T>::value,
+                                        memory::ManagedPointer<T>, T*>::type, true>;
+
+template <typename T>
+using ConstMPtrDList =
+    DListBase<typename std::conditional<std::is_base_of<memory::RefCountable, T>::value,
+                                        memory::ManagedConstPointer<T>,
+                                        const T*>::type, false>;
+
+template <typename T>
+using PoolConstMPtrDList =
+    DListBase<typename std::conditional<std::is_base_of<memory::RefCountable, T>::value,
+                                        memory::ManagedConstPointer<T>,
+                                        const T*>::type, true>;
 
 typedef PoolDList<u08> u08PoolDList;
 typedef PoolDList<u16> u16PoolDList;
@@ -1168,7 +1180,6 @@ class String;
 
 typedef DList<String> StringDList;
 typedef PoolDList<String> StringPoolDList;
-
 
 } /* end namespace containers */
 } /* end namespace kinara */

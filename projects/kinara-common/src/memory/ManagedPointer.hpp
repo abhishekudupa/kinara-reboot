@@ -119,22 +119,28 @@ public:
     inline ReferenceType operator * () const;
 
     template <typename U, bool OTHERCONSTPOINTER>
-    inline bool operator == (const ManagedPointerBase<U, OTHERCONSTPOINTER>& other_managed_ptr) const;
+    inline bool
+    operator == (const ManagedPointerBase<U, OTHERCONSTPOINTER>& other_managed_ptr) const;
 
     template <typename U, bool OTHERCONSTPOINTER>
-    inline bool operator != (const ManagedPointerBase<U, OTHERCONSTPOINTER>& other_managed_ptr) const;
+    inline bool
+    operator != (const ManagedPointerBase<U, OTHERCONSTPOINTER>& other_managed_ptr) const;
 
     template <typename U, bool OTHERCONSTPOINTER>
-    inline bool operator < (const ManagedPointerBase<U, OTHERCONSTPOINTER>& other_managed_ptr) const;
+    inline bool
+    operator < (const ManagedPointerBase<U, OTHERCONSTPOINTER>& other_managed_ptr) const;
 
     template <typename U, bool OTHERCONSTPOINTER>
-    inline bool operator <= (const ManagedPointerBase<U, OTHERCONSTPOINTER>& other_managed_ptr) const;
+    inline bool
+    operator <= (const ManagedPointerBase<U, OTHERCONSTPOINTER>& other_managed_ptr) const;
 
     template <typename U, bool OTHERCONSTPOINTER>
-    inline bool operator > (const ManagedPointerBase<U, OTHERCONSTPOINTER>& other_managed_ptr) const;
+    inline bool
+    operator > (const ManagedPointerBase<U, OTHERCONSTPOINTER>& other_managed_ptr) const;
 
     template <typename U, bool OTHERCONSTPOINTER>
-    inline bool operator >= (const ManagedPointerBase<U, OTHERCONSTPOINTER>& other_managed_ptr) const;
+    inline bool
+    operator >= (const ManagedPointerBase<U, OTHERCONSTPOINTER>& other_managed_ptr) const;
 
 
     inline bool operator == (const T* other_pointer) const;

@@ -98,22 +98,6 @@ public:
     }
 };
 
-// manage ref count of a RefCountable pointer or reference
-static inline void inc_ref(const RefCountable* ptr)
-{
-    ptr->inc_ref_();
-}
-
-static inline void dec_ref(const RefCountable* ptr)
-{
-    ptr->dec_ref_();
-}
-
-static inline i64 get_ref_count(const RefCountable* ptr)
-{
-    return ptr->get_ref_count_();
-}
-
 } /* end namespace memory */
 } /* end namespace kinara */
 

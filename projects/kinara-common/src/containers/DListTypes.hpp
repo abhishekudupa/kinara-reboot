@@ -48,8 +48,7 @@
 namespace kinara {
 namespace containers {
 
-template <typename T, typename ConstructFunc, typename DestructFunc, bool USEPOOLS>
-class DListBase;
+template <typename T, bool USEPOOLS> class DListBase;
 
 namespace dlist_detail_ {
 
@@ -61,7 +60,7 @@ struct DListNodeBase
     DListNodeBase* m_prev;
 
     inline DListNodeBase()
-        : m_next(nullptr), m_prev(nullptr)
+        : m_next(this), m_prev(this)
     {
         // Nothing here
     }
@@ -72,13 +71,41 @@ struct DListNodeBase
         // Nothing here
     }
 
+    inline DListNodeBase(const DListNodeBase& other)
+        : DListNodeBase()
+    {
+        if (other.m_next == &other && other.m_prev == &other) {
+            m_next = this;
+            m_prev = this;
+        } else {
+            m_next = other.m_next;
+            m_prev = other.m_prev;
+        }
+    }
+
+    inline DListNodeBase& operator = (const DListNodeBase& other)
+    {
+        if (&other == this) {
+            return *this;
+        }
+
+        if (other.m_next == &other && other.m_prev == &other) {
+            m_next = this;
+            m_prev = this;
+        } else {
+            m_next = other.m_next;
+            m_prev = other.m_prev;
+        }
+        return *this;
+    }
+
     inline ~DListNodeBase()
     {
         // Nothing here
     }
 };
 
-template <typename T, typename ConstructFunc, typename DestructFunc>
+template <typename T>
 struct DListNode : public DListNodeBase
 {
     T m_value;
@@ -91,8 +118,7 @@ struct DListNode : public DListNodeBase
 
     inline ~DListNode()
     {
-        DestructFunc the_destructor;
-        the_destructor(m_value);
+        // Nothing here
     }
 
     template <typename... ArgTypes>
@@ -101,25 +127,24 @@ struct DListNode : public DListNodeBase
         DListNode* node_ptr = static_cast<DListNode*>(mem_ptr);
         node_ptr->m_next = nullptr;
         node_ptr->m_prev = nullptr;
-        ConstructFunc the_constructor;
-        the_constructor(&(node_ptr->m_value), std::forward<ArgTypes>(args)...);
+        new (&(node_ptr->m_value)) T(std::forward<ArgTypes>(args)...);
         return node_ptr;
     }
 };
 
-template <typename T, typename ConstructFunc, typename DestructFunc, bool ISCONST>
+template <typename T, bool ISCONST>
 class IteratorBase
     : public std::iterator<std::bidirectional_iterator_tag, T, i64,
                            typename std::conditional<ISCONST, const T*, T*>::type,
                            typename std::conditional<ISCONST, const T&, T&>::type>
 {
-    friend class DListBase<T, ConstructFunc, DestructFunc, true>;
-    friend class DListBase<T, ConstructFunc, DestructFunc, false>;
-    friend class kc::dlist_detail_::IteratorBase<T, ConstructFunc, DestructFunc, true>;
-    friend class kc::dlist_detail_::IteratorBase<T, ConstructFunc, DestructFunc, false>;
+    friend class DListBase<T, true>;
+    friend class DListBase<T, false>;
+    friend class kc::dlist_detail_::IteratorBase<T, true>;
+    friend class kc::dlist_detail_::IteratorBase<T, false>;
 
 private:
-    typedef DListNode<T, ConstructFunc, DestructFunc> NodeType;
+    typedef DListNode<T> NodeType;
     typedef DListNodeBase NodeBaseType;
     typedef typename std::conditional<ISCONST, const T&, T&>::type ValRefType;
     typedef typename std::conditional<ISCONST, const T*, T*>::type ValPtrType;
@@ -156,8 +181,7 @@ public:
     }
 
     template <bool OISCONST>
-    inline IteratorBase(const kc::dlist_detail_::IteratorBase<T, ConstructFunc,
-                                                              DestructFunc, OISCONST>& other)
+    inline IteratorBase(const kc::dlist_detail_::IteratorBase<T, OISCONST>& other)
         : m_node(other.m_node)
     {
         static_assert(((!OISCONST) || ISCONST),
@@ -181,8 +205,7 @@ public:
 
     template <bool OISCONST>
     inline IteratorBase&
-    operator = (const kc::dlist_detail_::IteratorBase<T, ConstructFunc,
-                                                      DestructFunc, OISCONST>& other)
+    operator = (const kc::dlist_detail_::IteratorBase<T, OISCONST>& other)
     {
         if (&other == this) {
             return *this;
@@ -230,26 +253,24 @@ public:
 
     template <bool OISCONST>
     inline bool
-    operator == (const kc::dlist_detail_::IteratorBase<T, ConstructFunc,
-                                                       DestructFunc, OISCONST>& other) const
+    operator == (const kc::dlist_detail_::IteratorBase<T, OISCONST>& other) const
     {
         return (m_node == other.m_node);
     }
 
     template <bool OISCONST>
     inline bool
-    operator != (const kc::dlist_detail_::IteratorBase<T, ConstructFunc,
-                                                       DestructFunc, OISCONST>& other) const
+    operator != (const kc::dlist_detail_::IteratorBase<T, OISCONST>& other) const
     {
         return (m_node != other.m_node);
     }
 };
 
-template <typename T, typename ConstructFunc, typename DestructFunc>
-using Iterator = IteratorBase<T, ConstructFunc, DestructFunc, false>;
+template <typename T>
+using Iterator = IteratorBase<T, false>;
 
-template <typename T, typename ConstructFunc, typename DestructFunc>
-using ConstIterator = IteratorBase<T, ConstructFunc, DestructFunc, true>;
+template <typename T>
+using ConstIterator = IteratorBase<T, true>;
 
 } /* end namespace dlist_detail_ */
 } /* end namespace containers */

@@ -51,9 +51,9 @@ namespace containers {
 namespace ka = kinara::allocators;
 namespace kc = kinara::containers;
 
-template <typename T, typename ConstructFunc, typename DestructFunc>
+template <typename T>
 class DequeBase final :
-        protected deque_detail_::DequeInternal<T, ConstructFunc, DestructFunc>
+        protected deque_detail_::DequeInternal<T>
 {
 public:
     typedef T ValueType;
@@ -61,12 +61,12 @@ public:
     typedef T& RefType;
     typedef const T* ConstPtrType;
     typedef const T& ConstRefType;
-    typedef deque_detail_::DequeInternal<T, ConstructFunc, DestructFunc> BaseType;
+    typedef deque_detail_::DequeInternal<T> BaseType;
 
     // iterators
-    typedef deque_detail_::IteratorBase<T, ConstructFunc, DestructFunc, false> Iterator;
+    typedef deque_detail_::IteratorBase<T, false> Iterator;
     typedef Iterator iterator;
-    typedef deque_detail_::IteratorBase<T, ConstructFunc, DestructFunc, true> ConstIterator;
+    typedef deque_detail_::IteratorBase<T, true> ConstIterator;
     typedef ConstIterator const_iterator;
     typedef std::reverse_iterator<iterator> ReverseIterator;
     typedef ReverseIterator reverse_iterator;
@@ -74,20 +74,29 @@ public:
     typedef ConstReverseIterator const_reverse_iterator;
 
 private:
-    inline void call_destructors()
+    inline void destroy_range()
     {
-        DestructFunc the_destructor;
-        for (auto it = this->m_start; it != this->m_finish; ++it) {
-            the_destructor(*it);
+        destroy_range(this->m_start, this->m_finish);
+    }
+
+    inline void destroy_range(const Iterator& first, const Iterator& last,
+                              std::true_type is_trivial_value)
+    {
+        for (auto it = first; it != last; ++it) {
+            new (&(*it)) ValueType();
         }
+    }
+
+    inline void destroy_range(const Iterator& first, const Iterator& last,
+                              std::false_type is_trivial_value)
+    {
+        return;
     }
 
     inline void destroy_range(const Iterator& first, const Iterator& last)
     {
-        DestructFunc the_destructor;
-        for (auto it = first; it != last; ++it) {
-            the_destructor(*it);
-        }
+        typename std::is_trivially_destructible<T>::type is_trivial_value;
+        destroy_range(first, last, is_trivial_value);
     }
 
     // assumes that the object isn't constructed yet
@@ -108,11 +117,7 @@ private:
                                 std::forward_iterator_tag unused)
     {
         this->initialize(std::distance(first, last));
-        u64 i = 0;
-        ConstructFunc the_construct_func;
-        for (auto it = first; it != last; ++it, ++i) {
-            the_construct_func(&((*this)[i]), *it);
-        }
+        std::copy(first, last, begin());
     }
 
     template <typename InputIterator>
@@ -120,7 +125,6 @@ private:
                              const InputIterator& last,
                              std::input_iterator_tag unused)
     {
-        call_destructors();
         this->reset();
 
         for (auto it = first; it != last; ++it) {
@@ -166,12 +170,8 @@ private:
     {
         auto num_elems = std::distance(first, last);
         auto actual_position = this->make_hole_at_position(position, num_elems);
-        ConstructFunc the_constructor;
-        for (auto it = first; it != last; ++it) {
-            the_constructor(&(*actual_position), *it);
-            ++actual_position;
-        }
-        return (actual_position - num_elems);
+        std::copy(first, last, actual_position);
+        return actual_position;
     }
 
 public:
@@ -243,7 +243,7 @@ public:
 
     ~DequeBase()
     {
-        call_destructors();
+        // Nothing here
     }
 
     inline DequeBase& operator = (const DequeBase& other)
@@ -355,11 +355,7 @@ public:
         } else {
             auto num_elems_to_add = new_size - orig_size;
             this->expand_towards_back(num_elems_to_add);
-            // construct
-            ConstructFunc the_constructor;
-            for (u64 i = 0; i < num_elems_to_add; ++i) {
-                the_constructor(&((*this)[orig_size + i]), value);
-            }
+            std::fill_n(begin() + orig_size, new_size - orig_size, value);
         }
     }
 
@@ -421,64 +417,51 @@ public:
     void push_back(const ValueType& value)
     {
         this->expand_towards_back();
-        ConstructFunc the_constructor;
-        the_constructor(&(*(this->m_finish - 1)), value);
+        *(this->m_finish - 1) = value;
     }
 
     void push_back(ValueType&& value)
     {
         this->expand_towards_back();
-        ConstructFunc the_constructor;
-        the_constructor(&(*(this->m_finish - 1)), std::move(value));
+        *(this->m_finish - 1) = std::move(value);
     }
 
     void push_front(const ValueType& value)
     {
         this->expand_towards_front();
-        ConstructFunc the_constructor;
-        the_constructor(&(*(this->m_start)), value);
+        *(this->m_start) = value;
     }
 
     void push_front(ValueType&& value)
     {
         this->expand_towards_front();
-        ConstructFunc the_constructor;
-        the_constructor(&(*(this->m_start)), std::move(value));
+        *(this->m_start) = std::move(value);
     }
 
     void pop_front()
     {
-        DestructFunc the_destructor;
-        the_destructor(*(this->m_start));
         ++(this->m_start);
         this->compact();
     }
 
     void pop_back()
     {
-        DestructFunc the_destructor;
         --(this->m_finish);
-        the_destructor(*(this->m_finish));
         this->compact();
     }
 
     Iterator insert(const ConstIterator& position, const ValueType& value)
     {
         auto hole_position = this->make_hole_at_position(position, 1);
-        ConstructFunc the_constructor;
-        the_constructor(&(*hole_position), value);
+        *hole_position = value;
         return hole_position;
     }
 
     Iterator insert(const ConstIterator& position, u64 n, const ValueType& value)
     {
         auto hole_position = this->make_hole_at_position(position, n);
-        ConstructFunc the_constructor;
-        for (u64 i = 0; i < n; ++i) {
-            the_constructor(&(*hole_position), value);
-            ++hole_position;
-        }
-        return (hole_position - n);
+        std::fill_n(hole_position, n, value);
+        return hole_position;
     }
 
     template <typename InputIterator>
@@ -502,18 +485,10 @@ public:
 
     Iterator erase(const ConstIterator& position)
     {
-        DestructFunc the_destructor;
-        the_destructor(*position);
-        auto offset_from_start = position - this->m_start;
-        auto offset_from_finish = this->m_finish - position;
-        if (offset_from_start < offset_from_finish) {
-            this->move_objects(this->m_start + 1, this->m_start, offset_from_start);
-            ++(this->m_start);
-        } else {
-            this->move_objects(this->m_finish - 1, this->m_finish, offset_from_finish - 1);
-            --(this->m_finish);
+        if (position == this->m_finish) {
+            return;
         }
-        return (this->m_start + offset_from_start);
+        return erase(position, position + 1);
     }
 
     Iterator erase(const ConstIterator& first, const ConstIterator& last)
@@ -550,8 +525,7 @@ public:
     inline void emplace(const ConstIterator& position, ArgTypes&&... args)
     {
         auto hole_position = this->make_hole_at_position(position, 1);
-        ConstructFunc the_constructor;
-        the_constructor(&(*hole_position), std::forward<ArgTypes>(args)...);
+        new (&(*hole_position)) T(std::forward<ArgTypes>(args)...);
         return hole_position;
     }
 
@@ -559,16 +533,14 @@ public:
     inline void emplace_front(ArgTypes&&... args)
     {
         this->expand_towards_front();
-        ConstructFunc the_constructor;
-        the_constructor(&(*(this->m_start)), std::forward<ArgTypes>(args)...);
+        new (&(*(this->m_start))) T(std::forward<ArgTypes>(args)...);
     }
 
     template <typename... ArgTypes>
     inline void emplace_back(ArgTypes&&... args)
     {
         this->expand_towards_back();
-        ConstructFunc the_constructor;
-        the_constructor(&(*(this->m_finish - 1)), std::forward<ArgTypes>(args)...);
+        new (&(*(this->m_finish - 1))) T(std::forward<ArgTypes>(args)...);
     }
 
     // functions not part of standard stl
@@ -612,24 +584,24 @@ public:
 namespace deque_detail_ {
 
 // compare function for deques
-template <typename T, typename CF1, typename DF1,
-          typename CF2, typename DF2>
-inline i32 compare(const DequeBase<T, CF1, DF1>& deque1,
-                   const DequeBase<T, CF2, DF2>& deque2)
+template <typename T, typename BinaryPredicate>
+inline i32 compare(const DequeBase<T>& deque1,
+                   const DequeBase<T>& deque2,
+                   BinaryPredicate predicate)
 {
     auto diff = deque1.size() - deque2.size();
     if (diff != 0) {
         return diff;
     }
+
     auto it1 = deque1.begin();
     auto it2 = deque2.begin();
     auto end1 = deque1.end();
     auto end2 = deque2.end();
-    std::less<T> less_func;
     while (it1 != end1 && it2 != end2) {
-        if (less_func(*it1, *it2)) {
+        if (predicate(*it1, *it2)) {
             return -1;
-        } else if (less_func(*it2, *it1)) {
+        } else if (predicate(*it2, *it1)) {
             return 1;
         }
         ++it1;
@@ -638,66 +610,75 @@ inline i32 compare(const DequeBase<T, CF1, DF1>& deque1,
     return 0;
 }
 
+template <typename T>
+inline i32 compare(const DequeBase<T>& deque1,
+                   const DequeBase<T>& deque2)
+{
+    return compare(deque1, deque2, std::less<T>());
+}
+
 } /* end namespace deque_detail_ */
 
-template <typename T, typename CF1, typename DF1,
-          typename CF2, typename DF2>
-static inline bool operator == (const DequeBase<T, CF1, DF1>& deque1,
-                                const DequeBase<T, CF2, DF2>& deque2)
+template <typename T>
+static inline bool operator == (const DequeBase<T>& deque1,
+                                const DequeBase<T>& deque2)
 {
-    return (compare(deque1, deque2) == 0);
+    return (deque_detail_::compare(deque1, deque2) == 0);
 }
 
-template <typename T, typename CF1, typename DF1,
-          typename CF2, typename DF2>
-static inline bool operator != (const DequeBase<T, CF1, DF1>& deque1,
-                                const DequeBase<T, CF2, DF2>& deque2)
+template <typename T>
+static inline bool operator != (const DequeBase<T>& deque1,
+                                const DequeBase<T>& deque2)
 {
-    return (compare(deque1, deque2) != 0);
+    return (deque_detail_::compare(deque1, deque2) != 0);
 }
 
-template <typename T, typename CF1, typename DF1,
-          typename CF2, typename DF2>
-static inline bool operator < (const DequeBase<T, CF1, DF1>& deque1,
-                               const DequeBase<T, CF2, DF2>& deque2)
+template <typename T>
+static inline bool operator < (const DequeBase<T>& deque1,
+                               const DequeBase<T>& deque2)
 {
-    return (compare(deque1, deque2) < 0);
+    return (deque_detail_::compare(deque1, deque2) < 0);
+}
+template <typename T>
+static inline bool operator > (const DequeBase<T>& deque1,
+                               const DequeBase<T>& deque2)
+{
+    return (deque_detail_::compare(deque1, deque2) > 0);
+}
+template <typename T>
+static inline bool operator <= (const DequeBase<T>& deque1,
+                                const DequeBase<T>& deque2)
+{
+    return (deque_detail_::compare(deque1, deque2) <= 0);
+}
+template <typename T>
+static inline bool operator >= (const DequeBase<T>& deque1,
+                                const DequeBase<T>& deque2)
+{
+    return (deque_detail_::compare(deque1, deque2) >= 0);
 }
 
-template <typename T, typename CF1, typename DF1,
-          typename CF2, typename DF2>
-static inline bool operator > (const DequeBase<T, CF1, DF1>& deque1,
-                               const DequeBase<T, CF2, DF2>& deque2)
-{
-    return (compare(deque1, deque2) > 0);
-}
-
-template <typename T, typename CF1, typename DF1,
-          typename CF2, typename DF2>
-static inline bool operator <= (const DequeBase<T, CF1, DF1>& deque1,
-                                const DequeBase<T, CF2, DF2>& deque2)
-{
-    return (compare(deque1, deque2) <= 0);
-}
-
-template <typename T, typename CF1, typename DF1,
-          typename CF2, typename DF2>
-static inline bool operator >= (const DequeBase<T, CF1, DF1>& deque1,
-                                const DequeBase<T, CF2, DF2>& deque2)
-{
-    return (compare(deque1, deque2) >= 0);
-}
 
 // Some useful typedefs
-template <typename T,
-          typename ConstructFunc = DefaultConstructFunc<T>,
-          typename DestructFunc = DefaultDestructFunc<T>>
-using Deque = DequeBase<T, ConstructFunc, DestructFunc>;
+template <typename T>
+using Deque = DequeBase<T>;
 
-template <typename T,
-          typename ConstructFunc = DefaultConstructFunc<T*>,
-          typename DestructFunc = DefaultConstructFunc<T*>>
-using PtrDeque = DequeBase<T*, ConstructFunc, DestructFunc>;
+template <typename T>
+using PtrDeque = DequeBase<T*>;
+
+template <typename T>
+using ConstPtrDeque = DequeBase<const T*>;
+
+template <typename T>
+using MPtrDeque =
+    DequeBase<typename std::conditional<std::is_base_of<memory::RefCountable, T>::value,
+                                        memory::ManagedPointer<T>, T*>::type>;
+
+template <typename T>
+using ConstMPtrDeque =
+    DequeBase<typename std::conditional<std::is_base_of<memory::RefCountable, T>::value,
+                                        memory::ManagedConstPointer<T>,
+                                        const T*>::type>;
 
 typedef Deque<u08> u08Deque;
 typedef Deque<u16> u16Deque;

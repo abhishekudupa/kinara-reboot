@@ -61,9 +61,7 @@ namespace containers {
 namespace ka = kinara::allocators;
 namespace kc = kinara::containers;
 
-template <typename T, typename IncrementFunc,
-          u32 MAXSLACK, typename ConstructFunc,
-          typename DestructFunc>
+template <typename T>
 class VectorBase final
 {
 public:
@@ -112,6 +110,14 @@ private:
         ++(*((static_cast<u64*>(static_cast<void*>(m_data))) - 1));
     }
 
+    inline void decrement_size()
+    {
+        if (m_data == nullptr) {
+            return;
+        }
+        --(*((static_cast<u64*>(static_cast<void*>(m_data))) - 1));
+    }
+
     inline u64 get_capacity() const
     {
         if (m_data == nullptr) {
@@ -137,19 +143,29 @@ private:
                  sizeof(T)) + sc_array_overhead);
     }
 
-    inline void call_destructors() const
+    inline T* allocate_data(u64 num_elements, std::true_type is_trivial_value)
     {
-        DestructFunc the_destruct_func;
-        for (u64 i = 0, size = get_size(); i < size; ++i) {
-            the_destruct_func(m_data[i]);
+        auto retval =
+            ka::casted_allocate_raw_cleared<T>(sizeof(T) * num_elements + sc_array_overhead);
+        auto retval_as_ptr_to_u64 = static_cast<u64*>(static_cast<void*>(retval));
+        return static_cast<T*>(static_cast<void*>(retval_as_ptr_to_u64 + sc_array_overhead));
+    }
+
+    inline T* allocate_data(u64 num_elements, std::false_type is_trivial_value)
+    {
+        auto buffer = ka::casted_allocate_raw<T>(sizeof(T) * num_elements + sc_array_overhead);
+        auto buffer_as_ptr_to_u64 = static_cast<u64*>(static_cast<void*>(buffer));
+        auto retval = static_cast<T*>(static_cast<void*>(buffer_as_ptr_to_u64 + sc_array_overhead));
+        for (auto cur_ptr = retval, last = retval + num_elements; cur_ptr != last; ++cur_ptr) {
+            new (cur_ptr) T();
         }
+        return retval;
     }
 
     inline T* allocate_data(u64 num_elements)
     {
-        auto retval = ka::casted_allocate_raw<T>(sizeof(T) * num_elements + sc_array_overhead);
-        auto retval_as_ptr_to_u64 = static_cast<u64*>(static_cast<void*>(retval));
-        return static_cast<T*>(static_cast<void*>(retval_as_ptr_to_u64 + 2));
+        typename std::has_trivial_default_constructor<T>::type is_trivial_value;
+        return allocate_data(num_elements, is_trivial_value);
     }
 
     inline void deallocate_data()
@@ -158,31 +174,34 @@ private:
             return;
         }
         ka::deallocate_raw(get_array_ptr(), get_array_size());
+        m_data = nullptr;
     }
 
-    inline void copy_core(T* dst_ptr, const T* src_start, const T* src_end)
+    inline void destroy_range(T* first, T* last, std::true_type is_trivial_value)
     {
-        auto num_elems = std::distance(src_start, src_end);
-        memcpy(dst_ptr, src_start, sizeof(T) * num_elems);
+        return;
     }
 
-    template <typename InputIterator>
-    inline void construct_core(T* dst_ptr, const InputIterator& first, const InputIterator& last)
+    inline void destroy_range(T* first, T* last, std::false_type is_trivial_value)
     {
-        ConstructFunc the_construct_func;
-        InputIterator it = first;
-        for (auto cur_ptr = dst_ptr; it != last; ++cur_ptr, ++it) {
-            the_construct_func(cur_ptr, *it);
+        for (auto cur_ptr = first; cur_ptr != last; ++cur_ptr) {
+            cur_ptr->~ValueType();
         }
     }
 
-    inline void construct_core(T* dst_ptr, u64 n, const ValueType& value)
+    inline void destroy_range(T* first, T* last)
     {
-        ConstructFunc the_construct_func;
-        u64 i = 0;
-        for (auto cur_ptr = dst_ptr; i < n; ++i, ++cur_ptr) {
-            the_construct_func(cur_ptr, value);
+        typename std::is_trivially_destructible<T>::type is_trivial_value;
+        destroy_range(first, last, is_trivial_value);
+    }
+
+
+    inline void destroy_range()
+    {
+        if (m_data == nullptr) {
+            return;
         }
+        destroy_range(m_data, m_data + get_size());
     }
 
     inline void* get_array_ptr() const
@@ -193,105 +212,95 @@ private:
     // expand to accommodate one more element
     inline void expand()
     {
-        auto capacity = get_capacity();
-        auto size = get_size();
+        auto old_capacity = get_capacity();
+        auto old_size = get_size();
 
-        if (capacity > size) {
+        if (old_capacity > old_size) {
             return;
         }
 
-        IncrementFunc increment_fun;
-        auto new_capacity = increment_fun(capacity);
-
-        auto array_size = get_array_size();
-        auto new_data = allocate_data(new_capacity);
-
-        if (m_data != nullptr) {
-            memcpy(new_data, m_data, size * sizeof(T));
-            ka::deallocate_raw(get_array_ptr(), array_size);
-        }
-
-        m_data = new_data;
-        set_size(size);
-        set_capacity(new_capacity);
+        // need to resize
+        auto new_capacity = (old_capacity * 3) / 2;
+        expand(new_capacity);
     }
 
     inline void expand(u64 new_capacity)
     {
-        auto capacity = get_capacity();
-        auto size = get_size();
+        auto old_capacity = get_capacity();
+        auto old_size = get_size();
 
-        if (capacity >= new_capacity) {
+        if (old_capacity >= new_capacity) {
             return;
         }
-
-        auto array_size = get_array_size();
 
         // need to reallocate
         auto new_data = allocate_data(new_capacity);
 
         if (m_data != nullptr) {
-            memcpy(new_data, m_data, size * sizeof(T));
-            ka::deallocate_raw(get_array_ptr(), array_size);
+            std::move(m_data, m_data + old_size, new_data);
+            destroy_range();
+            deallocate_data();
         }
 
         m_data = new_data;
-        set_size(size);
+        set_size(old_size);
         set_capacity(new_capacity);
     }
 
-    inline Iterator expand_with_hole(u64 hole_size,
-                                     const ConstIterator& hole_position)
+    inline T* expand_with_hole(u64 hole_size,
+                               T* hole_position)
     {
-        auto capacity = get_capacity();
-        auto array_size = get_array_size();
-        auto size = get_size();
-        auto new_capacity = size + hole_size;
-        Iterator retval = const_cast<T*>(hole_position);
+        auto old_capacity = get_capacity();
+        auto old_size = get_size();
 
-        if (capacity >= new_capacity) {
+        auto new_capacity = old_size + hole_size;
+        Iterator retval = hole_position;
+
+        if (old_capacity >= new_capacity) {
             // punch a hole and return
-            memmove(const_cast<T*>(hole_position) + hole_size, hole_position,
-                    std::distance(hole_position, cend()));
+            std::move_backward(hole_position, m_data + old_size, hole_position + hole_size);
             return retval;
         }
+
         // reallocate
         auto new_data = allocate_data(new_capacity);
-        auto offset_from_begin = std::distance(cbegin(), hole_position);
+        auto offset_from_begin = hole_position - m_data;
         retval = new_data + offset_from_begin;
 
         if (m_data != nullptr) {
-            memcpy(new_data, m_data, sizeof(T) * offset_from_begin);
-            memcpy(new_data + offset_from_begin + hole_size,
-                   m_data + offset_from_begin,
-                   sizeof(T) * (size - offset_from_begin));
-            ka::deallocate_raw(get_array_ptr(), array_size);
+            std::move(m_data, m_data + offset_from_begin, new_data);
+            std::move(m_data + offset_from_begin, m_data + old_size,
+                      new_data + offset_from_begin + hole_size);
+            destroy_range();
+            deallocate_data();
         }
 
         m_data = new_data;
-
         set_capacity(new_capacity);
-        set_size(size);
+        set_size(old_size);
+
         return retval;
     }
 
-    inline void compact(u64 allowed_slack = MAXSLACK)
+    inline void compact(bool strict = false)
     {
-        auto array_size = get_array_size();
-        auto capacity = get_capacity();
-        auto size = get_size();
-        if (capacity <= size * allowed_slack) {
+        auto orig_capacity = get_capacity();
+        auto orig_size = get_size();
+
+        if (!strict && orig_capacity <= (4 * orig_size) / 3) {
             return;
         }
 
         // reallocate the buffer
-        auto new_data = allocate_data(size);
-        memcpy(new_data, m_data, sizeof(T) * size);
-        ka::deallocate_raw(get_array_ptr(), array_size);
+        auto new_data = allocate_data(orig_size);
+
+        std::move(m_data, m_data + orig_size, new_data);
+        destroy_range();
+        deallocate_data();
 
         m_data = new_data;
-        set_size(size);
-        set_capacity(size);
+        set_size(orig_size);
+        set_capacity(orig_size);
     }
 
     template <typename ForwardIterator>
@@ -301,8 +310,8 @@ private:
                              std::forward_iterator_tag unused)
     {
         auto num_elements = std::distance(first, last);
-        auto actual_pos = expand_with_hole(num_elements, position);
-        construct_core(actual_pos, first, last);
+        auto actual_pos = expand_with_hole(num_elements, const_cast<T*>(position));
+        std::copy(first, last, actual_pos);
         set_size(get_size() + num_elements);
         return;
     }
@@ -324,15 +333,17 @@ private:
     inline void assign_range(const ForwardIterator& first, const ForwardIterator& last,
                              std::forward_iterator_tag unused)
     {
-        call_destructors();
+        destroy_range();
+
         auto new_size = (u64)std::distance(first, last);
+        auto old_capacity = get_capacity();
 
         if (new_size == 0) {
             deallocate_data();
             return;
         }
 
-        if (new_size > get_capacity()) {
+        if (new_size > old_capacity || old_capacity > ((4 * new_size) / 3)) {
             deallocate_data();
             m_data = allocate_data(new_size);
             set_size(new_size);
@@ -341,15 +352,15 @@ private:
             set_size(new_size);
         }
 
-        construct_core(m_data, first, last);
-        compact();
+        std::copy(first, last, m_data);
     }
 
     template <typename InputIterator>
     inline void assign_range(const InputIterator& first, const InputIterator& last,
                              std::input_iterator_tag unused)
     {
-        call_destructors();
+        destroy_range();
+
         if (first == last) {
             deallocate_data();
             return;
@@ -358,7 +369,7 @@ private:
         for (auto it = first; it != last; ++it) {
             this->push_back(*it);
         }
-        compact();
+
         return;
     }
 
@@ -373,8 +384,10 @@ public:
 
     void assign(u64 n, const ValueType& value)
     {
-        call_destructors();
-        if (n > get_capacity()) {
+        auto old_capacity = get_capacity();
+        destroy_range();
+
+        if (n > old_capacity || old_capacity > ((4 * n) / 3)) {
             deallocate_data();
             m_data = allocate_data(n);
             set_size(n);
@@ -382,8 +395,8 @@ public:
         } else {
             set_size(n);
         }
-        construct_core(m_data, n, value);
-        compact();
+
+        std::fill_n(m_data, n, value);
     }
 
     void assign(std::initializer_list<ValueType> init_list)
@@ -416,10 +429,6 @@ public:
     VectorBase(const InputIterator& first, const InputIterator& last)
         : m_data(nullptr)
     {
-        auto size = distance(first, last);
-        if (size == 0) {
-            return;
-        }
         assign(first, last);
     }
 
@@ -455,9 +464,8 @@ public:
         if (m_data == nullptr) {
             return;
         }
-        call_destructors();
+        destroy_range();
         deallocate_data();
-        m_data = nullptr;
     }
 
     // The default assignment operator
@@ -476,15 +484,14 @@ public:
         if (&other == this) {
             return *this;
         }
-        call_destructors();
-        m_data = nullptr;
+
         std::swap(other.m_data, m_data);
         return *this;
     }
 
     VectorBase& operator = (std::initializer_list<ValueType> init_list)
     {
-        assign(std::move(init_list));
+        assign(init_list.begin(), init_list.end());
         return *this;
     }
 
@@ -562,17 +569,13 @@ public:
     {
         auto old_size = get_size();
         if (new_size < old_size) {
-            DestructFunc the_destruct_func;
-            for (u64 i = new_size; i < old_size; ++i) {
-                the_destruct_func(m_data[i]);
-            }
             set_size(new_size);
             compact();
         } else if (new_size > old_size) {
             if (new_size > get_capacity()) {
                 expand(new_size);
             }
-            construct_core(begin() + old_size, (new_size - old_size), value);
+            std::fill_n(begin() + old_size, (new_size - old_size), value);
         }
         return;
     }
@@ -600,7 +603,7 @@ public:
 
     void shrink_to_fit()
     {
-        compact(1);
+        compact(true);
     }
 
     RefType operator [] (u64 index)
@@ -656,16 +659,14 @@ public:
     void push_back(const ValueType& value)
     {
         expand();
-        ConstructFunc the_construct_func;
-        the_construct_func(&(m_data[get_size()]), value);
+        m_data[get_size()] = value;
         increment_size();
     }
 
     void push_back(ValueType&& value)
     {
         expand();
-        ConstructFunc the_construct_func;
-        the_construct_func(&(m_data[get_size()]), std::move(value));
+        m_data[get_size()] = std::move(value);
         increment_size();
     }
 
@@ -681,9 +682,7 @@ public:
 
     void pop_back()
     {
-        DestructFunc the_destruct_func;
-        the_destruct_func(m_data[get_size() - 1]);
-        set_size(get_size() - 1);
+        decrement_size();
     }
 
     void pop_front()
@@ -694,8 +693,7 @@ public:
     Iterator insert(const ConstIterator& position, const ValueType& value)
     {
         auto actual_pos = expand_with_hole(1, position);
-        ConstructFunc the_construct_func;
-        the_construct_func(actual_pos, value);
+        *actual_pos = value;
         increment_size();
         return actual_pos;
     }
@@ -703,8 +701,7 @@ public:
     Iterator insert(const ConstIterator& position, u64 n, const ValueType& value)
     {
         auto actual_pos = expand_with_hole(n, position);
-        ConstructFunc the_construct_func;
-        construct_core(actual_pos, n, value);
+        std::fill_n(actual_pos, n, value);
         set_size(get_size() + n);
         return actual_pos;
     }
@@ -723,9 +720,8 @@ public:
     Iterator insert(const ConstIterator& position, ValueType&& value)
     {
         auto actual_pos = expand_with_hole(1, position);
-        ConstructFunc the_construct_func;
-        the_construct_func(actual_pos, std::move(value));
-        set_size(get_size() + 1);
+        *actual_pos = std::move(value);
+        increment_size();
         return actual_pos;
     }
 
@@ -733,36 +729,51 @@ public:
     {
         auto num_elements = il.size();
         auto actual_pos = expand_with_hole(num_elements, position);
-        construct_core(actual_pos, il.begin(), il.end());
+        std::copy(il.begin(), il.end(), actual_pos);
         set_size(get_size() + num_elements);
         return actual_pos;
     }
 
     Iterator erase(const ConstIterator& position)
     {
-        DestructFunc the_destruct_func;
-        the_destruct_func(*position);
-
-        memmove(const_cast<ValueType*>(position),
-                position + 1, sizeof(T) * std::distance(position + 1, cend()));
-
-        set_size(get_size() - 1);
-        compact();
-        return (const_cast<T*>(position));
+        if (position == cend()) {
+            return const_cast<T*>(position);
+        }
+        return erase(position, position + 1);
     }
 
     Iterator erase(const ConstIterator& first, const ConstIterator& last)
     {
-        auto num_deleted_elements = std::distance(first, last);
-        DestructFunc the_destruct_func;
-        for (auto it = first; it != last; ++it) {
-            the_destruct_func(*it);
+        if (first == last) {
+            return const_cast<T*>(first);
         }
-        memmove(first, first + num_deleted_elements,
-                sizeof(T) * std::distance(first + num_deleted_elements, cend()));
-        set_size(get_size() - num_deleted_elements);
-        compact();
-        return (const_cast<T*>(first));
+        auto num_to_delete = std::distance(first, last);
+        auto orig_size = get_size();
+        auto orig_capacity = get_capacity();
+        auto new_size = orig_size - num_to_delete;
+        auto offset_from_begin = first - begin();
+
+        if (new_size <= ((4 * orig_capacity) / 3)) {
+            std::move(const_cast<T*>(last),
+                      m_data + orig_size,
+                      m_data + offset_from_begin);
+
+            std::fill(m_data + new_size, m_data + orig_size, ValueType());
+        } else {
+            auto new_data = allocate_data(new_size);
+            std::move(m_data, m_data + offset_from_begin, new_data);
+            std::move(const_cast<T*>(last),
+                      m_data + orig_size,
+                      new_data + offset_from_begin);
+
+            destroy_range();
+            deallocate_data();
+
+            m_data = new_data;
+            set_capacity(new_size);
+        }
+        set_size(new_size);
+        return (m_data + offset_from_begin);
     }
 
     void swap(const VectorBase& other)
@@ -772,7 +783,7 @@ public:
 
     void clear()
     {
-        call_destructors();
+        destroy_range();
         reset();
     }
 
@@ -780,7 +791,6 @@ public:
     void reset()
     {
         deallocate_data();
-        m_data = nullptr;
     }
 
     template <typename... ArgTypes>
@@ -810,9 +820,34 @@ public:
 
     ConstIterator find(const ValueType& value) const
     {
-        typedef kc::VectorBase<T, IncrementFunc, MAXSLACK, ConstructFunc, DestructFunc> MyType;
-        auto non_const_this = const_cast<MyType*>(this);
-        return const_cast<const T*>(non_const_this->find(value));
+        for (auto it = begin(), last = end(); it != last; ++it) {
+            if ((*it) == value) {
+                return it;
+            }
+        }
+        return end();
+    }
+
+    template <typename UnaryPredicate>
+    Iterator find(UnaryPredicate predicate)
+    {
+        for (auto it = begin(), last = end(); it != last; ++it) {
+            if (predicate(*it)) {
+                return it;
+            }
+        }
+        return end();
+    }
+
+    template <typename UnaryPredicate>
+    ConstIterator find(UnaryPredicate predicate) const
+    {
+        for (auto it = begin(), last = end(); it != last; ++it) {
+            if (predicate(*it)) {
+                return it;
+            }
+        }
+        return end();
     }
 
     void sort()
@@ -841,126 +876,103 @@ public:
         auto right_mover = begin();
         auto left_mover = end() - 1;
 
-        T temp_object;
-
         std::less<T*> less_func;
 
         while (less_func(right_mover, left_mover)) {
-            memcpy(&temp_object, right_mover, sizeof(T));
-            memcpy(right_mover, left_mover, sizeof(T));
-            memcpy(left_mover, &temp_object, sizeof(T));
+            std::swap(*right_mover, *left_mover);
             ++right_mover;
             --left_mover;
         }
     }
+
+    template <typename BinaryPredicate>
+    inline i64 compare(const VectorBase& other,
+                       BinaryPredicate predicate) const
+    {
+        auto diff = size() - other.size();
+        if (diff != 0) {
+            return diff;
+        }
+        for (u64 i = 0, last = size(); i < last; ++i) {
+            if (predicate((*this)[i], other[i])) {
+                return -1;
+            } else if (predicate(other[i], (*this)[i])) {
+                return 1;
+            }
+        }
+        return 0;
+    }
+
+    inline i64 compare(const VectorBase& other) const
+    {
+        return compare(other, std::less<T>());
+    }
 };
 
-// overload of relational operators for vector
-
-namespace detail {
-template <typename T, typename Inc1, typename Inc2,
-          u32 MS1, u32 MS2, typename CF1, typename CF2,
-          typename DF1, typename DF2>
-static inline i64 compare(const VectorBase<T, Inc1, MS1, CF1, DF1>& vector_1,
-                          const VectorBase<T, Inc2, MS2, CF2, DF2>& vector_2)
+template <typename T>
+static inline bool operator == (const VectorBase<T>& vector_1,
+                                const VectorBase<T>& vector_2)
 {
-    auto diff = vector_1.size() - vector_2.size();
-    if (diff != 0) {
-        return diff;
-    }
-    auto size = vector_1.size();
-    std::less<T> less_func;
-    for (u64 i = 0; i < size; ++i) {
-        if (less_func(vector_1[i], vector_2[i])) {
-            return -1;
-        } else if (less_func(vector_2[i], vector_1[i])) {
-            return 1;
-        }
-    }
-    return 0;
+    return (vector_1.compare(vector_2) == 0);
 }
 
-} /* end namespace detail */
-
-template <typename T, typename Inc1, typename Inc2,
-          u32 MS1, u32 MS2, typename CF1, typename CF2,
-          typename DF1, typename DF2>
-static inline bool operator == (const VectorBase<T, Inc1, MS1, CF1, DF1>& vector_1,
-                                const VectorBase<T, Inc2, MS2, CF2, DF2>& vector_2)
+template <typename T>
+static inline bool operator != (const VectorBase<T>& vector_1,
+                                const VectorBase<T>& vector_2)
 {
-    return (detail::compare(vector_1, vector_2) == 0);
+    return (vector_1.compare(vector_2) != 0);
 }
 
-template <typename T, typename Inc1, typename Inc2,
-          u32 MS1, u32 MS2, typename CF1, typename CF2,
-          typename DF1, typename DF2>
-static inline bool operator != (const VectorBase<T, Inc1, MS1, CF1, DF1>& vector_1,
-                                const VectorBase<T, Inc2, MS2, CF2, DF2>& vector_2)
+template <typename T>
+static inline bool operator < (const VectorBase<T>& vector_1,
+                               const VectorBase<T>& vector_2)
 {
-    return (detail::compare(vector_1, vector_2) != 0);
+    return (vector_1.compare(vector_2) < 0);
 }
 
-template <typename T, typename Inc1, typename Inc2,
-          u32 MS1, u32 MS2, typename CF1, typename CF2,
-          typename DF1, typename DF2>
-static inline bool operator < (const VectorBase<T, Inc1, MS1, CF1, DF1>& vector_1,
-                                const VectorBase<T, Inc2, MS2, CF2, DF2>& vector_2)
+template <typename T>
+static inline bool operator > (const VectorBase<T>& vector_1,
+                               const VectorBase<T>& vector_2)
 {
-    return (detail::compare(vector_1, vector_2) < 0);
+    return (vector_1.compare(vector_2) > 0);
 }
 
-template <typename T, typename Inc1, typename Inc2,
-          u32 MS1, u32 MS2, typename CF1, typename CF2,
-          typename DF1, typename DF2>
-static inline bool operator <= (const VectorBase<T, Inc1, MS1, CF1, DF1>& vector_1,
-                                const VectorBase<T, Inc2, MS2, CF2, DF2>& vector_2)
+template <typename T>
+static inline bool operator <= (const VectorBase<T>& vector_1,
+                                const VectorBase<T>& vector_2)
 {
-    return (detail::compare(vector_1, vector_2) <= 0);
+    return (vector_1.compare(vector_2) <= 0);
 }
 
-template <typename T, typename Inc1, typename Inc2,
-          u32 MS1, u32 MS2, typename CF1, typename CF2,
-          typename DF1, typename DF2>
-static inline bool operator > (const VectorBase<T, Inc1, MS1, CF1, DF1>& vector_1,
-                                const VectorBase<T, Inc2, MS2, CF2, DF2>& vector_2)
+template <typename T>
+static inline bool operator >= (const VectorBase<T>& vector_1,
+                                const VectorBase<T>& vector_2)
 {
-    return (detail::compare(vector_1, vector_2) > 0);
+    return (vector_1.compare(vector_2) >= 0);
 }
 
-template <typename T, typename Inc1, typename Inc2,
-          u32 MS1, u32 MS2, typename CF1, typename CF2,
-          typename DF1, typename DF2>
-static inline bool operator >= (const VectorBase<T, Inc1, MS1, CF1, DF1>& vector_1,
-                                const VectorBase<T, Inc2, MS2, CF2, DF2>& vector_2)
-{
-    return (detail::compare(vector_1, vector_2) >= 0);
-}
+// Some useful typedefs
+template <typename T>
+using Vector = VectorBase<T>;
 
-// some useful typedefs
-template <typename T,
-          typename ConstructFunc = DefaultConstructFunc<T>,
-          typename DestructFunc = DefaultDestructFunc<T>>
-using CompactVector = VectorBase<T, detail::AdditiveIncrementer<16>,
-                                 1, ConstructFunc, DestructFunc>;
+template <typename T>
+using PtrVector = VectorBase<T*>;
 
-template <typename T,
-          typename ConstructFunc = DefaultConstructFunc<T>,
-          typename DestructFunc = DefaultDestructFunc<T>>
-using Vector = VectorBase<T, detail::MultiplicativeIncrementer<3, 2, 8>,
-                          2, ConstructFunc, DestructFunc>;
+template <typename T>
+using ConstPtrVector = VectorBase<const T*>;
 
-template <typename T,
-          typename ConstructFunc = DefaultConstructFunc<T*>,
-          typename DestructFunc = DefaultDestructFunc<T*>>
-using PtrVector = VectorBase<T*, detail::MultiplicativeIncrementer<3, 2, 8>,
-                             2, ConstructFunc, DestructFunc>;
+template <typename T>
+using MPtrVector =
+    VectorBase<typename std::conditional<std::is_base_of<memory::RefCountable, T>::value,
+                                         memory::ManagedPointer<T>, T*>::type>;
 
-template <typename T,
-          typename ConstructFunc = DefaultConstructFunc<T*>,
-          typename DestructFunc = DefaultDestructFunc<T*>>
-using CompactPtrVector = VectorBase<T*, detail::AdditiveIncrementer<16>, 1,
-                                    ConstructFunc, DestructFunc>;
+template <typename T>
+using ConstMPtrVector =
+    VectorBase<typename std::conditional<std::is_base_of<memory::RefCountable, T>::value,
+                                         memory::ManagedConstPointer<T>,
+                                         const T*>::type>;
 
+// forward declaration of string class
 class String;
 
 typedef Vector<u08> u08Vector;
@@ -972,17 +984,7 @@ typedef Vector<i32> i32Vector;
 typedef Vector<u64> u64Vector;
 typedef Vector<i64> i64Vector;
 
-typedef CompactVector<u08> u08CompactVector;
-typedef CompactVector<i08> i08CompactVector;
-typedef CompactVector<u16> u16CompactVector;
-typedef CompactVector<i16> i16CompactVector;
-typedef CompactVector<u32> u32CompactVector;
-typedef CompactVector<i32> i32CompactVector;
-typedef CompactVector<u64> u64CompactVector;
-typedef CompactVector<i64> i64CompactVector;
-
 typedef Vector<String> StringVector;
-typedef CompactVector<String> StringCompactVector;
 
 } /* end namespace containers */
 } /* end namespace kinara */

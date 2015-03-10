@@ -40,8 +40,8 @@
 #if !defined KINARA_CONTAINERS_CONTAINERS_BASE_HPP_
 #define KINARA_CONTAINERS_CONTAINERS_BASE_HPP_
 
-#include <cmath>
 #include <ostream>
+#include <algorithm>
 
 #include "../basetypes/KinaraBase.hpp"
 
@@ -63,31 +63,6 @@ static inline void print_iterable(std::ostream& out_stream,
     return;
 }
 
-namespace detail {
-
-template <u64 INCREMENT=8>
-struct AdditiveIncrementer
-{
-    inline u64 operator () (u64 current_size) const
-    {
-        return current_size + INCREMENT;
-    }
-};
-
-template <u32 NUMERATOR=3, u32 DENOMINATOR=2, u32 INITIALSIZE=8>
-struct MultiplicativeIncrementer
-{
-    inline u64 operator () (u64 current_size) const
-    {
-        if (current_size == 0) {
-            return INITIALSIZE;
-        }
-        float factor = (float)NUMERATOR / (float)DENOMINATOR;
-        return (u64)(ceil((float)current_size * factor));
-    }
-};
-
-} /* end namespace detail */
 } /* end namespace containers */
 } /* end namespace kinara */
 

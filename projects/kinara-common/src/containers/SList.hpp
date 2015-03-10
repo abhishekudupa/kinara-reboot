@@ -62,8 +62,7 @@ namespace kc = kinara::containers;
   - overhead = (3 words) + (n * 1 word)
 */
 
-template <typename T, typename ConstructFunc,
-          typename DestructFunc, bool USEPOOLS>
+template <typename T, bool USEPOOLS>
 class SListBase final
 {
  public:
@@ -73,15 +72,15 @@ class SListBase final
     typedef T& RefType;
     typedef const T& ConstRefType;
 
-    typedef slist_detail_::Iterator<T, ConstructFunc, DestructFunc> Iterator;
+    typedef slist_detail_::Iterator<T> Iterator;
     typedef Iterator iterator;
-    typedef slist_detail_::ConstIterator<T, ConstructFunc, DestructFunc> ConstIterator;
+    typedef slist_detail_::ConstIterator<T> ConstIterator;
     typedef ConstIterator const_iterator;
 
     // No reverse iteration is possible!
 
  private:
-    typedef slist_detail_::SListNode<T, ConstructFunc, DestructFunc> NodeType;
+    typedef slist_detail_::SListNode<T> NodeType;
     typedef slist_detail_::SListNodeBase NodeBaseType;
 
     union PoolSizeUnionType
@@ -308,14 +307,14 @@ class SListBase final
     }
 
     template <bool OUSEPOOLS>
-    SListBase(const kc::SListBase<T, ConstructFunc, DestructFunc, OUSEPOOLS>& other)
+    SListBase(const kc::SListBase<T, OUSEPOOLS>& other)
         : SListBase(std::move(other))
     {
         // Nothing here
     }
 
     template <bool OUSEPOOLS>
-    SListBase(kc::SListBase<T, ConstructFunc, DestructFunc, OUSEPOOLS>&& other)
+    SListBase(kc::SListBase<T, OUSEPOOLS>&& other)
         : SListBase()
     {
         if (other.size() == 0) {
@@ -365,7 +364,7 @@ class SListBase final
     }
 
     template <bool OUSEPOOLS>
-    inline void assign(const kc::SListBase<T, ConstructFunc, DestructFunc, OUSEPOOLS>& other)
+    inline void assign(const kc::SListBase<T, OUSEPOOLS>& other)
     {
         assign(other.begin(), other.end());
     }
@@ -394,8 +393,7 @@ class SListBase final
     }
 
     template <bool OUSEPOOLS>
-    inline SListBase& operator = (const kc::SListBase<T, ConstructFunc,
-                                                      DestructFunc, OUSEPOOLS>& other)
+    inline SListBase& operator = (const kc::SListBase<T, OUSEPOOLS>& other)
     {
         if (&other == this) {
             return *this;
@@ -1362,109 +1360,147 @@ class SListBase final
         }
         return end();
     }
+
+    template <typename UnaryPredicate>
+    Iterator find(UnaryPredicate predicate)
+    {
+        for (auto it = begin(), last = end(); it != last; ++it) {
+            if (predicate(*it)) {
+                return it;
+            }
+        }
+        return end();
+    }
+
+    template <typename UnaryPredicate>
+    ConstIterator find(UnaryPredicate predicate)
+    {
+        for (auto it = begin(), last = end(); it != last; ++it) {
+            if (predicate(*it)) {
+                return it;
+            }
+        }
+        return end();
+    }
+
+    template <bool OUSEPOOLS>
+    i64 compare(const kc::SListBase<T, OUSEPOOLS>& other) const
+    {
+        return compare(other, std::less<T>());
+    }
+
+    template <bool OUSEPOOLS, typename BinaryPredicate>
+    i64 compare(const kc::SListBase<T, OUSEPOOLS>& other,
+                BinaryPredicate predicate) const
+    {
+        auto diff = size() - other.size();
+        if (diff != 0) {
+            return diff;
+        }
+
+        auto it1 = begin();
+        auto it2 = other.begin();
+
+        auto end1 = end();
+        auto end2 = other.end();
+
+        while (it1 != end1 && it2 != end2) {
+            if (predicate(*it1, *it2)) {
+                return -1;
+            } else if (predicate(*it2, *it1)) {
+                return 1;
+            }
+            ++it1;
+            ++it2;
+        }
+        return 0;
+    }
 };
 
-// free functions for relational operators
-namespace slist_detail_ {
-
-template <typename T, typename CF1, typename DF1, bool UP1,
-          typename CF2, typename DF2, bool UP2>
-static inline i64 compare(const SListBase<T, CF1, DF1, UP1>& list_a,
-                          const SListBase<T, CF2, DF2, UP2>& list_b)
+template <typename T, bool UP1, bool UP2>
+static inline bool operator == (const SListBase<T, UP1>& list_a,
+                                const SListBase<T, UP2>& list_b)
 {
-    auto diff = list_a.size() - list_b.size();
-    if (diff != 0) {
-        return diff;
-    }
-    auto it1 = list_a.begin();
-    auto it2 = list_b.begin();
-
-    auto end1 = list_a.end();
-    auto end2 = list_b.end();
-
-    std::less<T> less_func;
-    while (it1 != end1 && it2 != end2) {
-        if (less_func(*it1, *it2)) {
-            return -1;
-        } else if (less_func(*it2, *it1)) {
-            return 1;
-        }
-        ++it1;
-        ++it2;
-    }
-    return 0;
+    return (list_a.compare(list_b) == 0);
 }
 
-} /* end namespace slist_detail_ */
-
-template <typename T, typename CF1, typename DF1, bool UP1,
-          typename CF2, typename DF2, bool UP2>
-static inline bool operator == (const SListBase<T, CF1, DF1, UP1>& list_a,
-                                const SListBase<T, CF2, DF2, UP2>& list_b)
+template <typename T, bool UP1, bool UP2>
+static inline bool operator != (const SListBase<T, UP1>& list_a,
+                                const SListBase<T, UP2>& list_b)
 {
-    return (slist_detail_::compare(list_a, list_b) == 0);
+    return (list_a.compare(list_b) != 0);
 }
 
-template <typename T, typename CF1, typename DF1, bool UP1,
-          typename CF2, typename DF2, bool UP2>
-static inline bool operator != (const SListBase<T, CF1, DF1, UP1>& list_a,
-                                const SListBase<T, CF2, DF2, UP2>& list_b)
+template <typename T, bool UP1, bool UP2>
+static inline bool operator < (const SListBase<T, UP1>& list_a,
+                               const SListBase<T, UP2>& list_b)
 {
-    return (slist_detail_::compare(list_a, list_b) != 0);
+    return (list_a.compare(list_b) < 0);
 }
 
-template <typename T, typename CF1, typename DF1, bool UP1,
-          typename CF2, typename DF2, bool UP2>
-static inline bool operator < (const SListBase<T, CF1, DF1, UP1>& list_a,
-                               const SListBase<T, CF2, DF2, UP2>& list_b)
+template <typename T, bool UP1, bool UP2>
+static inline bool operator > (const SListBase<T, UP1>& list_a,
+                               const SListBase<T, UP2>& list_b)
 {
-    return (slist_detail_::compare(list_a, list_b) < 0);
+    return (list_a.compare(list_b) > 0);
 }
 
-template <typename T, typename CF1, typename DF1, bool UP1,
-          typename CF2, typename DF2, bool UP2>
-static inline bool operator <= (const SListBase<T, CF1, DF1, UP1>& list_a,
-                                const SListBase<T, CF2, DF2, UP2>& list_b)
+template <typename T, bool UP1, bool UP2>
+static inline bool operator <= (const SListBase<T, UP1>& list_a,
+                                const SListBase<T, UP2>& list_b)
 {
-    return (slist_detail_::compare(list_a, list_b) <= 0);
+    return (list_a.compare(list_b) <= 0);
 }
 
-template <typename T, typename CF1, typename DF1, bool UP1,
-          typename CF2, typename DF2, bool UP2>
-static inline bool operator >= (const SListBase<T, CF1, DF1, UP1>& list_a,
-                                const SListBase<T, CF2, DF2, UP2>& list_b)
+template <typename T, bool UP1, bool UP2>
+static inline bool operator >= (const SListBase<T, UP1>& list_a,
+                                const SListBase<T, UP2>& list_b)
 {
-    return (slist_detail_::compare(list_a, list_b) >= 0);
+    return (list_a.compare(list_b) >= 0);
 }
 
-template <typename T, typename CF1, typename DF1, bool UP1,
-          typename CF2, typename DF2, bool UP2>
-static inline bool operator > (const SListBase<T, CF1, DF1, UP1>& list_a,
-                               const SListBase<T, CF2, DF2, UP2>& list_b)
-{
-    return (slist_detail_::compare(list_a, list_b) > 0);
-}
 
 // Some useful typedefs
-template <typename T,
-          typename ConstructFunc = DefaultConstructFunc<T>,
-          typename DestructFunc = DefaultDestructFunc<T>>
-using PoolSList = SListBase<T, ConstructFunc, DestructFunc, true>;
+template <typename T>
+using PoolSList = SListBase<T, true>;
 
-template <typename T,
-          typename ConstructFunc = DefaultConstructFunc<T>,
-          typename DestructFunc = DefaultDestructFunc<T>>
-using SList = SListBase<T, ConstructFunc, DestructFunc, false>;
+template <typename T>
+using SList = SListBase<T, false>;
 
-template <typename T,
-          typename ConstructFunc = DefaultConstructFunc<T*>,
-          typename DestructFunc = DefaultDestructFunc<T*>>
-using PoolPtrSList = SListBase<T*, ConstructFunc, DestructFunc, true>;
+template <typename T>
+using PoolPtrSList = SListBase<T*, true>;
 
-template <typename T,
-          typename ConstructFunc = DefaultConstructFunc<T*>,
-          typename DestructFunc = DefaultDestructFunc<T*>>
-using PtrSList = SListBase<T*, ConstructFunc, DestructFunc, false>;
+template <typename T>
+using PoolMPtrSList =
+    SListBase<typename std::conditional<std::is_base_of<memory::RefCountable, T>::value,
+                                        memory::ManagedPointer<T>, T*>::type, true>;
+
+template <typename T>
+using PoolConstPtrSList = SListBase<const T*, true>;
+
+template <typename T>
+using PoolConstMPtrSList =
+    SListBase<typename std::conditional<std::is_base_of<memory::RefCountable, T>::value,
+                                        memory::ManagedConstPointer<T>,
+                                        const T*>::type, true>;
+
+template <typename T>
+using PtrSList = SListBase<T*, false>;
+
+template <typename T>
+using ConstPtrSList = SListBase<const T*, false>;
+
+template <typename T>
+using MPtrSList =
+    SListBase<typename std::conditional<std::is_base_of<memory::RefCountable, T>::value,
+                                        memory::ManagedPointer<T>, T*>::type, false>;
+
+template <typename T>
+using ConstMPtrSList =
+    SListBase<typename std::conditional<std::is_base_of<memory::RefCountable, T>::value,
+                                        memory::ManagedConstPointer<T>,
+                                        const T*>::type, false>;
+
 
 typedef PoolSList<u08> u08PoolSList;
 typedef PoolSList<u16> u16PoolSList;

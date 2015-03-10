@@ -46,7 +46,6 @@
 #include "../../thirdparty/gtest/include/gtest/gtest.h"
 
 using kinara::containers::u32Vector;
-using kinara::containers::u32CompactVector;
 using kinara::containers::PtrVector;
 
 using kinara::u32;
@@ -212,7 +211,7 @@ TEST(Vector, Erase)
 TEST(Vector, Find)
 {
     u32Vector vec = { 1, 2, 3, 4, 5 };
-    auto it = vec.find(3);
+    auto it = vec.find(3u);
     EXPECT_EQ(3u, *it);
     EXPECT_EQ(4u, *(++it));
 }
