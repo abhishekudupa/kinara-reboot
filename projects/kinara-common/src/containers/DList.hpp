@@ -277,6 +277,12 @@ public:
         }
 
         std::swap(m_root, other.m_root);
+
+        m_root.m_next->m_prev = &m_root;
+        m_root.m_prev->m_next = &m_root;
+
+        other.m_root.m_prev->m_next = &(other.m_root);
+        other.m_root.m_next->m_prev = &(other.m_root);
     }
 
     template <bool OUSEPOOLS>
@@ -386,6 +392,13 @@ public:
 
         std::swap(m_root, other.m_root);
         std::swap(m_root, other.m_root);
+
+
+        m_root.m_next->m_prev = &m_root;
+        m_root.m_prev->m_next = &m_root;
+
+        other.m_root.m_prev->m_next = &(other.m_root);
+        other.m_root.m_next->m_prev = &(other.m_root);
 
         return *this;
     }

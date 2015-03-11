@@ -65,7 +65,9 @@ private:
 
     struct FixedRepr {
         bool m_short_repr :  1;
-        mutable i64 m_ref_count   : 63;
+        bool m_interned : 1;
+        bool m_dirty : 1;
+        mutable i64 m_ref_count   : 61;
 
         inline FixedRepr(bool short_repr)
             : m_short_repr(short_repr), m_ref_count(0)
@@ -84,9 +86,9 @@ private:
 
     struct LongRepr {
         char* m_data;
-        // hash code INCLUDES the nul character
+        // hash code does not include the nul character
         u64 m_hashcode;
-        // length WITHOUT the null character
+        // length WITHOUT the nul character
         u64 m_length;
     };
 

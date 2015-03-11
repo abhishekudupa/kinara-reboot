@@ -51,8 +51,8 @@ using kinara::u32;
 using kinara::u64;
 using kinara::containers::SList;
 using kinara::containers::u32SList;
-using kinara::containers::PtrSList;
-using kinara::containers::PoolPtrSList;
+using kinara::containers::MPtrSList;
+using kinara::containers::PoolMPtrSList;
 
 using kinara::containers::PoolSList;
 using kinara::containers::u32PoolSList;
@@ -706,7 +706,7 @@ REGISTER_TYPED_TEST_CASE_P(u32SListTest,
 REGISTER_TYPED_TEST_CASE_P(RCSListTest, RefCountableTests);
 
 typedef Types<u32SList, u32PoolSList> u32SListImplementations;
-typedef Types<PtrSList<RCClass>, PoolPtrSList<RCClass>> RCSListImplementations;
+typedef Types<MPtrSList<RCClass>, PoolMPtrSList<RCClass>> RCSListImplementations;
 
 INSTANTIATE_TYPED_TEST_CASE_P(NonPoolAndPoolSList,
                               u32SListTest, u32SListImplementations);

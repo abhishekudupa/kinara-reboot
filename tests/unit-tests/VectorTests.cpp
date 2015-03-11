@@ -46,7 +46,7 @@
 #include "../../thirdparty/gtest/include/gtest/gtest.h"
 
 using kinara::containers::u32Vector;
-using kinara::containers::PtrVector;
+using kinara::containers::MPtrVector;
 
 using kinara::u32;
 using kinara::u64;
@@ -127,13 +127,13 @@ TEST(Vector, LongIntVector)
 
 TEST(Vector, RefCountableObjects)
 {
-    PtrVector<RCClass> vector1;
+    MPtrVector<RCClass> vector1;
 
     for (int i = 0; i < (1 << 16); ++i) {
         vector1.push_back(new RCClass(i));
     }
 
-    PtrVector<RCClass> vector2 = vector1;
+    MPtrVector<RCClass> vector2 = vector1;
 
     for (int i = 0; i < (1 << 16); ++i) {
         EXPECT_EQ(i, (int)(*(vector1[i])));

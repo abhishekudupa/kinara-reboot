@@ -148,14 +148,14 @@ private:
         auto retval =
             ka::casted_allocate_raw_cleared<T>(sizeof(T) * num_elements + sc_array_overhead);
         auto retval_as_ptr_to_u64 = static_cast<u64*>(static_cast<void*>(retval));
-        return static_cast<T*>(static_cast<void*>(retval_as_ptr_to_u64 + sc_array_overhead));
+        return static_cast<T*>(static_cast<void*>(retval_as_ptr_to_u64 + 2));;
     }
 
     inline T* allocate_data(u64 num_elements, std::false_type is_trivial_value)
     {
         auto buffer = ka::casted_allocate_raw<T>(sizeof(T) * num_elements + sc_array_overhead);
         auto buffer_as_ptr_to_u64 = static_cast<u64*>(static_cast<void*>(buffer));
-        auto retval = static_cast<T*>(static_cast<void*>(buffer_as_ptr_to_u64 + sc_array_overhead));
+        auto retval = static_cast<T*>(static_cast<void*>(buffer_as_ptr_to_u64 + 2));
         for (auto cur_ptr = retval, last = retval + num_elements; cur_ptr != last; ++cur_ptr) {
             new (cur_ptr) T();
         }
@@ -220,7 +220,7 @@ private:
         }
 
         // need to resize
-        auto new_capacity = (old_capacity * 3) / 2;
+        auto new_capacity = std::max((old_capacity * 3) / 2, 8ul);
         expand(new_capacity);
     }
 
@@ -287,7 +287,7 @@ private:
         auto orig_capacity = get_capacity();
         auto orig_size = get_size();
 
-        if (!strict && orig_capacity <= (4 * orig_size) / 3) {
+        if (!strict && orig_capacity <= std::max((4 * orig_size) / 3, 8ul)) {
             return;
         }
 
@@ -343,7 +343,8 @@ private:
             return;
         }
 
-        if (new_size > old_capacity || old_capacity > ((4 * new_size) / 3)) {
+        if (new_size > old_capacity ||
+            old_capacity > std::max((4 * new_size) / 3, 8ul)) {
             deallocate_data();
             m_data = allocate_data(new_size);
             set_size(new_size);
@@ -387,7 +388,8 @@ public:
         auto old_capacity = get_capacity();
         destroy_range();
 
-        if (n > old_capacity || old_capacity > ((4 * n) / 3)) {
+        if (n > old_capacity ||
+            old_capacity > std::max((4 * n) / 3, 8ul)) {
             deallocate_data();
             m_data = allocate_data(n);
             set_size(n);
@@ -753,7 +755,7 @@ public:
         auto new_size = orig_size - num_to_delete;
         auto offset_from_begin = first - begin();
 
-        if (new_size <= ((4 * orig_capacity) / 3)) {
+        if (orig_capacity <= std::max((4 * orig_size) / 3, 8ul)) {
             std::move(const_cast<T*>(last),
                       m_data + orig_size,
                       m_data + offset_from_begin);

@@ -59,7 +59,7 @@ class ManagedPointerBase final
 {
 private:
     // We can only make managed pointers out of RefCountable objects
-    static_assert(!(std::is_base_of<RefCountable, T>::value),
+    static_assert(std::is_base_of<RefCountable, T>::value,
                   "ManagedPointers can only be instantiated with objects "
                   "of type RefCountable");
 
@@ -82,11 +82,15 @@ public:
     inline ManagedPointerBase();
 
     // Copy constructor
+    inline ManagedPointerBase(const ManagedPointerBase& other_managed_ptr);
+
     template <bool OTHERCONSTPOINTER>
     inline ManagedPointerBase(const kmd::ManagedPointerBase<T, OTHERCONSTPOINTER>&
                               other_managed_ptr);
 
     // Move constructor
+    inline ManagedPointerBase(ManagedPointerBase&& other_managed_ptr);
+
     template <bool OTHERCONSTPOINTER>
     inline ManagedPointerBase(kmd::ManagedPointerBase<T, OTHERCONSTPOINTER>&&
                               other_managed_ptr);
@@ -104,11 +108,15 @@ public:
     inline operator RawPointerType () const;
 
     // Assignment operator
+    inline ManagedPointerBase& operator = (const ManagedPointerBase& other_managed_ptr);
+
     template <bool OTHERCONSTPOINTER>
     inline ManagedPointerBase& operator = (const kmd::ManagedPointerBase<T, OTHERCONSTPOINTER>&
                                            other_managed_ptr);
 
     // Move assignment operator
+    inline ManagedPointerBase& operator = (ManagedPointerBase&& other_managed_ptr);
+
     template <bool OTHERCONSTPOINTER>
     inline ManagedPointerBase& operator = (kmd::ManagedPointerBase<T, OTHERCONSTPOINTER>&& other);
 
@@ -184,16 +192,9 @@ inline ManagedPointerBase<T, CONSTPOINTER>::ManagedPointerBase()
 }
 
 template <typename T, bool CONSTPOINTER>
-template <bool OTHERCONSTPOINTER>
-inline
-ManagedPointerBase<T, CONSTPOINTER>::ManagedPointerBase
-(const kmd::ManagedPointerBase<T, OTHERCONSTPOINTER>& other_managed_ptr)
+inline ManagedPointerBase<T, CONSTPOINTER>::ManagedPointerBase(const ManagedPointerBase& other_managed_ptr)
     : m_ptr(nullptr)
 {
-    static_assert((OTHERCONSTPOINTER && !CONSTPOINTER),
-                  "Cannot convert a const managed pointer into a non-const "
-                  "managed pointer");
-
     m_ptr = other_managed_ptr.m_ptr;
     if (m_ptr != nullptr) {
         m_ptr->inc_ref_();
@@ -204,10 +205,34 @@ template <typename T, bool CONSTPOINTER>
 template <bool OTHERCONSTPOINTER>
 inline
 ManagedPointerBase<T, CONSTPOINTER>::ManagedPointerBase
+(const kmd::ManagedPointerBase<T, OTHERCONSTPOINTER>& other_managed_ptr)
+    : m_ptr(nullptr)
+{
+    static_assert((!OTHERCONSTPOINTER || CONSTPOINTER),
+                  "Cannot convert a const managed pointer into a non-const "
+                  "managed pointer");
+
+    m_ptr = other_managed_ptr.m_ptr;
+    if (m_ptr != nullptr) {
+        m_ptr->inc_ref_();
+    }
+}
+
+template <typename T, bool CONSTPOINTER>
+inline ManagedPointerBase<T, CONSTPOINTER>::ManagedPointerBase(ManagedPointerBase&& other_managed_ptr)
+    : m_ptr(nullptr)
+{
+    std::swap(m_ptr, other_managed_ptr.m_ptr);
+}
+
+template <typename T, bool CONSTPOINTER>
+template <bool OTHERCONSTPOINTER>
+inline
+ManagedPointerBase<T, CONSTPOINTER>::ManagedPointerBase
 (kmd::ManagedPointerBase<T, OTHERCONSTPOINTER>&& other_managed_ptr)
     : ManagedPointerBase<T, CONSTPOINTER>()
 {
-    static_assert((OTHERCONSTPOINTER && !CONSTPOINTER),
+    static_assert((!OTHERCONSTPOINTER || CONSTPOINTER),
                   "Cannot convert a const managed pointer into a non-const "
                   "managed pointer");
 
@@ -246,15 +271,48 @@ inline ManagedPointerBase<T, CONSTPOINTER>::operator RawPointerType () const
 }
 
 template <typename T, bool CONSTPOINTER>
+inline ManagedPointerBase<T, CONSTPOINTER>&
+ManagedPointerBase<T, CONSTPOINTER>::operator = (const ManagedPointerBase& other_managed_ptr)
+{
+    if (&other_managed_ptr == this) {
+        return *this;
+    }
+    if (m_ptr != nullptr) {
+        m_ptr->dec_ref_();
+        m_ptr = nullptr;
+    }
+
+    m_ptr = other_managed_ptr.m_ptr;
+    m_ptr->inc_ref_();
+    return *this;
+}
+
+template <typename T, bool CONSTPOINTER>
 template <bool OTHERCONSTPOINTER>
 inline ManagedPointerBase<T, CONSTPOINTER>&
 ManagedPointerBase<T, CONSTPOINTER>::operator =
 (const ManagedPointerBase<T, OTHERCONSTPOINTER>& other_managed_ptr)
 {
-    static_assert((OTHERCONSTPOINTER && !CONSTPOINTER),
+    static_assert((!OTHERCONSTPOINTER || CONSTPOINTER),
                   "Cannot convert a const managed pointer into a non-const "
                   "managed pointer");
 
+    if (&other_managed_ptr == this) {
+        return *this;
+    }
+    if (m_ptr != nullptr) {
+        m_ptr->dec_ref_();
+        m_ptr = nullptr;
+    }
+    m_ptr = other_managed_ptr.m_ptr;
+    m_ptr->inc_ref_();
+    return *this;
+}
+
+template <typename T, bool CONSTPOINTER>
+inline ManagedPointerBase<T, CONSTPOINTER>&
+ManagedPointerBase<T, CONSTPOINTER>::operator = (ManagedPointerBase&& other_managed_ptr)
+{
     if (&other_managed_ptr == this) {
         return *this;
     }
@@ -273,7 +331,7 @@ inline ManagedPointerBase<T, CONSTPOINTER>&
 ManagedPointerBase<T, CONSTPOINTER>::operator =
 (ManagedPointerBase<T, OTHERCONSTPOINTER>&& other_managed_ptr)
 {
-    static_assert((OTHERCONSTPOINTER && !CONSTPOINTER),
+    static_assert((!OTHERCONSTPOINTER || CONSTPOINTER),
                   "Cannot convert a const managed pointer into a non-const "
                   "managed pointer");
 
