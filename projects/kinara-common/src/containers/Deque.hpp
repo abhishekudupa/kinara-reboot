@@ -74,31 +74,6 @@ public:
     typedef ConstReverseIterator const_reverse_iterator;
 
 private:
-    inline void destroy_range()
-    {
-        destroy_range(this->m_start, this->m_finish);
-    }
-
-    inline void destroy_range(const Iterator& first, const Iterator& last,
-                              std::true_type is_trivial_value)
-    {
-        for (auto it = first; it != last; ++it) {
-            new (&(*it)) ValueType();
-        }
-    }
-
-    inline void destroy_range(const Iterator& first, const Iterator& last,
-                              std::false_type is_trivial_value)
-    {
-        return;
-    }
-
-    inline void destroy_range(const Iterator& first, const Iterator& last)
-    {
-        typename std::is_trivially_destructible<T>::type is_trivial_value;
-        destroy_range(first, last, is_trivial_value);
-    }
-
     // assumes that the object isn't constructed yet
     template <typename InputIterator>
     inline void construct_range(const InputIterator& first,
@@ -350,7 +325,6 @@ public:
 
         if (new_size < orig_size) {
             auto position = begin() + (new_size - 1);
-            destroy_range(position + 1, end());
             this->shrink_after(position);
         } else {
             auto num_elems_to_add = new_size - orig_size;
@@ -486,7 +460,7 @@ public:
     Iterator erase(const ConstIterator& position)
     {
         if (position == this->m_finish) {
-            return;
+            return Iterator(position.m_current, position.m_block_array_ptr);
         }
         return erase(position, position + 1);
     }
@@ -494,21 +468,37 @@ public:
     Iterator erase(const ConstIterator& first, const ConstIterator& last)
     {
         if (first == last) {
-            return;
+            return Iterator(first.m_current, first.m_block_array_ptr);
         }
-        destroy_range(first, last);
+
         auto num_elems = last - first;
-        auto offset_from_start = first - this->m_start;
-        auto offset_from_finish = last - this->m_finish;
-        if (offset_from_start < offset_from_finish) {
-            this->move_objects(this->m_start + num_elems, this->m_start, offset_from_start);
+        auto orig_size = size();
+
+        KINARA_ASSERT(num_elems > 0);
+
+        if ((u64)num_elems == orig_size) {
+            clear();
+            return this->m_finish;
+        }
+
+        auto elems_before_first = first - this->m_start;
+        auto elems_after_last = this->m_finish - last;
+
+        if (elems_after_last == 0) {
+            this->shrink_after(first - 1);
+            return this->m_finish;
+        }
+
+        if (elems_before_first < elems_after_last) {
+            this->move_objects(this->m_start + num_elems, this->m_start, elems_before_first);
             this->m_start += num_elems;
         } else {
-            this->move_objects(this->m_finish - num_elems, this->m_finish,
-                               offset_from_finish - num_elems);
+            this->move_objects(this->m_start + elems_before_first,
+                               last, elems_after_last);
+
             this->m_finish -= num_elems;
         }
-        return (this->m_start + offset_from_start);
+        return (Iterator(last.m_current, last.m_block_array_ptr));
     }
 
     void swap(DequeBase& other)

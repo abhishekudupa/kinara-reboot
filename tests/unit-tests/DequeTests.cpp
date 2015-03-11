@@ -47,7 +47,10 @@ using kinara::u32;
 using kinara::u64;
 using kinara::containers::Deque;
 using kinara::containers::u32Deque;
-using kinara::containers::PtrDeque;
+using kinara::containers::MPtrDeque;
+
+#define MAX_TEST_SIZE 2048
+#define TEST_NUM_ITERATIONS 2048
 
 TEST(u32DequeTest, Constructor)
 {
@@ -167,17 +170,20 @@ TEST(u32DequeTest, Assignment)
 // caveat: assumes that std::deque is correct! :-)
 TEST(u32DequeTest, PushPop)
 {
-    const u32 num_iterations = 65536;
+    const u32 num_iterations = TEST_NUM_ITERATIONS;
 
     u32Deque deque1;
     std::deque<u32> std_deque;
+    const u32 max_test_size = MAX_TEST_SIZE;
 
     std::default_random_engine generator;
     std::uniform_int_distribution<u32> distribution(0, (1 << 30));
 
     for (u32 i = 0; i < num_iterations; ++i) {
 
-        auto num_to_push_back = distribution(generator) % 256;
+        u32 test_size = 1 + distribution(generator) % max_test_size;
+
+        auto num_to_push_back = distribution(generator) % test_size;
         for (u32 j = 0; j < num_to_push_back; ++j) {
             auto elem = distribution(generator) % (1 << 30);
             deque1.push_back(elem);
@@ -185,7 +191,7 @@ TEST(u32DequeTest, PushPop)
             EXPECT_EQ(std_deque.size(), deque1.size());
         }
 
-        auto num_to_push_front = distribution(generator) % 256;
+        auto num_to_push_front = distribution(generator) % test_size;
         for (u32 j = 0; j < num_to_push_front; ++j) {
             auto elem = distribution(generator) % (1 << 30);
             deque1.push_front(elem);
@@ -279,8 +285,8 @@ TEST(u32DequeTest, Insertions)
     EXPECT_EQ(10u, k);
 
 
-    const u32 num_iterations = 65536;
-    const u32 max_test_size = 8192;
+    const u32 num_iterations = TEST_NUM_ITERATIONS;
+    const u32 max_test_size = MAX_TEST_SIZE;
 
     std::default_random_engine generator;
     std::uniform_int_distribution<u32> distribution(0, (1 << 30));
@@ -324,6 +330,207 @@ TEST(u32DequeTest, Insertions)
         EXPECT_EQ(test_size, std_deque.end() - std_deque.begin());
         EXPECT_EQ(test_size, deque1.end() - deque1.begin());
     }
+}
+
+TEST(u32DequeTest, Resize)
+{
+    u32Deque deque1;
+    std::deque<u32> std_deque;
+
+    std::default_random_engine generator;
+    std::uniform_int_distribution<u32> distribution(0, (1 << 30));
+
+    // test resizes
+    const u32 max_test_size = MAX_TEST_SIZE;
+    // construct the deque first
+    for (u32 i = 0; i < TEST_NUM_ITERATIONS; ++i) {
+        const u32 test_size = 1 + distribution(generator) % max_test_size;
+        const u32 resize_to = distribution(generator) % max_test_size;
+
+        deque1.clear();
+        std_deque.clear();
+
+        for (u32 j = 0; j < test_size; ++j) {
+            if (distribution(generator) % 2 == 0) {
+                deque1.push_back(j);
+                std_deque.push_back(j);
+            } else {
+                deque1.push_front(j);
+                std_deque.push_front(j);
+            }
+
+            EXPECT_EQ(std_deque.front(), deque1.front());
+            EXPECT_EQ(std_deque.back(), deque1.back());
+        }
+
+        EXPECT_EQ(std_deque.size(), deque1.size());
+
+        for (u32 j = 0; j < deque1.size(); ++j) {
+            EXPECT_EQ(std_deque[j], deque1[j]);
+        }
+
+        deque1.resize(resize_to);
+        std_deque.resize(resize_to);
+
+        EXPECT_EQ(std_deque.size(), deque1.size());
+        EXPECT_EQ(resize_to, deque1.size());
+
+        auto std_it = std_deque.begin();
+        auto it = deque1.begin();
+
+        auto std_end = std_deque.end();
+        auto it_end = deque1.end();
+
+        u64 k = 0;
+        while (std_it != std_end && it != it_end) {
+            EXPECT_EQ(*std_it, *it);
+            ++k;
+            ++std_it;
+            ++it;
+        }
+
+        EXPECT_EQ(resize_to, k);
+    }
+}
+
+TEST(u32DequeTest, Erase)
+{
+    u32Deque deque1;
+    std::deque<u32> std_deque;
+
+    std::default_random_engine generator;
+    std::uniform_int_distribution<u32> distribution(0, (1 << 30));
+
+    // test resizes
+    const u32 max_test_size = MAX_TEST_SIZE;
+
+    for (u32 i = 0; i < max_test_size; ++i) {
+        deque1.clear();
+        std_deque.clear();
+
+        const u32 test_size = 1 + distribution(generator) % max_test_size;
+        for (u32 j = 0; j < test_size; ++j) {
+            if (distribution(generator) % 2 == 0) {
+                deque1.push_back(j);
+                std_deque.push_back(j);
+            } else {
+                deque1.push_front(j);
+                std_deque.push_front(j);
+            }
+
+            EXPECT_EQ(std_deque.front(), deque1.front());
+            EXPECT_EQ(std_deque.back(), deque1.back());
+        }
+
+        EXPECT_EQ(std_deque.size(), deque1.size());
+
+        for (u32 j = 0; j < deque1.size(); ++j) {
+            EXPECT_EQ(std_deque[j], deque1[j]);
+        }
+
+        // test erasures at begin and end
+        deque1.erase(deque1.begin());
+        std_deque.erase(std_deque.begin());
+
+        EXPECT_EQ(std_deque.size(), deque1.size());
+
+        for (u32 j = 0; j < deque1.size(); ++j) {
+            EXPECT_EQ(std_deque[j], deque1[j]);
+        }
+
+        deque1.erase(deque1.end() - 1);
+        std_deque.erase(std_deque.end() - 1);
+
+        EXPECT_EQ(std_deque.size(), deque1.size());
+
+        for (u32 j = 0; j < deque1.size(); ++j) {
+            EXPECT_EQ(std_deque[j], deque1[j]);
+        }
+
+        // push back the two erased elements
+        auto elem1 = distribution(generator);
+        deque1.push_front(elem1);
+        std_deque.push_front(elem1);
+
+        elem1 = distribution(generator);
+        deque1.push_back(elem1);
+        std_deque.push_back(elem1);
+
+        auto erase_start_offset = distribution(generator) % test_size;
+        auto erase_end_offset = erase_start_offset + (distribution(generator) % (test_size - erase_start_offset));
+
+        deque1.erase(deque1.begin() + erase_start_offset, deque1.begin() + erase_end_offset);
+        std_deque.erase(std_deque.begin() + erase_start_offset, std_deque.begin() + erase_end_offset);
+
+        EXPECT_EQ(std_deque.size(), deque1.size());
+        for (u32 j = 0; j < deque1.size(); ++j) {
+            EXPECT_EQ(std_deque[j], deque1[j]);
+        }
+    }
+}
+
+TEST(u32DequeTest, Sort)
+{
+    u32Deque deque1;
+    std::vector<u32> std_vec;
+
+    std::default_random_engine generator;
+    std::uniform_int_distribution<u32> distribution(0, (1 << 30));
+
+    // test resizes
+    const u32 max_test_size = std::max(32, MAX_TEST_SIZE / 4);
+    // construct the deque first
+    for (u32 i = 0; i < TEST_NUM_ITERATIONS; ++i) {
+        deque1.clear();
+        std_vec.clear();
+        const u32 test_size = 1 + distribution(generator) % max_test_size;
+
+        for (u32 j = 0; j < test_size; ++j) {
+            auto elem = distribution(generator);
+            if (distribution(generator) % 2 == 0) {
+                deque1.push_back(elem);
+            } else {
+                deque1.push_front(elem);
+            }
+            std_vec.push_back(elem);
+        }
+
+        deque1.sort();
+        std::sort(std_vec.begin(), std_vec.end());
+
+        EXPECT_EQ(test_size, deque1.size());
+        for (u32 j = 0; j < test_size; ++j) {
+            EXPECT_EQ(std_vec[j], deque1[j]);
+            for (u32 k = j + 1; k < test_size; ++k) {
+                EXPECT_LE(deque1[j], deque1[k]);
+            }
+        }
+    }
+
+}
+
+TEST(DequeTest, RefCountableTests)
+{
+    MPtrDeque<RCClass> deque1;
+
+    std::default_random_engine generator;
+    std::uniform_int_distribution<u32> distribution(0, 1 << 30);
+
+    for (int i = 0; i < MAX_TEST_SIZE; ++i) {
+        if (distribution(generator) % 2 == 0) {
+            deque1.push_back(new RCClass(i));
+        } else {
+            deque1.push_front(new RCClass(i));
+        }
+    }
+
+    auto deque2 = deque1;
+    for (u32 i = 0; i < MAX_TEST_SIZE; ++i) {
+        EXPECT_EQ((int)(*(deque1[i])), (int)(*(deque2[i])));
+    }
+
+    deque1.clear();
+    EXPECT_EQ((u64)MAX_TEST_SIZE, deque2.size());
 }
 
 //

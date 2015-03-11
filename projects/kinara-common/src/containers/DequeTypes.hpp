@@ -100,7 +100,8 @@ public:
 
     static inline DequeBlock* construct(void* mem_ptr)
     {
-        return static_cast<DequeBlock*>(mem_ptr);
+        typename std::has_trivial_default_constructor<T>::type is_trivial_value;
+        return construct(mem_ptr, is_trivial_value);
     }
 
     inline ~DequeBlock()
@@ -664,7 +665,8 @@ protected:
     // to the corresponding locations starting at destination
     inline void move_objects_backward(const Iterator& destination,
                                       const ConstIterator& source,
-                                      u64 num_elements)
+                                      u64 num_elements,
+                                      std::true_type is_trivially_copyable_value)
     {
         auto from = source + num_elements;
         auto to = destination + num_elements;
@@ -707,9 +709,19 @@ protected:
         }
     }
 
+    // we use std::move for non-trivially copyable objects
+    inline void move_objects_backward(const Iterator& destination,
+                                      const ConstIterator& source,
+                                      u64 num_elements,
+                                      std::false_type is_trivially_copyable_value)
+    {
+        std::move_backward(source, source + num_elements, destination);
+    }
+
     inline void move_objects_forward(const Iterator& destination,
                                      const ConstIterator& source,
-                                     u64 num_elements)
+                                     u64 num_elements,
+                                     std::true_type is_trivially_copyable_value)
     {
         auto from = source;
         auto to = destination;
@@ -740,21 +752,30 @@ protected:
         }
     }
 
+    inline void move_objects_forward(const Iterator& destination,
+                                     const ConstIterator& source,
+                                     u64 num_elements,
+                                     std::false_type is_trivially_copyable_value)
+    {
+        std::move(source, source + num_elements, destination);
+    }
+
     inline void move_objects(const Iterator& destination,
                              const ConstIterator& source,
                              u64 num_elements)
     {
+        typename std::is_trivial<T>::type is_trivial_value;
         // if moving the range backwards, then prefer
         // moving objects from beginning to end
         if (destination < source) {
-            move_objects_forward(destination, source, num_elements);
+            move_objects_forward(destination, source, num_elements, is_trivial_value);
         } else {
-            move_objects_backward(destination, source, num_elements);
+            move_objects_backward(destination, source, num_elements, is_trivial_value);
         }
     }
 
     // shrink by discarding elements AFTER position
-    inline void shrink_after(ConstIterator position, bool strict = false)
+    inline void shrink_after(const ConstIterator& position, bool strict = false)
     {
         if (position == m_finish) {
             return;
@@ -770,8 +791,8 @@ protected:
             *block_ptr = nullptr;
         }
 
-        m_finish.m_block_array_ptr = position.m_block_array_ptr;
-        m_finish.m_current = position.m_current;
+        m_finish.m_block_array_ptr = new_finish.m_block_array_ptr;
+        m_finish.m_current = new_finish.m_current;
 
         compact(strict);
     }
