@@ -1,9 +1,11 @@
-// Stack.hpp ---
-// Filename: Stack.hpp
-// Author: Abhishek Udupa
-// Created: Mon Feb 16 02:09:42 2015 (-0500)
+// Queue.hpp ---
 //
-// Copyright (c) 2013, Abhishek Udupa, University of Pennsylvania
+// Filename: Queue.hpp
+// Author: Abhishek Udupa
+// Created: Wed Mar 11 14:58:36 2015 (-0400)
+//
+//
+// Copyright (c) 2015, Abhishek Udupa, University of Pennsylvania
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -35,8 +37,8 @@
 
 // Code:
 
-#if !defined KINARA_KINARA_COMMON_CONTAINERS_STACK_HPP_
-#define KINARA_KINARA_COMMON_CONTAINERS_STACK_HPP_
+#if !defined KINARA_KINARA_COMMON_CONTAINERS_QUEUE_HPP_
+#define KINARA_KINARA_COMMON_CONTAINERS_QUEUE_HPP_
 
 #include "Deque.hpp"
 
@@ -47,7 +49,7 @@ namespace ka = kinara::allocators;
 namespace kc = kinara::containers;
 
 template <typename T, typename ContainerType_ = Deque<T>>
-class Stack final
+class Queue final
 {
 public:
     typedef T ValueType;
@@ -61,57 +63,67 @@ private:
     ContainerType m_container;
 
 public:
-    explicit Stack(const ContainerType& container)
-        : m_container(container)
+    explicit Queue(const ContainerType& container)
+        m_container(container)
     {
         // Nothing here
     }
 
-    explicit Stack(ContainerType&& container)
-        : m_container(container)
+    explicit Queue(ContainerType&& container)
+        : m_container(std::move(container))
     {
         // Nothing here
     }
 
-    explicit Stack()
+    explicit Queue()
         : m_container()
     {
         // Nothing here
     }
 
-    Stack(const Stack& other)
+    Queue(const Queue& other)
         : m_container(other.m_container)
     {
         // Nothing here
     }
 
-    Stack(Stack&& other)
+    Queue(Queue&& other)
         : m_container(std::move(other.m_container));
     {
         // Nothing here
     }
 
-    ~Stack()
+    ~Queue()
     {
         // Nothing here
     }
 
-    bool empty() const
+    inline bool empty() const
     {
         return m_container.empty();
     }
 
-    u64 size() const
+    inline u64 size() const
     {
         return m_container.size();
     }
 
-    RefType top()
+    RefType front()
+    {
+        return m_container.front();
+    }
+
+    ConstRefType front() const
+    {
+        return m_container.front();
+    }
+
+    RefType back()
     {
         return m_container.back();
     }
 
-    ConstRefType top() const
+    ConstRefType back() const
     {
         return m_container.back();
     }
@@ -129,87 +141,86 @@ public:
     template <typename... ArgTypes>
     inline void emplace(ArgTypes&&... args)
     {
-        m_container.emplace_back(std::forward<ArgTypes>(args)...);
+        m_container.emplace(std::forward<ArgTypes>(args)...);
     }
 
     void pop()
     {
-        m_container.pop_back();
+        m_container.pop_front();
     }
 
-    void swap(Stack& other) noexcept
+    void swap(Queue& other) noexcept
     {
         std::swap(m_container, other.m_container);
     }
 
-public:
-    inline bool operator == (const Stack& other) const
+    inline bool operator == (const Queue& other) const
     {
         return (m_container == other.m_container);
     }
 
-    inline bool operator != (const Stack& other) const
+    inline bool operator != (const Queue& other) const
     {
         return (m_container != other.m_container);
     }
 
-    inline bool operator <= (const Stack& other) const
+    inline bool operator <= (const Queue& other) const
     {
         return (m_container <= other.m_container);
     }
 
-    inline bool operator >= (const Stack& other) const
+    inline bool operator >= (const Queue& other) const
     {
         return (m_container >= other.m_container);
     }
 
-    inline bool operator < (const Stack& other) const
+    inline bool operator < (const Queue& other) const
     {
         return (m_container < other.m_container);
     }
 
-    inline bool operator > (const Stack& other) const
+    inline bool operator > (const Queue& other) const
     {
         return (m_container > other.m_container);
     }
 
 };
 
-// some typedefs
-typedef Stack<u08> u08Stack;
-typedef Stack<i08> i08Stack;
-typedef Stack<u16> u16Stack;
-typedef Stack<i16> i16Stack;
-typedef Stack<u32> u32Stack;
-typedef Stack<i32> i32Stack;
-typedef Stack<u64> u64Stack;
-typedef Stack<i64> i64Stack;
+// Some typedefs
+typedef Queue<u08> u08Queue;
+typedef Queue<i08> i08Queue;
+typedef Queue<u16> u16Queue;
+typedef Queue<i16> i16Queue;
+typedef Queue<u32> u32Queue;
+typedef Queue<i32> i32Queue;
+typedef Queue<u64> u64Queue;
+typedef Queue<i64> i64Queue;
 
 template <typename T>
-using PtrStack = Stack<T*>;
+using PtrQueue = Queue<T*>;
 
 template <typename T>
-using ConstPtrStack = Stack<const T*>;
+using ConstPtrQueue = Queue<const T*>;
 
 template <typename T>
-using MPtrStack =
-    Stack<typename std::conditional<std::is_base_of<memory::RefCountable, T>::value,
+using MPtrQueue =
+    Queue<typename std::conditional<std::is_base_of<memory::RefCountable, T>::value,
                                     memory::ManagedPointer<T>, T*>::type>;
 
 template <typename T>
-using ConstMPtrStack =
-    Stack<typename std::conditional<std::is_base_of<memory::RefCountable, T>::value,
+using ConstMPtrQueue =
+    Queue<typename std::conditional<std::is_base_of<memory::RefCountable, T>::value,
                                     memory::ManagedConstPointer<T>,
                                     const T*>::type>;
 
 class String;
 
-typedef Stack<String> StringStack;
+typedef Queue<String> StringQueue;
 
 } /* end namespace containers */
 } /* end namespace kinara */
 
-#endif /* KINARA_KINARA_COMMON_CONTAINERS_STACK_HPP_ */
+#endif /* KINARA_KINARA_COMMON_CONTAINERS_QUEUE_HPP_ */
 
 //
-// Stack.hpp ends here
+// Queue.hpp ends here
