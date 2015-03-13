@@ -69,7 +69,51 @@ struct KNElement
 {
     Key key;
     Value value;
+
+    inline KNElement()
+        : key(), value()
+    {
+        // Nothing here
+    }
+
+    inline KNElement(const KNElement& other)
+        : key(other.key), value(other.value)
+    {
+        // Nothing here
+    }
+
+    inline KNElement(KNElement&& other)
+        : key(std::move(other.key)), value(std::move(other.value))
+    {
+        // Nothing here
+    }
+
+    inline ~KNElement()
+    {
+        // Nothing here
+    }
+
+    inline KNElement& operator = (const KNElement& other)
+    {
+        if (&other == this) {
+            return *this;
+        }
+        key = other.key;
+        value = other.value;
+        return *this;
+    }
+
+    inline KNElement& operator = (KNElement&& other)
+    {
+        if (&other == this) {
+            return *this;
+        }
+        key = std::move(other.key);
+        value = std::move(other.value);
+        return *this;
+    }
 };
+
 
 //////////////////////////////////////////////////////////////////////
 // fixed size binary heap
@@ -126,17 +170,17 @@ public:
         // first move up elements on a min-path
         u64 hole = 1;
         u64 succ = 2;
-        u64 sz   = m_size;
+        u64 sz = m_size;
 
         while (succ < sz) {
             Key key1 = m_data[succ].key;
             Key key2 = m_data[succ + 1].key;
             if (key1 > key2) {
                 succ++;
-                m_data[hole].key   = key2;
+                m_data[hole].key = key2;
                 m_data[hole].value = m_data[succ].value;
             } else {
-                m_data[hole].key   = key1;
+                m_data[hole].key = key1;
                 m_data[hole].value = m_data[succ].value;
             }
             hole = succ;
@@ -145,7 +189,7 @@ public:
 
         // bubble up rightmost element
         Key bubble = m_data[sz].key;
-        int pred = hole >> 1;
+        u64 pred = hole >> 1;
         while (m_data[pred].key > bubble) { // must terminate since min at root
             m_data[hole] = m_data[pred];
             hole = pred;
@@ -189,7 +233,7 @@ public:
         m_data[hole].value = v;
     }
 
-    inline void sortTo(Element* to)
+    inline void sort_to(Element* to)
     {
         // sort in increasing order and empty
         const u64 sz = m_size;
@@ -231,13 +275,13 @@ public:
 //////////////////////////////////////////////////////////////////////
 // The data structure from Knuth, "Sorting and Searching", Section 5.4.1
 template <class Key, class Value>
-class KNLooserTree
+class KNLoserTree
 {
 private:
     typedef KNElement<Key, Value> Element;
     struct Entry
     {
-        Key key;   // Key of Looser element (winner for 0)
+        Key key;   // Key of Loser element (winner for 0)
         u64 index; // number of loosing segment
     };
 
@@ -251,7 +295,7 @@ private:
 
     Element m_dummy; // target of empty segment pointers
 
-    // upper levels of looser trees
+    // upper levels of loser trees
     // entry[0] contains the winner info
     Entry m_entry[KNKMAX];
 
@@ -268,7 +312,7 @@ private:
     void deallocate_segment(u64 index);
     void double_K();
     void compact_tree();
-    void rebuild_looser_tree();
+    void rebuild_loser_tree();
     int segment_is_empty(u64 i);
 
     inline void tree_step(u64 level, Key& winner_key, u64& winner_index,
@@ -279,7 +323,7 @@ private:
         __attribute__((__always_inline__));
 
 public:
-    KNLooserTree();
+    KNLoserTree();
     void init(const Key& sup);
 
     void multi_merge_unrolled_3(Element* to, u64 l);
@@ -319,7 +363,7 @@ class KNHeap
 private:
     typedef KNElement<Key, Value> Element;
 
-    KNLooserTree<Key, Value> m_tree[KNLevels];
+    KNLoserTree<Key, Value> m_tree[KNLevels];
 
     // one delete buffer for each tree (extra space for sentinel)
     Element m_buffer2[KNLevels][KNN + 1]; // tree->buffer2->buffer1
@@ -656,9 +700,9 @@ finish:
     *f3   = from3;
 }
 
-///////////////////////// LooserTree ///////////////////////////////////
+///////////////////////// LoserTree ///////////////////////////////////
 template <class Key, class Value>
-KNLooserTree<Key, Value>::KNLooserTree()
+KNLoserTree<Key, Value>::KNLoserTree()
     : m_last_free(0), m_size(0), m_logK(0), m_k(1)
 {
     m_empty[0] = 0;
@@ -670,15 +714,15 @@ KNLooserTree<Key, Value>::KNLooserTree()
 
 
 template <class Key, class Value>
-void KNLooserTree<Key, Value>::init(const Key& sup)
+void KNLoserTree<Key, Value>::init(const Key& sup)
 {
     m_dummy.key = sup;
-    rebuild_looser_tree();
+    rebuild_loser_tree();
 }
 
-// rebuild looser tree information from the values in current
+// rebuild loser tree information from the values in current
 template <class Key, class Value>
-void KNLooserTree<Key, Value>::rebuild_looser_tree()
+void KNLoserTree<Key, Value>::rebuild_loser_tree()
 {
     u64 winner = init_winner(1);
     m_entry[0].index = winner;
@@ -692,7 +736,7 @@ void KNLooserTree<Key, Value>::rebuild_looser_tree()
 // initialize entry[root].index and the subtree rooted there
 // return winner index
 template <class Key, class Value>
-u64 KNLooserTree<Key, Value>::init_winner(u64 root)
+u64 KNLoserTree<Key, Value>::init_winner(u64 root)
 {
     if (root >= m_k) { // leaf reached
         return root - m_k;
@@ -716,11 +760,11 @@ u64 KNLooserTree<Key, Value>::init_winner(u64 root)
 
 // first go up the tree all the way to the root
 // hand down old winner for the respective subtree
-// based on new value, and old winner and looser
+// based on new value, and old winner and loser
 // update each node on the path to the root top down.
 // This is implemented recursively
 template <class Key, class Value>
-void KNLooserTree<Key, Value>::update_on_insert(u64 node, const Key& new_key,
+void KNLoserTree<Key, Value>::update_on_insert(u64 node, const Key& new_key,
                                                 u64 new_index, Key& winner_key,
                                                 u64& winner_index, u64& mask)
 {
@@ -735,11 +779,11 @@ void KNLooserTree<Key, Value>::update_on_insert(u64 node, const Key& new_key,
         }
     } else {
         update_on_insert(node >> 1, new_key, new_index, winner_key, winner_index, mask);
-        const Key& looser_key = m_entry[node].key;
-        u64 looser_index = m_entry[node].index;
+        const Key& loser_key = m_entry[node].key;
+        u64 loser_index = m_entry[node].index;
 
         if ((winner_index & mask) != (new_index & mask)) { // different subtrees
-            if (new_key < looser_key) { // newKey will have influence here
+            if (new_key < loser_key) { // newKey will have influence here
                 if (new_key < winner_key) { // old winner loses here
                     m_entry[node].key   = winner_key;
                     m_entry[node].index = winner_index;
@@ -748,8 +792,8 @@ void KNLooserTree<Key, Value>::update_on_insert(u64 node, const Key& new_key,
                     m_entry[node].index = new_index;
                 }
             }
-            winner_key = looser_key;
-            winner_index = looser_index;
+            winner_key = loser_key;
+            winner_index = loser_index;
         }
         // note that nothing needs to be done if
         // the winner came from the same subtree
@@ -766,7 +810,7 @@ void KNLooserTree<Key, Value>::update_on_insert(u64 node, const Key& new_key,
 // make the tree two times as wide
 // may only be called if no free slots are left ?? necessary ??
 template <class Key, class Value>
-void KNLooserTree<Key, Value>::double_K()
+void KNLoserTree<Key, Value>::double_K()
 {
     for (u64 i = (2 * m_k) - 1; i >= m_k; i--) {
         m_current[i] = &m_dummy;
@@ -778,14 +822,14 @@ void KNLooserTree<Key, Value>::double_K()
     m_k *= 2;
     ++m_logK;
 
-    // recompute looser tree information
-    rebuild_looser_tree();
+    // recompute loser tree information
+    rebuild_loser_tree();
 }
 
 
 // compact nonempty segments in the left half of the tree
 template <class Key, class Value>
-void KNLooserTree<Key, Value>::compact_tree()
+void KNLoserTree<Key, Value>::compact_tree()
 {
     const Key& sup = m_dummy.key;
 
@@ -815,15 +859,15 @@ void KNLooserTree<Key, Value>::compact_tree()
         m_current[to] = &m_dummy;
     }
 
-    // recompute looser tree information
-    rebuild_looser_tree();
+    // recompute loser tree information
+    rebuild_loser_tree();
 }
 
 
 // insert segment beginning at to
 // require: spaceIsAvailable() == 1
 template <class Key, class Value>
-void KNLooserTree<Key, Value>::insert_segment(Element* to, u64 sz)
+void KNLoserTree<Key, Value>::insert_segment(Element* to, u64 sz)
 {
     if (sz > 0) {
         // get a free slot
@@ -855,7 +899,7 @@ void KNLooserTree<Key, Value>::insert_segment(Element* to, u64 sz)
 
 // free an empty segment
 template <class Key, class Value>
-void KNLooserTree<Key, Value>::deallocate_segment(u64 index)
+void KNLoserTree<Key, Value>::deallocate_segment(u64 index)
 {
     // reroute current pointer to some empty dummy segment
     // with a sentinel key
@@ -872,7 +916,7 @@ void KNLooserTree<Key, Value>::deallocate_segment(u64 index)
 
 template<class Key, class Value>
 inline void
-KNLooserTree<Key, Value>::tree_step(u64 level, Key& winner_key,
+KNLoserTree<Key, Value>::tree_step(u64 level, Key& winner_key,
                                     u64& winner_index, Entry* reg_entry,
                                     u64 logK)
 {
@@ -891,7 +935,7 @@ KNLooserTree<Key, Value>::tree_step(u64 level, Key& winner_key,
 
 template <class Key, class Value>
 inline void
-KNLooserTree<Key, Value>::multi_merge_body(Element* to, u64 l, u64 logK)
+KNLoserTree<Key, Value>::multi_merge_body(Element* to, u64 l, u64 logK)
 {
     Entry* current_pos;
     Key current_key;
@@ -922,7 +966,7 @@ KNLooserTree<Key, Value>::multi_merge_body(Element* to, u64 l, u64 logK)
         }
         ++to;
 
-        // update looser tree
+        // update loser tree
         TreeStep(10, winner_key, winner_index, reg_entry, logK);
         TreeStep(9, winner_key, winner_index, reg_entry, logK);
         TreeStep(8, winner_key, winner_index, reg_entry, logK);
@@ -942,49 +986,49 @@ KNLooserTree<Key, Value>::multi_merge_body(Element* to, u64 l, u64 logK)
 // this looks ugly but the include file explains
 // why this is the most portable choice
 template <class Key, class Value>
-void KNLooserTree<Key, Value>::multi_merge_unrolled_3(Element* to, u64 l)
+void KNLoserTree<Key, Value>::multi_merge_unrolled_3(Element* to, u64 l)
 {
     multi_merge_body(to, l, 3);
 }
 
 template <class Key, class Value>
-void KNLooserTree<Key, Value>::multi_merge_unrolled_4(Element* to, u64 l)
+void KNLoserTree<Key, Value>::multi_merge_unrolled_4(Element* to, u64 l)
 {
     multi_merge_body(to, l, 4);
 }
 
 template <class Key, class Value>
-void KNLooserTree<Key, Value>::multi_merge_unrolled_5(Element* to, u64 l)
+void KNLoserTree<Key, Value>::multi_merge_unrolled_5(Element* to, u64 l)
 {
     multi_merge_body(to, l, 5);
 }
 
 template <class Key, class Value>
-void KNLooserTree<Key, Value>::multi_merge_unrolled_6(Element* to, u64 l)
+void KNLoserTree<Key, Value>::multi_merge_unrolled_6(Element* to, u64 l)
 {
     multi_merge_body(to, l, 6);
 }
 
 template <class Key, class Value>
-void KNLooserTree<Key, Value>::multi_merge_unrolled_7(Element* to, u64 l)
+void KNLoserTree<Key, Value>::multi_merge_unrolled_7(Element* to, u64 l)
 {
     multi_merge_body(to, l, 7);
 }
 
 template <class Key, class Value>
-void KNLooserTree<Key, Value>::multi_merge_unrolled_8(Element* to, u64 l)
+void KNLoserTree<Key, Value>::multi_merge_unrolled_8(Element* to, u64 l)
 {
     multi_merge_body(to, l, 8);
 }
 
 template <class Key, class Value>
-void KNLooserTree<Key, Value>::multi_merge_unrolled_9(Element* to, u64 l)
+void KNLoserTree<Key, Value>::multi_merge_unrolled_9(Element* to, u64 l)
 {
     multi_merge_body(to, l, 9);
 }
 
 template <class Key, class Value>
-void KNLooserTree<Key, Value>::multi_merge_unrolled_10(Element* to, u64 l)
+void KNLoserTree<Key, Value>::multi_merge_unrolled_10(Element* to, u64 l)
 {
     multi_merge_body(to, l, 10);
 }
@@ -995,7 +1039,7 @@ void KNLooserTree<Key, Value>::multi_merge_unrolled_10(Element* to, u64 l)
 // - there are at least l elements
 // - segments are ended by sentinels
 template <class Key, class Value>
-void KNLooserTree<Key, Value>::multi_merge(Element* to, u64 l)
+void KNLoserTree<Key, Value>::multi_merge(Element* to, u64 l)
 {
     switch(m_logK) {
     case 0:
@@ -1009,7 +1053,7 @@ void KNLooserTree<Key, Value>::multi_merge(Element* to, u64 l)
 
     case 1:
         merge(m_current + 0, m_current + 1, to, l);
-        rebuild_looser_tree();
+        rebuild_loser_tree();
         if (segment_is_empty(0)) {
             deallocate_segment(0);
         }
@@ -1020,7 +1064,7 @@ void KNLooserTree<Key, Value>::multi_merge(Element* to, u64 l)
 
     case 2:
         merge4(m_current + 0, m_current + 1, m_current + 2, m_current + 3, to, l);
-        rebuild_looser_tree();
+        rebuild_loser_tree();
         if (segment_is_empty(0)) {
             deallocate_segment(0);
         }
@@ -1073,7 +1117,7 @@ void KNLooserTree<Key, Value>::multi_merge(Element* to, u64 l)
 
 // is this segment empty and does not point to dummy yet?
 template <class Key, class Value>
-inline int KNLooserTree<Key, Value>::segment_is_empty(u64 i)
+inline int KNLoserTree<Key, Value>::segment_is_empty(u64 i)
 {
     return (m_current[i]->key == get_supremum() &&
             m_current[i] != &m_dummy);
@@ -1081,7 +1125,7 @@ inline int KNLooserTree<Key, Value>::segment_is_empty(u64 i)
 
 // multi-merge for arbitrary K
 template <class Key, class Value>
-void KNLooserTree<Key, Value>::multi_merge_K(Element* to, u64 l)
+void KNLoserTree<Key, Value>::multi_merge_K(Element* to, u64 l)
 {
     Entry *current_pos;
     Key current_key;
