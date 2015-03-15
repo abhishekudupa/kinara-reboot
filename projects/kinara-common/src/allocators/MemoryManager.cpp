@@ -76,7 +76,7 @@ void* MemoryManager::allocate(u64 size)
     s_peak_bytes_allocated = (s_total_bytes_allocated > s_peak_bytes_allocated ?
                               s_total_bytes_allocated : s_peak_bytes_allocated);
 
-    u64* block_ptr = static_cast<u64*>(malloc(size));
+    u64* block_ptr = static_cast<u64*>(malloc(actual_size));
     if (block_ptr == nullptr) {
         throw OutOfMemoryError();
     }
@@ -99,7 +99,7 @@ void* MemoryManager::allocate_cleared(u64 size)
     s_peak_bytes_allocated = (s_total_bytes_allocated > s_peak_bytes_allocated ?
                               s_total_bytes_allocated : s_peak_bytes_allocated);
 
-    u64* block_ptr = static_cast<u64*>(calloc(size, 1));
+    u64* block_ptr = static_cast<u64*>(calloc(actual_size, 1));
     if (block_ptr == nullptr) {
         throw OutOfMemoryError();
     }

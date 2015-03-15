@@ -79,7 +79,7 @@ String::String(const String& other, u64 pos, u64 len)
 }
 
 String::String(String&& other)
-    : m_the_repr(nullptr)
+    : String()
 {
     std::swap(m_the_repr, other.m_the_repr);
 }
@@ -102,10 +102,8 @@ String::String(u64 n, char c)
 
 String::~String()
 {
-    if (m_the_repr != nullptr) {
-        m_the_repr->dec_ref();
-        m_the_repr = nullptr;
-    }
+    m_the_repr->dec_ref();
+    m_the_repr = nullptr;
 }
 
 String& String::operator = (const String& other)
@@ -340,8 +338,6 @@ String& String::assign(u64 n, char c)
 
 String& String::assign(String&& other)
 {
-    m_the_repr->dec_ref();
-    m_the_repr = nullptr;
     std::swap(m_the_repr, other.m_the_repr);
     return *this;
 }

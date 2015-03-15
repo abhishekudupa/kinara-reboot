@@ -111,6 +111,8 @@ private:
 
     static inline void expand_table();
     static inline void garbage_collect();
+    // cleans up the entries marked deleted
+    static inline void rehash_table();
 
 public:
     static const StringRepr* get_repr(const char* string_value, u64 length);

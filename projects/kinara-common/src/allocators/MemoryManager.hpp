@@ -161,7 +161,7 @@ static inline void deallocate_array(const T* array_ptr)
     const u64* array_ptr_as_u64 = static_cast<const u64*>(array_ptr_as_void) - 1;
     // we need to compute the actual size of this array
     u64 actual_num_elements = *array_ptr_as_u64;
-    actual_num_elements = actual_num_elements / sizeof(T*);
+    actual_num_elements = actual_num_elements / sizeof(T);
 
     auto cur_ptr = array_ptr;
     for (u64 i = 0; i < actual_num_elements; ++i) {

@@ -40,85 +40,122 @@
 #if !defined KINARA_KINARA_COMMON_CONTAINERS_PRIORITY_QUEUE_HPP_
 #define KINARA_KINARA_COMMON_CONTAINERS_PRIORITY_QUEUE_HPP_
 
+#include <utility>
+
 #include "HeapCommon.hpp"
-#include "SequenceHeap.hpp"
+#include "MultiWayHeap.hpp"
 
 namespace kinara {
 namespace containers {
 
-template <typename Key, typename Value, typename HeapType = sequence_heap_detail_::KNHeap>
+namespace ka = kinara::allocators;
+
+template <typename T, typename Comparator = std::less<T>,
+          typename HeapType = BinaryHeap<T, Comparator> >
 class PriorityQueue final
 {
 private:
-    HeapType* m_heap_ptr;
+    HeapType m_heap;
 
 public:
     inline PriorityQueue()
+        : m_heap()
     {
+        // Nothing here
     }
 
     template <typename InputIterator>
     inline PriorityQueue(const InputIterator& first, const InputIterator& last)
+        : PriorityQueue()
     {
-
-    }
-
-    inline PriorityQueue(const PriorityQueue& other)
-    {
-
+        for (auto it = first; it != last; ++it) {
+            m_heap.insert(*it);
+        }
     }
 
     inline PriorityQueue(PriorityQueue&& other)
+        : m_heap()
     {
-
+        std::swap(other.m_heap, m_heap);
     }
 
     inline ~PriorityQueue()
     {
-
+        // Nothing here
     }
 
     inline bool empty() const
     {
+        return (m_heap.get_size() == 0);
     }
 
     inline u64 size() const
     {
-
+        return m_heap.get_size();
     }
 
-    inline void top(Key& key, Value& value) const
+    inline const T& top() const
     {
-
+        return m_heap.get_min();
     }
 
-    inline void push(const Key& key, const Value& value)
+    inline void push(const T& value)
     {
-
-    }
-
-    inline void push(const Key& key, Value&& value)
-    {
-
-    }
-
-    template <typename... ArgTypes>
-    inline void emplace(const Key& key, ArgTypes&&... args)
-    {
-
+        return m_heap.insert(value);
     }
 
     inline void pop()
     {
-
+        m_heap.delete_min();
     }
 
     inline void swap(PriorityQueue& other) noexcept
     {
-
+        std::swap(m_heap, other.m_heap);
     }
-
 };
+
+namespace priority_queue_detail_ {
+
+template <typename Key, typename Value, typename Comparator = std::less<Key> >
+class PairComparator
+{
+public:
+    typedef std::pair<Key, Value> PairType;
+
+    inline bool operator () (const PairType& pair1, const PairType& pair2) const
+    {
+        Comparator comparator;
+        return comparator(pair1.first, pair2.first);
+    }
+};
+
+} /* end namespace priority_queue_detail_ */
+
+template <typename Value>
+using u32PriorityQueue = PriorityQueue<std::pair<u32, Value>,
+                                       priority_queue_detail_::PairComparator<u32, Value> >;
+
+template <typename Value>
+using i32PriorityQueue = PriorityQueue<std::pair<i32, Value>,
+                                       priority_queue_detail_::PairComparator<i32, Value> >;
+
+template <typename Value>
+using u64PriorityQueue = PriorityQueue<std::pair<u64, Value>,
+                                       priority_queue_detail_::PairComparator<u64, Value> >;
+
+template <typename Value>
+using i64PriorityQueue = PriorityQueue<std::pair<i64, Value>,
+                                       priority_queue_detail_::PairComparator<i64, Value> >;
+
+template <typename Value>
+using floatPriorityQueue = PriorityQueue<std::pair<float, Value>,
+                                         priority_queue_detail_::PairComparator<float, Value> >;
+
+template <typename Value>
+using doublePriorityQueue = PriorityQueue<std::pair<double, Value>,
+                                          priority_queue_detail_::PairComparator<double, Value> >;
+
 
 } /* end namespace kinara */
 } /* end namespace containers */

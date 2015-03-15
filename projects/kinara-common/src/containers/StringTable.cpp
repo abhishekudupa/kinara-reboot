@@ -136,6 +136,13 @@ inline const StringRepr* StringTable::find(const char* string_value, u64 length)
         entry = the_hash_table[index];
     }
 
+    // if more than 10% of entries were probed, then
+    // trigger a rebuild of the hash table
+    if (num_probes >= (the_hash_table_size / 10) && the_hash_table_size >= 64) {
+        rehash_table();
+    }
+
+
     // no slot is marked unused in the table, but
     // slots could possibly be marked deleted, but
     // nothing that is actually in use matches the
@@ -223,6 +230,31 @@ inline const StringRepr* StringTable::move_into_table(StringRepr* repr_ptr,
     // we now have an empty or deleted slot
     string_table[index] = repr_ptr;
     return repr_ptr;
+}
+
+// precondition: true
+// ensures: the_hash_table() contains no slots marked "deleted"
+inline void StringTable::rehash_table()
+{
+    auto the_table = hash_table();
+    auto table_size = hash_table_size();
+
+    auto new_table =
+        ka::casted_allocate_raw_cleared<StringRepr*>(sizeof(StringRepr*) * table_size);
+
+    for (u64 i = 0; i < table_size; ++i) {
+        auto entry = the_table[i];
+        if (is_slot_nonused(entry) || is_slot_deleted(entry)) {
+            continue;
+        }
+        move_into_table(entry, new_table, table_size);
+        the_table[i] = (StringRepr*)sc_nonused_slot_marker;
+    }
+
+    // free the old table and set the appropriate variables
+    ka::deallocate_raw(the_table, table_size * sizeof(StringRepr*));
+
+    hash_table() = new_table;
 }
 
 // precondition: true
