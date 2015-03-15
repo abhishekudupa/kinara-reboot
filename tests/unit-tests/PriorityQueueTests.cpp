@@ -36,7 +36,6 @@
 // Code:
 
 #include "../../projects/kinara-common/src/containers/PriorityQueue.hpp"
-#include "../../projects/kinara-common/src/containers/SequenceHeap.hpp"
 #include "../../projects/kinara-common/src/containers/MultiWayHeap.hpp"
 #include "../../projects/kinara-common/src/containers/String.hpp"
 
