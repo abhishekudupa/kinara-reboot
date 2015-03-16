@@ -57,6 +57,7 @@ class DequeBase final :
 {
 public:
     typedef T ValueType;
+    typedef T value_type;
     typedef T* PtrType;
     typedef T& RefType;
     typedef const T* ConstPtrType;

@@ -66,6 +66,7 @@ class VectorBase final
 {
 public:
     typedef T ValueType;
+    typedef T value_type;
     typedef T* PtrType;
     typedef const T* ConstPtrType;
     typedef T& RefType;

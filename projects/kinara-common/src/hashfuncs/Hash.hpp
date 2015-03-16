@@ -233,6 +233,23 @@ public:
     }
 };
 
+// hashes for iterables
+template <typename T, typename ElemHasher = Hasher<T::value_type>>
+class IterableHasher
+{
+public:
+    inline u64 operator () (const T& iterable) const
+    {
+        ElemHasher elem_hasher;
+        u64 retval = 0;
+        for (auto it = iterable.begin(), last = iterable.end(); it != last; ++it) {
+            auto cur_hash = elem_hasher(*it);
+            retval = retval ^ ((cur_hash << 23) ^ (cur_hash >> 37));
+        }
+        return retval;
+    }
+};
+
 
 } /* end namespace utils */
 } /* end namespace kinara */
