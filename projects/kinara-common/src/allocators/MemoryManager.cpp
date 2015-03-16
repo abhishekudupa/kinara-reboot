@@ -42,10 +42,29 @@
 namespace kinara {
 namespace allocators {
 
-u64 MemoryManager::s_total_bytes_allocated = (u64)0;
-u64 MemoryManager::s_memory_allocation_limit = UINT64_MAX;
-u64 MemoryManager::s_warn_watermark = UINT64_MAX;
-u64 MemoryManager::s_peak_bytes_allocated = (u64)0;
+inline u64& MemoryManager::total_bytes_allocated()
+{
+    static u64 s_total_bytes_allocated = (u64)0;
+    return s_total_bytes_allocated;
+}
+
+inline u64& MemoryManager::memory_allocation_limit()
+{
+    static u64 s_memory_allocation_limit = (u64)UINT64_MAX;
+    return s_memory_allocation_limit;
+}
+
+inline u64& MemoryManager::warn_watermark()
+{
+    static u64 s_warn_watermark = (u64)UINT64_MAX;
+    return s_warn_watermark;
+}
+
+inline u64& MemoryManager::peak_bytes_allocated()
+{
+    static u64 s_peak_bytes_allocated = (u64)0;
+    return s_peak_bytes_allocated;
+}
 
 OutOfMemoryError::OutOfMemoryError() noexcept
 {
@@ -69,12 +88,17 @@ void* MemoryManager::allocate(u64 size)
     }
     auto actual_size = size + sc_block_header_size;
 
-    if (s_total_bytes_allocated + actual_size > s_memory_allocation_limit) {
+    auto& total = total_bytes_allocated();
+    total += actual_size;
+    auto& peak = peak_bytes_allocated();
+    auto& limit = memory_allocation_limit();
+
+    if (total + actual_size > limit) {
         throw OutOfMemoryError();
     }
-    s_total_bytes_allocated += actual_size;
-    s_peak_bytes_allocated = (s_total_bytes_allocated > s_peak_bytes_allocated ?
-                              s_total_bytes_allocated : s_peak_bytes_allocated);
+
+    peak = (total > peak ? total : peak);
+
 
     u64* block_ptr = static_cast<u64*>(malloc(actual_size));
     if (block_ptr == nullptr) {
@@ -90,14 +114,16 @@ void* MemoryManager::allocate_cleared(u64 size)
         return nullptr;
     }
     auto actual_size = size + sc_block_header_size;
+    auto& total = total_bytes_allocated();
+    auto& peak = peak_bytes_allocated();
+    auto limit = memory_allocation_limit();
 
-    if (s_total_bytes_allocated + actual_size > s_memory_allocation_limit) {
+    if (total + actual_size > limit) {
         throw OutOfMemoryError();
     }
 
-    s_total_bytes_allocated += actual_size;
-    s_peak_bytes_allocated = (s_total_bytes_allocated > s_peak_bytes_allocated ?
-                              s_total_bytes_allocated : s_peak_bytes_allocated);
+    total += actual_size;
+    peak = (total > peak ? total : peak);
 
     u64* block_ptr = static_cast<u64*>(calloc(actual_size, 1));
     if (block_ptr == nullptr) {
@@ -115,13 +141,17 @@ void* MemoryManager::allocate_raw(u64 size)
     if (size == 0) {
         return nullptr;
     }
-    if (s_total_bytes_allocated + size > s_memory_allocation_limit) {
+
+    auto& total = total_bytes_allocated();
+    auto& peak = peak_bytes_allocated();
+    auto& limit = memory_allocation_limit();
+
+    if (total + size > limit) {
         throw OutOfMemoryError();
     }
 
-    s_total_bytes_allocated += size;
-    s_peak_bytes_allocated = (s_total_bytes_allocated > s_peak_bytes_allocated ?
-                              s_total_bytes_allocated : s_peak_bytes_allocated);
+    total += size;
+    peak = (total > peak ? total : peak);
     auto retval = malloc(size);
     if (retval == nullptr) {
         throw OutOfMemoryError();
@@ -135,14 +165,17 @@ void* MemoryManager::allocate_raw_cleared(u64 size)
         return nullptr;
     }
 
-    if (s_total_bytes_allocated + size > s_memory_allocation_limit) {
+
+    auto& total = total_bytes_allocated();
+    auto& peak = peak_bytes_allocated();
+    auto& limit = memory_allocation_limit();
+
+    if (total + size > limit) {
         throw OutOfMemoryError();
     }
 
-    s_total_bytes_allocated += size;
-    s_peak_bytes_allocated = (s_total_bytes_allocated > s_peak_bytes_allocated ?
-                              s_total_bytes_allocated : s_peak_bytes_allocated);
-
+    total += size;
+    peak = (total > peak ? total : peak);
 
     auto retval = calloc(size, 1);
     if (retval == nullptr) {
@@ -156,8 +189,9 @@ void MemoryManager::deallocate(const void* block_ptr)
     if (block_ptr == nullptr) {
         return;
     }
+
     auto actual_block_ptr = (static_cast<const u64*>(block_ptr) - 1);
-    s_total_bytes_allocated -= *actual_block_ptr;
+    total_bytes_allocated() -= *actual_block_ptr;
     free(const_cast<u64*>(actual_block_ptr));
 }
 
@@ -166,48 +200,48 @@ void MemoryManager::deallocate_raw(const void* block_ptr, u64 size)
     if (block_ptr == nullptr) {
         return;
     }
-    s_total_bytes_allocated -= size;
+    total_bytes_allocated() -= size;
     free(const_cast<void*>(block_ptr));
 }
 
 void MemoryManager::set_allocation_limit(u64 allocation_limit)
 {
-    s_memory_allocation_limit = allocation_limit;
+    memory_allocation_limit() = allocation_limit;
 }
 
-void MemoryManager::set_warn_watermark(u64 warn_watermark)
+void MemoryManager::set_warn_watermark(u64 new_warn_watermark)
 {
-    s_warn_watermark = warn_watermark;
+    warn_watermark() = new_warn_watermark;
 }
 
 u64 MemoryManager::get_bytes_allocated()
 {
-    return s_total_bytes_allocated;
+    return total_bytes_allocated();
 }
 
 u64 MemoryManager::get_peak_bytes_allocated()
 {
-    return s_peak_bytes_allocated;
+    return peak_bytes_allocated();
 }
 
 u64 MemoryManager::get_allocation_limit()
 {
-    return s_memory_allocation_limit;
+    return memory_allocation_limit();
 }
 
 u64 MemoryManager::get_warn_watermark()
 {
-    return s_warn_watermark;
+    return warn_watermark();
 }
 
 bool MemoryManager::is_warn_watermark_reached()
 {
-    return (s_total_bytes_allocated >= s_warn_watermark);
+    return (total_bytes_allocated() >= warn_watermark());
 }
 
 bool MemoryManager::is_out_of_memory()
 {
-    return (s_total_bytes_allocated >= s_memory_allocation_limit);
+    return (total_bytes_allocated() >= memory_allocation_limit());
 }
 
 

@@ -1,9 +1,11 @@
-// PrimeGenerator.hpp ---
-// Filename: PrimeGenerator.hpp
-// Author: Abhishek Udupa
-// Created: Mon Feb 16 13:59:20 2015 (-0500)
+// PrimeGeneratorTest.cpp ---
 //
-// Copyright (c) 2013, Abhishek Udupa, University of Pennsylvania
+// Filename: PrimeGeneratorTest.cpp
+// Author: Abhishek Udupa
+// Created: Mon Mar 16 18:14:03 2015 (-0400)
+//
+//
+// Copyright (c) 2015, Abhishek Udupa, University of Pennsylvania
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -35,46 +37,39 @@
 
 // Code:
 
-#if !defined KINARA_KINARA_COMMON_PRIMEUTILS_PRIME_GENERATOR_HPP_
-#define KINARA_KINARA_COMMON_PRIMEUTILS_PRIME_GENERATOR_HPP_
+#include "../../projects/kinara-common/src/primeutils/PrimeGenerator.hpp"
+#include "../../thirdparty/gtest/include/gtest/gtest.h"
+#include <random>
 
-#include "../basetypes/KinaraBase.hpp"
-#include "../containers/Vector.hpp"
+using kinara::utils::PrimeGenerator;
 
-namespace kinara {
-namespace utils {
+using kinara::u32;
+using kinara::u64;
 
-namespace kc = kinara::containers;
+#define MAX_TEST_SIZE ((u64)(1 << 10))
 
-class PrimeGenerator
+TEST(PrimeGenerator, Functional)
 {
-private:
-    static constexpr u64 sc_max_prime_list_size = ((u64)1 << 26);
+    u64 cur_prime = 2;
+    while (cur_prime < MAX_TEST_SIZE) {
+        auto prime_from_stateless = PrimeGenerator::get_next_prime(cur_prime, true);
+        auto prime_from_stateful = PrimeGenerator::get_next_prime(cur_prime);
+        EXPECT_EQ(prime_from_stateless, prime_from_stateful);
+        cur_prime = prime_from_stateless;
+    }
 
-    static inline void process_next_k(u64 k);
-    static inline u64 find_smallest_prime(u64 lower_bound);
-    static inline u64 find_next_prime(u64 lower_bound);
-    static inline kc::u64Vector& get_prime_table();
-    static inline bool is_prime(u64 candidate);
+    // generate random primes now
+    PrimeGenerator::trim_table();
+    std::default_random_engine generator;
+    std::uniform_int_distribution<u32> distribution(0, 1 << 24);
 
-public:
-    PrimeGenerator() = delete;
-    PrimeGenerator(const PrimeGenerator& other) = delete;
-    PrimeGenerator(PrimeGenerator&& other) = delete;
-    PrimeGenerator& operator = (const PrimeGenerator& other) = delete;
-    PrimeGenerator& operator = (PrimeGenerator&& other) = delete;
-
-    static void finalize();
-    static void trim_table();
-
-    // gets the next prime greater than or equal to lower_bound
-    static u64 get_next_prime(u64 lower_bound, bool stateless = false);
-};
-
-} /* end namespace utils */
-} /* end namespace kinara */
-
-#endif /* KINARA_KINARA_COMMON_PRIMEUTILS_PRIME_GENERATOR_HPP_ */
+    for (u64 i = 0; i < MAX_TEST_SIZE; ++i) {
+        auto lower_bound = distribution(generator);
+        auto prime_from_stateless = PrimeGenerator::get_next_prime(lower_bound, true);
+        auto prime_from_stateful = PrimeGenerator::get_next_prime(lower_bound);
+        EXPECT_EQ(prime_from_stateless, prime_from_stateful);
+    }
+}
 
 //
-// PrimeGenerator.hpp ends here
+// PrimeGeneratorTest.cpp ends here

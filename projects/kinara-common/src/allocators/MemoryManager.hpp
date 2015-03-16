@@ -58,10 +58,11 @@ public:
 class MemoryManager final
 {
 private:
-    static u64 s_total_bytes_allocated;
-    static u64 s_memory_allocation_limit;
-    static u64 s_warn_watermark;
-    static u64 s_peak_bytes_allocated;
+    static inline u64& total_bytes_allocated();
+    static inline u64& memory_allocation_limit();
+    static inline u64& warn_watermark();
+    static inline u64& peak_bytes_allocated();
+
     static constexpr u64 sc_block_header_size = sizeof(u64);
 
 public:

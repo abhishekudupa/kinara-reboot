@@ -72,6 +72,10 @@ public:
     static constexpr float sc_default_max_load_factor = 0.7f;
     static constexpr float sc_default_min_load_factor = 0.05f;
     static constexpr float sc_allocator_utilization_low = 0.1f;
+    // ratio of blocks marked deleted to unused before rehashing
+    // rehash when half of all the (overall) unused blocks are
+    // marked as deleted
+    static constexpr float sc_deleted_nonused_rehash_ratio = 0.5f;
 
 private:
     StringTable() = delete;
@@ -90,6 +94,7 @@ private:
     static float s_resize_factor;
     static float s_max_load_factor;
     static float s_min_load_factor;
+    static float s_deleted_nonused_rehash_ratio;
 
     static inline StringRepr**& hash_table();
     static inline ka::PoolAllocator* allocator();
@@ -109,6 +114,11 @@ private:
                                                     u64 table_size);
     static inline const StringRepr* insert(const char* string_value, u64 length);
 
+    static inline void rebuild_table(StringRepr** new_table,
+                                     StringRepr** old_table,
+                                     u64 new_table_size,
+                                     u64 old_table_size);
+
     static inline void expand_table();
     static inline void garbage_collect();
     // cleans up the entries marked deleted
@@ -119,9 +129,15 @@ public:
     static void finalize();
 
     // configuration
+    static float get_resize_factor();
+    static float get_min_load_factor();
+    static float get_max_load_factor();
+    static float get_deleted_nonused_rehash_ratio();
+
     static void set_resize_factor(float new_resize_factor);
     static void set_min_load_factor(float new_min_load_factor);
     static void set_max_load_factor(float new_max_load_factor);
+    static void set_deleted_nonused_rehash_ratio(float new_rehash_ratio);
     static void gc();
 };
 

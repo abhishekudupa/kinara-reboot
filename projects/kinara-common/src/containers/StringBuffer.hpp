@@ -78,6 +78,14 @@ static inline StringBuffer& operator << (StringBuffer& string_buffer,
     return string_buffer;
 }
 
+template <typename T>
+static inline StringBuffer& operator << (StringBuffer& string_buffer,
+                                         const T& object)
+{
+    string_buffer.append(object.to_string().c_str());
+    return string_buffer;
+}
+
 extern StringBuffer& operator << (StringBuffer& string_buffer, String& contents);
 
 static inline std::istream& operator >> (std::istream& input_stream,

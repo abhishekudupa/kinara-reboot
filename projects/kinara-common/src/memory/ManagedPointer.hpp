@@ -192,7 +192,8 @@ inline ManagedPointerBase<T, CONSTPOINTER>::ManagedPointerBase()
 }
 
 template <typename T, bool CONSTPOINTER>
-inline ManagedPointerBase<T, CONSTPOINTER>::ManagedPointerBase(const ManagedPointerBase& other_managed_ptr)
+inline ManagedPointerBase<T, CONSTPOINTER>::ManagedPointerBase(const ManagedPointerBase&
+                                                               other_managed_ptr)
     : m_ptr(nullptr)
 {
     m_ptr = other_managed_ptr.m_ptr;
@@ -219,7 +220,8 @@ ManagedPointerBase<T, CONSTPOINTER>::ManagedPointerBase
 }
 
 template <typename T, bool CONSTPOINTER>
-inline ManagedPointerBase<T, CONSTPOINTER>::ManagedPointerBase(ManagedPointerBase&& other_managed_ptr)
+inline ManagedPointerBase<T, CONSTPOINTER>::ManagedPointerBase(ManagedPointerBase&&
+                                                               other_managed_ptr)
     : m_ptr(nullptr)
 {
     std::swap(m_ptr, other_managed_ptr.m_ptr);
