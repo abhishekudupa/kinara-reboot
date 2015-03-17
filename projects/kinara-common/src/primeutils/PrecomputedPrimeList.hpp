@@ -44,7 +44,7 @@ namespace kinara {
 namespace utils {
 namespace precomputed_primes {
 
-extern const u64 precomputed_prime_list[];
+extern const u32 precomputed_prime_list[];
 extern const u64 num_precomputed_primes;
 extern const u64 max_precomputed_prime;
 
