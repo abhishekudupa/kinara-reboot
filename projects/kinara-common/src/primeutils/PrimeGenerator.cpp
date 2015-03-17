@@ -37,24 +37,25 @@
 
 #include "../basetypes/KinaraTypes.hpp"
 
+#include "PrecomputedPrimeList.hpp"
 #include "PrimeGenerator.hpp"
 
 namespace kinara {
 namespace utils {
 
 namespace kc = kinara::containers;
+namespace ka = kinara::allocators;
 
-
-inline kc::u64Vector& PrimeGenerator::get_prime_table()
+inline kc::u64Vector*& PrimeGenerator::get_prime_table()
 {
     // TODO: fix up with a precomputed list of initial primes
-    static bool initialized = false;
-    static kc::u64Vector s_prime_table;
+    static kc::u64Vector* s_prime_table = nullptr;
 
-    if (!initialized) {
-        s_prime_table.push_back(2);
-        s_prime_table.push_back(3);
-        initialized = true;
+    if (s_prime_table == nullptr) {
+        s_prime_table = ka::allocate_object_raw<kc::u64Vector>();
+        for(u64 i = 0; i < sc_init_pull_size; ++i) {
+            s_prime_table->push_back(precomputed_primes::precomputed_prime_list[i]);
+        }
     }
 
     return s_prime_table;
@@ -62,8 +63,16 @@ inline kc::u64Vector& PrimeGenerator::get_prime_table()
 
 inline void PrimeGenerator::process_next_k(u64 k)
 {
-    auto& prime_table = get_prime_table();
-    kc::u64Vector work_list(k/2);
+    auto& prime_table = *(get_prime_table());
+    auto init_table_size = prime_table.size();
+
+    while (k > 0 && init_table_size < precomputed_primes::num_precomputed_primes) {
+        prime_table.push_back(precomputed_primes::precomputed_prime_list[init_table_size]);
+        ++init_table_size;
+        --k;
+    }
+
+    kc::u64Vector work_list(k/2 + 1);
     auto first = prime_table.back() + 2;
     auto last = first + k;
     u64 tmp_index = 0;
@@ -119,7 +128,7 @@ inline void PrimeGenerator::process_next_k(u64 k)
 
 inline u64 PrimeGenerator::find_smallest_prime(u64 lower_bound)
 {
-    auto& prime_table = get_prime_table();
+    auto& prime_table = *(get_prime_table());
     u64 low = 0;
     u64 high = prime_table.size() - 1;
 
@@ -143,7 +152,19 @@ inline u64 PrimeGenerator::find_smallest_prime(u64 lower_bound)
 
 inline bool PrimeGenerator::is_prime(u64 candidate)
 {
-    for (u64 i = 3; i * i <= candidate; ++i) {
+    auto& prime_table = *(get_prime_table());
+    // go through the list of primes in the prime_table
+    // first anyway.
+    for (auto const& prime : prime_table) {
+        if (candidate % prime == 0) {
+            return false;
+        }
+        if (prime * prime > candidate) {
+            return true;
+        }
+    }
+
+    for (u64 i = prime_table.back() + 2; i * i <= candidate; i += 2) {
         if (candidate % i == 0) {
             return false;
         }
@@ -171,17 +192,34 @@ u64 PrimeGenerator::get_next_prime(u64 lower_bound, bool stateless)
         return find_next_prime(lower_bound);
     }
 
-    auto& prime_table = get_prime_table();
+    auto& prime_table = *(get_prime_table());
 
     if (prime_table.back() >= lower_bound) {
         return find_smallest_prime(lower_bound);
     } else {
+
+        // revert to being stateless if we've reached
+        // the maximum list size
+        if (prime_table.size() >= sc_max_prime_list_size) {
+            return find_next_prime(lower_bound);
+        }
+
         process_next_k(1024);
+
+        if (prime_table.size() >= sc_max_prime_list_size) {
+            prime_table.shrink_to_fit();
+            return find_next_prime(lower_bound);
+        }
+
         if (prime_table.back() >= lower_bound) {
             return find_smallest_prime(lower_bound);
         } else {
             while (prime_table.back() < lower_bound) {
                 process_next_k(16384);
+                if (prime_table.size() >= sc_max_prime_list_size) {
+                    prime_table.shrink_to_fit();
+                    return find_next_prime(lower_bound);
+                }
             }
             return find_smallest_prime(lower_bound);
         }
@@ -190,7 +228,7 @@ u64 PrimeGenerator::get_next_prime(u64 lower_bound, bool stateless)
 
 void PrimeGenerator::trim_table()
 {
-    auto& prime_table = get_prime_table();
+    auto& prime_table = *(get_prime_table());
     prime_table.clear();
     prime_table.push_back(2);
     prime_table.push_back(3);
@@ -198,7 +236,9 @@ void PrimeGenerator::trim_table()
 
 void PrimeGenerator::finalize()
 {
-    get_prime_table().clear();
+    auto& prime_table_ptr = get_prime_table();
+    ka::deallocate_object_raw(prime_table_ptr, sizeof(kc::u64Vector));
+    prime_table_ptr = nullptr;
 }
 
 __attribute__ ((destructor)) void finalize_prime_generator()

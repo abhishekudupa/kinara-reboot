@@ -49,12 +49,14 @@ namespace kc = kinara::containers;
 class PrimeGenerator
 {
 private:
-    static constexpr u64 sc_max_prime_list_size = ((u64)1 << 26);
+    // use up to 64 MB for prime sieve tables
+    static constexpr u64 sc_max_prime_list_size = ((u64)1 << 23);
+    static constexpr u64 sc_init_pull_size = ((u64)1024);
 
     static inline void process_next_k(u64 k);
     static inline u64 find_smallest_prime(u64 lower_bound);
     static inline u64 find_next_prime(u64 lower_bound);
-    static inline kc::u64Vector& get_prime_table();
+    static inline kc::u64Vector*& get_prime_table();
     static inline bool is_prime(u64 candidate);
 
 public:

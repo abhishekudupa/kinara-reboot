@@ -46,7 +46,7 @@ using kinara::utils::PrimeGenerator;
 using kinara::u32;
 using kinara::u64;
 
-#define MAX_TEST_SIZE ((u64)(1 << 10))
+#define MAX_TEST_SIZE ((u64)(1 << 12))
 
 TEST(PrimeGenerator, Functional)
 {
@@ -61,7 +61,7 @@ TEST(PrimeGenerator, Functional)
     // generate random primes now
     PrimeGenerator::trim_table();
     std::default_random_engine generator;
-    std::uniform_int_distribution<u32> distribution(0, 1 << 24);
+    std::uniform_int_distribution<u32> distribution(0, 1 << 26);
 
     for (u64 i = 0; i < MAX_TEST_SIZE; ++i) {
         auto lower_bound = distribution(generator);
