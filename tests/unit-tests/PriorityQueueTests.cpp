@@ -38,7 +38,6 @@
 #include "../../projects/kinara-common/src/containers/PriorityQueue.hpp"
 #include "../../projects/kinara-common/src/containers/Vector.hpp"
 #include "../../projects/kinara-common/src/containers/MultiWayHeap.hpp"
-#include "../../projects/kinara-common/src/containers/String.hpp"
 
 #include <vector>
 #include <utility>
@@ -62,7 +61,6 @@ using kinara::i64;
 
 using kinara::containers::PriorityQueue;
 using kinara::containers::i64PriorityQueue;
-using kinara::containers::String;
 using kinara::containers::BinaryHeap;
 using kinara::containers::TernaryHeap;
 using kinara::containers::QuaternaryHeap;

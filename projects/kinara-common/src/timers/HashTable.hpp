@@ -46,6 +46,8 @@
 #include "../allocators/MemoryManager.hpp"
 #include "../hashfuncs/Hash.hpp"
 
+#include "HashTableTypes.hpp"
+
 namespace kinara {
 namespace containers {
 namespace hashtable_detail_ {
@@ -54,371 +56,15 @@ namespace ka = kinara::allocators;
 namespace kc = kinara::containers;
 namespace ku = kinara::utils;
 
-template <typename T>
-class HashEntry
-{
-private:
-    static constexpr u32 sc_nonused_marker = 0x0;
-    static constexpr u32 sc_deleted_marker = 0x1;
-    static constexpr u32 sc_in_use_marker = 0x2;
-
-public:
-    T m_value;
-    u32 m_marker;
-
-    HashEntry()
-        : m_value(), m_marker(sc_nonused_marker)
-    {
-        // Nothing here
-    }
-
-    HashEntry(const HashEntry& other)
-        : m_value(other.m_value), m_marker(other.m_marker)
-    {
-        // Nothing here
-    }
-
-    HashEntry(HashEntry&& other)
-        : HashEntry()
-    {
-        std::swap(m_value, other.m_value);
-        std::swap(m_marker, other.m_marker);
-    }
-
-    ~HashEntry()
-    {
-        // Nothing here
-    }
-
-    inline HashEntry& operator = (const HashEntry& other)
-    {
-        if (&other == this) {
-            return *this;
-        }
-        m_value = other.m_value;
-        m_marker = other.m_marker;
-    }
-
-    inline HashEntry& operator = (HashEntry&& other)
-    {
-        if (&other == this) {
-            return *this;
-        }
-        std::swap(m_value, other.m_value);
-        std::swap(m_marker, other.m_marker);
-    }
-
-    inline bool is_in_use() const
-    {
-        return (m_marker == sc_in_use_marker);
-    }
-
-    inline bool is_nonused() const
-    {
-        return (m_marker == sc_nonused_marker);
-    }
-
-    inline bool is_deleted() const
-    {
-        return (m_marker == sc_deleted_marker);
-    }
-
-    inline void mark_in_use()
-    {
-        m_marker = sc_in_use_marker;
-    }
-
-    inline void mark_deleted()
-    {
-        m_marker = sc_deleted_marker;
-    }
-
-    inline void mark_nonused()
-    {
-        m_marker = sc_nonused_marker;
-    }
-
-    const T& get_value() const
-    {
-        return m_value;
-    }
-
-    const T* get_ptr() const
-    {
-        return &m_value;
-    }
-};
-
-// specialization for pointer types
-template <typename T>
-class HashEntry<T*>
-{
-private:
-    static constexpr u64 sc_nonused_marker = 0x0;
-    static constexpr u64 sc_deleted_marker = 0x1;
-    static constexpr u64 sc_in_use_marker = 0x2;
-
-public:
-    T* m_value;
-
-    HashEntry()
-        : m_value((T*)sc_nonused_marker)
-    {
-        // Nothing here
-    }
-
-    HashEntry(const HashEntry& other)
-        : m_value(other.m_value)
-    {
-        // Nothing here
-    }
-
-    HashEntry(HashEntry&& other)
-        : HashEntry()
-    {
-        std::swap(m_value, other.m_value);
-    }
-
-    ~HashEntry()
-    {
-        // Nothing here
-    }
-
-    inline HashEntry& operator = (const HashEntry& other)
-    {
-        if (&other == this) {
-            return *this;
-        }
-        m_value = other.m_value;
-    }
-
-    inline HashEntry& operator = (HashEntry&& other)
-    {
-        if (&other == this) {
-            return *this;
-        }
-        std::swap(m_value, other.m_value);
-    }
-
-    inline bool is_in_use() const
-    {
-        return (m_value == (T*)sc_in_use_marker);
-    }
-
-    inline bool is_nonused() const
-    {
-        return (m_value == (T*)sc_nonused_marker);
-    }
-
-    inline bool is_deleted() const
-    {
-        return (m_value == (T*)sc_deleted_marker);
-    }
-
-    inline void mark_in_use()
-    {
-        m_value = (T*)sc_in_use_marker;
-    }
-
-    inline void mark_deleted()
-    {
-        m_value = (T*)sc_deleted_marker;
-    }
-
-    inline void mark_nonused()
-    {
-        m_value = (T*)sc_nonused_marker;
-    }
-
-    T* get_value() const
-    {
-        return m_value;
-    }
-
-    T* const* get_ptr() const
-    {
-        return &m_value;
-    }
-};
-
-template <typename T>
-class HashEntry<const T*>
-{
-private:
-    static constexpr u64 sc_nonused_marker = 0x0;
-    static constexpr u64 sc_deleted_marker = 0x1;
-    static constexpr u64 sc_in_use_marker = 0x2;
-
-public:
-    const T* m_value;
-
-    HashEntry()
-        : m_value((const T*)sc_nonused_marker)
-    {
-        // Nothing here
-    }
-
-    HashEntry(const HashEntry& other)
-        : m_value(other.m_value)
-    {
-        // Nothing here
-    }
-
-    HashEntry(HashEntry&& other)
-        : HashEntry()
-    {
-        std::swap(m_value, other.m_value);
-    }
-
-    ~HashEntry()
-    {
-        // Nothing here
-    }
-
-    inline HashEntry& operator = (const HashEntry& other)
-    {
-        if (&other == this) {
-            return *this;
-        }
-        m_value = other.m_value;
-    }
-
-    inline HashEntry& operator = (HashEntry&& other)
-    {
-        if (&other == this) {
-            return *this;
-        }
-        std::swap(m_value, other.m_value);
-    }
-
-    inline bool is_in_use() const
-    {
-        return (m_value == (const T*)sc_in_use_marker);
-    }
-
-    inline bool is_nonused() const
-    {
-        return (m_value == (const T*)sc_nonused_marker);
-    }
-
-    inline bool is_deleted() const
-    {
-        return (m_value == (const T*)sc_deleted_marker);
-    }
-
-    inline void mark_in_use()
-    {
-        m_value = (const T*)sc_in_use_marker;
-    }
-
-    inline void mark_deleted()
-    {
-        m_value = (const T*)sc_deleted_marker;
-    }
-
-    inline void mark_nonused()
-    {
-        m_value = (const T*)sc_nonused_marker;
-    }
-
-    T const* const* get_value() const
-    {
-        return &m_value;
-    }
-};
-
-// iterator class, note that hash tables support only
-// const iterators!
-template <typename T>
-class Iterator : public std::iterator<std::bidirectional_iterator_tag,
-                                      T, i64, const T*, const T&>
-{
-private:
-    typedef HashEntry<T> TableEntry;
-    TableEntry* m_entry;
-
-public:
-    Iterator()
-        : m_entry(nullptr)
-    {
-        // Nothing here
-    }
-
-    Iterator(TableEntry* entry)
-        : m_entry(entry)
-    {
-        // Nothing here
-    }
-
-    Iterator(const Iterator& other)
-        : m_entry(other.m_entry)
-    {
-        // Nothing here
-    }
-
-    ~Iterator()
-    {
-        // Nothing here
-    }
-
-    inline Iterator& operator = (const Iterator& other)
-    {
-        if (&other == this) {
-            return *this;
-        }
-        m_entry = other.m_entry;
-    }
-
-    inline Iterator& operator ++ ()
-    {
-        do {
-            ++m_entry;
-        } while (!m_entry->is_in_use());
-        return *this;
-    }
-
-    inline Iterator operator ++ (int usused)
-    {
-        auto retval = *this;
-        (*this)++;
-        return retval;
-    }
-
-    inline Iterator& operator -- ()
-    {
-        do {
-            --m_entry;
-        } while (!m_entry->is_in_use());
-        return *this;
-    }
-
-    inline Iterator operator -- (int unused)
-    {
-        auto retval = *this;
-        (*this)--;
-        return retval;
-    }
-
-    inline const T& operator * () const
-    {
-        return m_entry->get_value();
-    }
-
-    inline const T* operator -> () const
-    {
-        return m_entry->get_ptr();
-    }
-};
-
 // Maintains a simple open-addressed hash table
 template <typename T, typename HashFunction = ku::Hasher<T>,
           typename EqualsFunction = std::equal_to<T> >
 class HashTable
 {
 private:
-    static constexpr float sc_default_resize_factor = 1.618f;
-    static constexpr float sc_default_max_load_factor = 0.7f;
-    static constexpr float sc_default_min_load_factor = 0.05f;
+    static constexpr float sc_resize_factor = 1.618f;
+    static constexpr float sc_max_load_factor = 0.7f;
+    static constexpr float sc_min_load_factor = 0.05f;
     static constexpr float sc_allocator_utilization_low = 0.1f;
     static constexpr float sc_deleted_nonused_rehash_ratio = 0.5f;
     static constexpr u64 sc_initial_table_size = 19;
@@ -428,13 +74,13 @@ private:
     TableEntry* m_table;
     u64 m_table_size;
     u64 m_size;
+    u64 m_num_deleted_slots;
 
     inline TableEntry* allocate_table(u64 table_size)
     {
         // we reserve the first and last element of the table
         // as sentinels
-        ku::PrimeGenerator prime_generator(true);
-        auto actual_table_size = prime_generator.get_next_prime(table_size + 2);
+        auto actual_table_size = ku::PrimeGenerator::get_next_prime(table_size + 2);
         m_table = ka::allocate_array<TableEntry>(actual_table_size);
 
         // mark the sentinels
@@ -451,6 +97,57 @@ private:
             ka::deallocate_array_raw(m_table, m_table_size + 2);
             m_table = nullptr;
         }
+    }
+
+    inline void expand_table(u64 required_capacity)
+    {
+        u64 current_capacity = m_table_size;
+        float new_utilization;
+        if (current_capacity > 0) {
+            new_utilization = (float)required_capacity / (float)current_capacity;
+        } else {
+            new_utilization = 1.0f;
+        }
+        if (new_utilization < sc_max_load_factor) {
+            return;
+        }
+
+        // rebuild the table
+        auto new_table_size = (u64)ceil((float)required_capacity * sc_resize_factor);
+        new_table_size = std::max(new_table_size, required_capacity + 3);
+        new_table_size = ku::PrimeGenerator::get_next_prime(new_table_size);
+
+        auto new_table = ka::allocate_array_raw<TableEntry>(new_table_size + 2);
+        new_table[0].mark_in_use();
+        new_table[new_table_size + 1].mark_in_use();
+
+        rebuild_table(new_table, new_table_size);
+    }
+
+    // precondition: true
+    // ensures: the_hash_table() contains at least 2 empty slots
+    // ensures min_utilization <= utilization factor < max_utilization
+    inline void expand_table()
+    {
+        expand_table(m_size + 1);
+    }
+
+    inline void rebuild_table(TableEntry* new_table, u64 new_table_size);
+    {
+        auto old_table = m_table;
+        auto old_table_size = m_table_size;
+
+        for (u64 i = 1; i < old_table_size + 1; ++i) {
+            auto& entry = old_table[i];
+            if (entry.is_nonused() || entry.is_deleted()) {
+                continue;
+            }
+            move_into_table(std::move(entry), new_table, new_table_size);
+        }
+
+        ka::deallocate_array_raw(old_table, old_table_size);
+        m_table_size = new_table_size;
+        m_num_deleted_slots = 0;
     }
 
 public:
@@ -505,30 +202,49 @@ public:
         HashFunction hash_function;
         EqualsFunction equals_function;
 
-        u64 h1 = hash_function(value) % m_table_size;
+        u64 h1 = 1 + (hash_function(value) % m_table_size);
         u64 h2 = 1 + (((h1 << 17) ^ h1) % (m_table_size - 1));
+
         u64 num_probes = 0;
         u64 index = h1;
-        TableEntry* cur_entry = m_table[index];
+        TableEntry* cur_entry = &(m_table[index]);
 
-        while (!(cur_entry->is_nonused()) && num_probes < m_table_size) {
+        while (!(cur_entry->is_nonused()) && num_probes < m_table_size - 2) {
             ++num_probes;
             if (!(cur_entry->is_deleted()) && equals_function(cur_entry->get_value(), value)) {
                 return Iterator(cur_entry);
             }
 
             // rehash
-            index = (index + h2) % m_table_size;
-            entry = m_table[index];
+            index = 1 + ((index + h2) % m_table_size);
+            cur_entry = &(m_table[index]);
         }
 
         return end();
     }
 
-    inline Iterator insert(const T& value)
+    inline Iterator insert(const T& value, bool& already_present)
     {
-        if (m_table == nullptr) {
-            allocate_table(sc_initial_table_size);
+        auto it = find(value);
+        if (it != end()) {
+            already_present = true;
+            return it;
+        }
+
+        already_present = false;
+        expand_table();
+
+        HashFunction hash_function;
+        EqualsFunction equals_function;
+
+        u64 h1 = 1 + (hash_function(value) % m_table_size);
+        u64 h2 = 1 + (((h1 << 17) ^ h1) % (m_table_size - 1));
+
+        u64 index = h1;
+        TableEntry* cur_entry = &(m_table[index]);
+
+        while (!(cur_entry->is_nonused()) && !(cur_entry->is_deleted())) {
+            index = (index + h2) % m_table_size
         }
     }
 

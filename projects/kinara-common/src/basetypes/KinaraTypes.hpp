@@ -40,9 +40,9 @@
 
 #include <ostream>
 #include <type_traits>
+#include <string>
 
 #include "../memory/RefCountable.hpp"
-#include "../containers/String.hpp"
 #include "../memory/ManagedPointer.hpp"
 
 namespace kinara {
@@ -54,8 +54,8 @@ public:
     Stringifiable();
     virtual ~Stringifiable();
 
-    virtual kinara::containers::String to_string(u32 verbosity) const = 0;
-    inline kinara::containers::String to_string() const
+    virtual std::string to_string(u32 verbosity) const = 0;
+    inline std::string to_string() const
     {
         return to_string(0);
     }
@@ -228,7 +228,7 @@ class Constructible
 class KinaraException : public std::exception
 {
 private:
-    kinara::containers::String m_exception_info;
+    std::string m_exception_info;
 
 public:
     KinaraException()
@@ -237,7 +237,7 @@ public:
         // Nothing here
     }
 
-    KinaraException(const kinara::containers::String& exception_info) noexcept
+    KinaraException(const std::string& exception_info) noexcept
         : m_exception_info(exception_info)
     {
         // Nothing here

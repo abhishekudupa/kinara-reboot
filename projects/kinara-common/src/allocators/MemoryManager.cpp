@@ -244,9 +244,21 @@ bool MemoryManager::is_out_of_memory()
     return (total_bytes_allocated() >= memory_allocation_limit());
 }
 
-
 } /* end namespace allocators */
 } /* end namespace kinara */
+
+// override the new and delete operators
+// to use kinara managed memory
+
+void* operator new(std::size_t count)
+{
+    return kinara::allocators::allocate(count);
+}
+
+void operator delete(void* block_ptr) noexcept
+{
+    kinara::allocators::deallocate(block_ptr);
+}
 
 //
 // MemoryManager.cpp ends here

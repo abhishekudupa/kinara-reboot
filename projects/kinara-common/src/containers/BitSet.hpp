@@ -35,6 +35,401 @@
 
 // Code:
 
+#if !defined KINARA_KINARA_COMMON_CONTAINERS_BIT_SET_HPP_
+#define KINARA_KINARA_COMMON_CONTAINERS_BIT_SET_HPP_
+
+#include <cstring>
+#include <utility>
+
+#include "../allocators/MemoryManager.hpp"
+#include "../basetypes/KinaraTypes.hpp"
+
+#include "String.hpp"
+#include "StringBuffer.hpp"
+
+namespace kinara {
+namespace containers {
+
+// An efficient fixed size bit set
+// size changes are only possible via explicit
+// resize operations
+
+namespace ka = kinara::allocators;
+
+class BitSet final
+{
+private:
+    u64 m_num_bits;
+    u08* m_bit_array;
+
+    inline i32 compare(const BitSet& other) const;
+
+public:
+    class BitRef
+    {
+    private:
+        BitSet* m_bit_set;
+        u64 m_bit_num;
+
+    public:
+        inline BitRef(BitSet* bit_set, u64 bit_num);
+        inline BitRef(const BitRef& other);
+        inline ~BitRef();
+
+        inline BitRef& operator = (const BitRef& other);
+        inline BitRef& operator = (bool value);
+
+        inline bool operator == (const BitRef& other) const;
+        inline bool operator != (const BitRef& other) const;
+
+        inline bool operator == (bool value) const;
+        inline bool operator != (bool value) const;
+
+        inline operator bool () const;
+        inline bool operator ! () const;
+    };
+
+    inline BitSet();
+    inline BitSet(u64 size);
+    inline BitSet(u64 size, bool initial_value);
+    inline BitSet(const BitSet& other);
+    inline BitSet(BitSet&& other);
+
+    inline ~BitSet();
+
+    inline BitSet& operator = (const BitSet& other);
+    inline BitSet& operator = (BitSet&& other);
+
+    inline bool operator == (const BitSet& other) const;
+    inline bool operator < (const BitSet& other) const;
+    inline bool operator > (const BitSet& other) const;
+    inline bool operator <= (const BitSet& other) const;
+    inline bool operator >= (const BitSet& other) const;
+    inline bool operator != (const BitSet& other) const;
+
+    inline void set(u64 bit_num);
+    inline bool test(u64 bit_num) const;
+    inline void clear(u64 bit_num);
+    // returns the value of bit before flip
+    inline bool flip(u64 bit_num);
+
+    // Gang set, clear and flip
+    inline void set();
+    inline void clear();
+    inline void flip();
+
+    inline bool operator [] (u64 bit_num) const;
+    inline BitRef operator [] (u64 bit_num);
+
+    inline u64 size() const;
+    inline void resize(u64 new_num_bits);
+    inline String to_string() const;
+};
+
+// Implementation of BitRef
+inline BitSet::BitRef::BitRef(BitSet* bit_set, u64 bit_num)
+    : m_bit_set(bit_set), m_bit_num(bit_num)
+{
+    // Nothing here
+}
+
+inline BitSet::BitRef::BitRef(const BitRef& other)
+    : BitRef(other.m_bit_set, other.m_bit_num)
+{
+    // Nothing here
+}
+
+inline BitSet::BitRef::~BitRef()
+{
+    m_bit_set = nullptr;
+    m_bit_num = 0;
+}
+
+inline BitSet::BitRef& BitSet::BitRef::operator = (const BitRef& other)
+{
+    if (&other == this) {
+        return *this;
+    }
+    m_bit_set = other.m_bit_set;
+    m_bit_num = other.m_bit_num;
+    return *this;
+}
+
+inline BitSet::BitRef& BitSet::BitRef::operator = (bool value)
+{
+    if (value) {
+        m_bit_set->set(m_bit_num);
+    } else {
+        m_bit_set->clear(m_bit_num);
+    }
+    return *this;
+}
+
+inline bool BitSet::BitRef::operator == (const BitRef& other) const
+{
+    return ((bool)(*this) == (bool)(other));
+}
+
+inline bool BitSet::BitRef::operator != (const BitRef& other) const
+{
+    return ((bool)(*this) != (bool)(other));
+}
+
+inline bool BitSet::BitRef::operator == (bool value) const
+{
+    return ((bool)(*this) == value);
+}
+
+inline bool BitSet::BitRef::operator != (bool value) const
+{
+    return ((bool)(*this) != value);
+}
+
+inline BitSet::BitRef::operator bool() const
+{
+    if (m_bit_set == nullptr) {
+        return false;
+    }
+    return m_bit_set->test(m_bit_num);
+}
+
+inline bool BitSet::BitRef::operator ! () const
+{
+    return (!((bool)(*this)));
+}
+
+// implementation of BitSet
+inline BitSet::BitSet()
+    : m_num_bits(0), m_bit_array(nullptr)
+{
+    // Nothing here
+}
+
+inline BitSet::BitSet(u64 size)
+    : m_num_bits(Size)
+{
+    u64 num_bytes = (m_num_bits + 7) / 8;
+    m_bit_array = ka::casted_allocate_raw_cleared<u08>(sizeof(u08) * num_bytes);
+}
+
+inline BitSet::BitSet(u64 size, bool initial_value)
+    : BitSet(size)
+{
+    if (initial_value) {
+        memset(m_bit_array, 0xFF, Size / 8);
+        // take care of the last few bits.
+        if (m_num_bits % 8 != 0) {
+            u32 mask = 0;
+            for (u32 i = 0; i < m_num_bits % 8; ++i) {
+                mask <<= 1;
+                mask += 1;
+            }
+            m_bit_array[m_num_bits / 8] |= mask;
+        }
+    }
+}
+
+inline BitSet::BitSet(const BitSet& other)
+    : m_num_bits(other.m_num_bits)
+{
+    u64 num_bytes = (m_num_bits + 7) / 8;
+    m_bit_array = ka::casted_allocate_raw_cleared<u08>(sizeof(u08) * num_bytes);
+    memcpy(m_bit_array, Other.m_bit_array, num_bytes);
+}
+
+inline BitSet::BitSet(BitSet&& other)
+    : m_num_bits(0), m_bit_array(nullptr)
+{
+    std::swap(m_num_bits, Other.m_num_bits);
+    std::swap(m_bit_array, Other.m_bit_array);
+}
+
+inline BitSet::~BitSet()
+{
+    u64 num_bytes = (m_num_bits + 7) / 8;
+    ka::deallocate_raw(m_bit_array, num_bytes);
+}
+
+inline BitSet& BitSet::operator = (const BitSet& other)
+{
+    if (&other == this) {
+        return *this;
+    }
+
+    if (m_bit_array != nullptr) {
+        u64 old_num_bytes = (m_num_bits + 7) / 8;
+        ka::deallocate_raw(m_bit_array, old_num_bytes);
+    }
+
+    m_num_bits = Other.m_num_bits;
+    u64 num_bytes = (m_num_bits + 7) / 8;
+    m_bit_array = ka::casted_allocate_raw<u08>(sizeof(u08) * num_bytes);
+    memcpy(m_bit_array, Other.m_bit_array, num_bytes);
+    return *this;
+}
+
+inline BitSet& BitSet::operator = (BitSet&& other)
+{
+    std::swap(m_num_bits, other.m_num_bits);
+    std::swap(m_bit_array, other.m_bit_array);
+    return *this;
+}
+
+inline i32 BitSet::compare(const BitSet& other) const
+{
+    i32 diff = m_num_bits - other.m_num_bits;
+    if (diff != 0) {
+        return diff
+    }
+    return memcmp(m_bit_array, other.m_bit_array, (m_num_bits + 7) / 8);
+}
+
+inline bool BitSet::operator == (const BitSet& other) const
+{
+    return (compare(Other) == 0);
+}
+
+inline bool BitSet::operator < (const BitSet& other) const
+{
+    return (compare(Other) < 0);
+}
+
+inline bool BitSet::operator > (const BitSet& other) const
+{
+    return (compare(other) > 0);
+}
+
+inline bool BitSet::operator <= (const BitSet& other) const
+{
+    return (compare(other) <= 0);
+}
+
+inline bool BitSet::operator >= (const BitSet& other) const
+{
+    return (compare(other) >= 0);
+}
+
+inline bool BitSet::operator != (const BitSet& other) const
+{
+    return (compare(other) != 0);
+}
+
+inline void BitSet::set(u64 bit_num)
+{
+    u64 offset = bit_num / 8;
+    const u64 bit_num_mod_8 = bit_num % 8;
+    u08 mask = 0x80;
+    if (bit_num_mod_8 != 0) {
+        mask >>= (bit_num_mod_8);
+    }
+    m_bit_array[offset] |= mask;
+}
+
+inline void BitSet::clear(u64 bit_num)
+{
+    u64 offset = bit_num / 8;
+    const u32 bit_num_mod_8 = bit_num % 8;
+    u08 mask = 0x80;
+    if (bit_num_mod_8 != 0) {
+        mask >>= (bit_num_mod_8);
+    }
+    m_bit_array[offset] &= (~mask);
+}
+
+inline bool BitSet::test(u64 bit_num) const
+{
+    u64 offset = bit_num / 8;
+    const u32 bit_num_mod_8 = bit_num % 8;
+    u08 mask = 0x80;
+    if (bit_num_mod_8 != 0) {
+        Mask >>= (bit_num_mod_8);
+    }
+    return (((m_bit_array[offset] & mask) == 0) ? false : true);
+}
+
+inline bool BitSet::flip(u64 bit_num)
+{
+    u32 offset = bit_num / 8;
+    const u32 bit_num_mod_8 = bit_num % 8;
+    u08 mask = 0x80;
+    if (bit_num_mod_8 != 0) {
+        mask >>= (bit_num_mod_8);
+    }
+    bool retval = (((m_bit_array[offset] & mask) == 0) ? false : true);
+    if (retval) {
+        m_bit_array[offset] &= (~mask);
+    } else {
+        m_bit_array[offset] |= mask;
+    }
+    return retval;
+}
+
+inline void BitSet::set()
+{
+    memset(m_bit_array, 0xFF, m_num_bits / 8);
+    // take care of the last few bits.
+    if (m_num_bits % 8 != 0) {
+        u32 mask = 0;
+        for (u32 i = 0; i < m_num_bits % 8; ++i) {
+            mask <<= 1;
+            mask |= 1;
+        }
+        m_bit_array[m_num_bits / 8] |= mask;
+    }
+}
+
+inline void BitSet::clear()
+{
+    memset(m_bit_array, 0, (m_num_bits + 7) / 8);
+}
+
+inline void BitSet::flip()
+{
+    for (u64 i = 0; i < m_num_bits / 8; ++i) {
+        m_bit_array[i] = (~(m_bit_array[i]));
+    }
+    // take care of the last few bits with
+    // explicit calls
+    for (u32 i = 0; i < m_num_bits % 8; ++i) {
+        flip(((m_num_bits / 8) * 8) + i);
+    }
+}
+
+inline bool BitSet::operator [] (u64 bit_num) const
+{
+    return test(bit_num);
+}
+
+inline BitSet::BitRef BitSet::operator [] (u64 bit_num)
+{
+    return BitRef(this, bit_num);
+}
+
+inline u64 BitSet::size() const
+{
+    return m_num_bits;
+}
+
+inline String BitSet::ToString() const
+{
+    StringBuffer sstr;
+    sstr << "{\n";
+    for (u64 i = 0; i < m_num_bits; ++i) {
+        if (test(i)) {
+            sstr << " " << std::to_string(i).c_str() << " -> 1";
+        } else {
+            sstr << " " << i << " -> 0";
+        }
+    }
+    sstr << " }";
+    return sstr.str();
+}
+
+} /* end namespace containers */
+} /* end namespace kinara */
+
+
+#endif /* KINARA_KINARA_COMMON_CONTAINERS_BIT_SET_HPP_ */
 
 
 //
