@@ -51,11 +51,6 @@ namespace ku = kinara::utils;
 template <typename T>
 class HashEntry
 {
-private:
-    static constexpr u32 sc_nonused_marker = 0x0;
-    static constexpr u32 sc_deleted_marker = 0x1;
-    static constexpr u32 sc_in_use_marker = 0x2;
-
 public:
     T m_value;
     u32 m_marker;
@@ -323,7 +318,8 @@ public:
 
 // iterator class, note that hash tables support only
 // const iterators!
-template <typename T>
+template <typename T, typename HashFunction,
+          typename EqualsFunction>
 class Iterator : public std::iterator<std::bidirectional_iterator_tag,
                                       T, i64, const T*, const T&>
 {

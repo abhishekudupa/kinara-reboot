@@ -38,11 +38,18 @@
 // Code:
 
 #include <sstream>
+#include <cstring>
+#include <utility>
+#include <string>
+
+#include "../allocators/MemoryManager.hpp"
 
 #include "BitSet.hpp"
 
 namespace kinara {
 namespace containers {
+
+namespace ka = kinara::allocators;
 
 // Implementation of BitRef
 BitSet::BitRef::BitRef(BitSet* bit_set, u64 bit_num)
@@ -137,10 +144,10 @@ BitSet::BitSet(u64 size, bool initial_value)
         memset(m_bit_array, 0xFF, size / 8);
         // take care of the last few bits.
         if (m_num_bits % 8 != 0) {
-            u32 mask = 0;
+            u08 mask = 0;
             for (u32 i = 0; i < m_num_bits % 8; ++i) {
-                mask <<= 1;
-                mask += 1;
+                mask >>= 1;
+                mask |= (u08)0x80;
             }
             m_bit_array[m_num_bits / 8] |= mask;
         }
@@ -289,8 +296,8 @@ void BitSet::set()
     if (m_num_bits % 8 != 0) {
         u32 mask = 0;
         for (u32 i = 0; i < m_num_bits % 8; ++i) {
-            mask <<= 1;
-            mask |= 1;
+            mask >>= 1;
+            mask |= (u08)0x80;
         }
         m_bit_array[m_num_bits / 8] |= mask;
     }
@@ -341,6 +348,24 @@ std::string BitSet::to_string() const
     }
     sstr << " }";
     return sstr.str();
+}
+
+void BitSet::resize_and_clear(u64 new_num_bits)
+{
+    if (new_num_bits == m_num_bits) {
+        clear();
+    }
+    if (new_num_bits == 0) {
+        ka::deallocate_raw(m_bit_array, (m_num_bits + 7 / 8));
+        m_bit_array = nullptr;
+        m_num_bits = 0;
+    }
+
+    auto new_num_bytes = (new_num_bits + 7) / 8;
+    auto new_bit_array = ka::casted_allocate_raw_cleared<u08>(new_num_bytes * sizeof(u08));
+    ka::deallocate_raw(m_bit_array, (m_num_bits + 7) / 8);
+    m_num_bits = new_num_bits;
+    m_bit_array = new_bit_array;
 }
 
 } /* end namespace containers */

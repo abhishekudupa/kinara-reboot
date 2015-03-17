@@ -38,21 +38,10 @@
 #if !defined KINARA_KINARA_COMMON_CONTAINERS_BIT_SET_HPP_
 #define KINARA_KINARA_COMMON_CONTAINERS_BIT_SET_HPP_
 
-#include <cstring>
-#include <utility>
-#include <string>
-
-#include "../allocators/MemoryManager.hpp"
 #include "../basetypes/KinaraTypes.hpp"
 
 namespace kinara {
 namespace containers {
-
-// An efficient fixed size bit set
-// size changes are only possible via explicit
-// resize operations
-
-namespace ka = kinara::allocators;
 
 class BitSet final
 {
@@ -120,7 +109,7 @@ public:
     BitRef operator [] (u64 bit_num);
 
     u64 size() const;
-    void resize(u64 new_num_bits);
+    void resize_and_clear(u64 new_num_bits);
     std::string to_string() const;
 };
 
