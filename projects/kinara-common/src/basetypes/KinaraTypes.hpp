@@ -155,6 +155,8 @@ public:
     virtual ~Comparable();
 
     virtual i64 compare(const Comparable& other) const = 0;
+    virtual bool equals(const Comparable& other) const = 0;
+
     inline bool operator == (const Comparable& other) const
     {
         return (compare(other) == 0);

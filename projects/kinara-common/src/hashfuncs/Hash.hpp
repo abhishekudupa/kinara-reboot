@@ -218,7 +218,8 @@ private:
     compute_hash(const std::tuple<TupleTypes...>& the_tuple,
                  std::array<u64, sizeof...(TupleTypes)>& the_array) const
     {
-        RawHasher<typename std::tuple_element<INDEX, typename std::tuple<TupleTypes...> >::type> hasher;
+        RawHasher<typename std::tuple_element<INDEX,
+                                              typename std::tuple<TupleTypes...> >::type> hasher;
         the_array[INDEX] = hasher(std::get<INDEX>(the_tuple));
         compute_hash<INDEX+1>(the_tuple, the_array);
     }
