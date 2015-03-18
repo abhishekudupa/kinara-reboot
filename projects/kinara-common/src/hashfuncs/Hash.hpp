@@ -235,7 +235,7 @@ public:
 };
 
 // hashes for iterables
-template <typename T, typename ElemHasher = Hasher<T::value_type>>
+template <typename T, typename ElemHasher = Hasher<typename T::value_type>>
 class IterableHasher
 {
 public:

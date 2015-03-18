@@ -1,9 +1,11 @@
-// OrderedSet.hpp ---
-// Filename: OrderedSet.hpp
-// Author: Abhishek Udupa
-// Created: Mon Feb 16 02:09:26 2015 (-0500)
+// UnorderedSetTests.cpp ---
 //
-// Copyright (c) 2013, Abhishek Udupa, University of Pennsylvania
+// Filename: UnorderedSetTests.cpp
+// Author: Abhishek Udupa
+// Created: Wed Mar 18 17:30:04 2015 (-0400)
+//
+//
+// Copyright (c) 2015, Abhishek Udupa, University of Pennsylvania
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -35,6 +37,61 @@
 
 // Code:
 
+#include "../../projects/kinara-common/src/containers/UnorderedSet.hpp"
+#include "../../projects/kinara-common/src/containers/Vector.hpp"
+
+#include <utility>
+#include <random>
+#include <algorithm>
+
+
+#include "RCClass.hpp"
+
+#include "../../thirdparty/gtest/include/gtest/gtest.h"
+
+using kinara::u32;
+using kinara::u64;
+using kinara::i32;
+using kinara::i64;
+
+using kinara::containers::UnifiedUnorderedSet;
+using kinara::containers::RestrictedUnorderedSet;
+using kinara::containers::SegregatedUnorderedSet;
+using kinara::containers::Vector;
+using kinara::containers::u64Vector;
+
+using testing::Types;
+
+template <typename UnorderedSetType>
+class UnorderedSetTest : public testing::Test
+{
+protected:
+    UnorderedSetTest() {}
+    virtual ~UnorderedSetTest() {}
+};
+
+TYPED_TEST_CASE_P(UnorderedSetTest);
+
+TYPED_TEST_P(UnorderedSetTest, Constructor)
+{
+    typedef TypeParam SetType;
+
+    SetType set1;
+    EXPECT_EQ(0ul, set1.size());
+
+    SetType set2(set1);
+    EXPECT_EQ(0ull, set1.size());
+    EXPECT_EQ(0ull, set2.size());
+}
+
+REGISTER_TYPED_TEST_CASE_P(UnorderedSetTest,
+                           Constructor);
+
+typedef Types<UnifiedUnorderedSet<u64>,
+              SegregatedUnorderedSet<u64> > UnorderedSetImplementations;
+
+INSTANTIATE_TYPED_TEST_CASE_P(UnorderedSetTemplateTests,
+                              UnorderedSetTest, UnorderedSetImplementations);
 
 //
-// OrderedSet.hpp ends here
+// UnorderedSetTests.cpp ends here

@@ -171,9 +171,19 @@ BitSet::BitSet(BitSet&& other)
 
 BitSet::~BitSet()
 {
-    u64 num_bytes = (m_num_bits + 7) / 8;
-    ka::deallocate_raw(m_bit_array, num_bytes);
+    reset();
 }
+
+void BitSet::reset()
+{
+    if (m_bit_array != nullptr) {
+        u64 num_bytes = (m_num_bits + 7) / 8;
+        ka::deallocate_raw(m_bit_array, num_bytes);
+        m_bit_array = nullptr;
+    }
+    m_num_bits = 0;
+}
+
 
 BitSet& BitSet::operator = (const BitSet& other)
 {
@@ -363,7 +373,10 @@ void BitSet::resize_and_clear(u64 new_num_bits)
 
     auto new_num_bytes = (new_num_bits + 7) / 8;
     auto new_bit_array = ka::casted_allocate_raw_cleared<u08>(new_num_bytes * sizeof(u08));
-    ka::deallocate_raw(m_bit_array, (m_num_bits + 7) / 8);
+
+    if (m_bit_array != nullptr) {
+        ka::deallocate_raw(m_bit_array, (m_num_bits + 7) / 8);
+    }
     m_num_bits = new_num_bits;
     m_bit_array = new_bit_array;
 }

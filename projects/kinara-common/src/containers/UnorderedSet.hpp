@@ -35,7 +35,102 @@
 
 // Code:
 
+#if !defined KINARA_KINARA_COMMON_CONTAINERS_UNORDERED_SET_HPP_
+#define KINARA_KINARA_COMMON_CONTAINERS_UNORDERED_SET_HPP_
 
+#include "../hashfuncs/Hash.hpp"
+#include "../basetypes/Comparators.hpp"
+
+#include "HashTable.hpp"
+
+namespace kinara {
+namespace containers {
+
+namespace kc = kinara::containers;
+namespace ku = kinara::utils;
+
+namespace unordered_set_detail_ {
+
+template <typename T, typename HashFunction, typename EqualsFunction,
+          template <typename, typename, typename> class HashTableTemplateType>
+class UnorderedSetBase : private HashTableTemplateType<T, HashFunction, EqualsFunction>
+{
+private:
+    typedef HashTableTemplateType<T, HashFunction, EqualsFunction> HashTableType;
+
+public:
+    typedef T ValueType;
+    typedef ValueType value_type;
+    typedef T* PtrType;
+    typedef T* ptr_type;
+    typedef T& RefType;
+    typedef T& ref_type;
+    typedef const T* ConstPtrType;
+    typedef const T* const_ptr_type;
+    typedef const T& ConstRefType;
+    typedef const T& const_ref_type;
+
+    class Iterator : private HashTableType::Iterator,
+                     public std::iterator<std::bidirectional_iterator_tag,
+                                          T, i64, const T*, const T&>
+    {
+    private:
+        typedef typename HashTableType::Iterator BaseType;
+
+    public:
+        using BaseType::BaseType;
+        using BaseType::operator=;
+        using BaseType::operator==;
+        using BaseType::operator!=;
+        using BaseType::operator++;
+        using BaseType::operator--;
+
+        inline const T& operator * () const
+        {
+            return BaseType::operator*();
+        }
+
+        inline const T* operator -> () const
+        {
+            return BaseType::operator->();
+        }
+    };
+
+    using HashTableType::HashTableType;
+    using HashTableType::insert;
+    using HashTableType::find;
+    using HashTableType::erase;
+    using HashTableType::size;
+    using HashTableType::begin;
+    using HashTableType::end;
+    using HashTableType::clear;
+};
+
+} /* end namespace unordered_set_detail_ */
+
+// Some useful typedefs
+template <typename T, typename HashFunction = ku::Hasher<T>,
+          typename EqualsFunction = ku::Equal<T> >
+using UnifiedUnorderedSet =
+    unordered_set_detail_::UnorderedSetBase<T, HashFunction, EqualsFunction,
+                                            hash_table_detail_::UnifiedHashTable>;
+
+template <typename T, typename HashFunction = ku::Hasher<T>,
+          typename EqualsFunction = ku::Equal<T> >
+using SegregatedUnorderedSet =
+    unordered_set_detail_::UnorderedSetBase<T, HashFunction, EqualsFunction,
+                                            hash_table_detail_::SegregatedHashTable>;
+
+template <typename T, typename HashFunction = ku::Hasher<T>,
+          typename EqualsFunction = ku::Equal<T> >
+using RestrictedUnorderedSet =
+    unordered_set_detail_::UnorderedSetBase<T, HashFunction, EqualsFunction,
+                                            hash_table_detail_::RestrictedHashTable>;
+
+} /* end namespace containers */
+} /* end namespace kinara */
+
+#endif /* KINARA_KINARA_COMMON_CONTAINERS_UNORDERED_SET_HPP_ */
 
 //
 // UnorderedSet.hpp ends here

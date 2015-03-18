@@ -105,6 +105,9 @@ public:
     void clear();
     void flip();
 
+    // resets to a zero size bit set
+    void reset();
+
     bool operator [] (u64 bit_num) const;
     BitRef operator [] (u64 bit_num);
 

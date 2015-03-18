@@ -42,6 +42,8 @@
 #include "../allocators/MemoryManager.hpp"
 #include "../primeutils/PrimeGenerator.hpp"
 
+#include "BitSet.hpp"
+
 namespace kinara {
 namespace containers {
 namespace hash_table_detail_ {
@@ -57,6 +59,517 @@ public:
     static constexpr float sc_min_load_factor = 0.1f;
     static constexpr float sc_deleted_nonused_rehash_ratio = 0.5f;
     static constexpr u64 sc_initial_table_size = 19;
+};
+
+// All hash tables derive privately from this class
+// i.e., all hash tables are implemented in terms of this
+// class. This base class handles all the details of
+// maintaining the hash table, but depends on the implementation
+// to figure out when an entry is considered nonused, deleted
+// or in use. It also needs the type of the entries
+// to be declared in the implementation.
+// Finally, the implementation needs to declare the iterators
+// as friends.
+// To sum up the implementation must make the following available:
+// 1.  EntryType, indicating the type of entries to use
+// 2.  get_value_ref(EntryType*) to get the value reference from an entry
+// 3.  get_value_ptr(EntryType*) to get the value pointer from an entry
+// 4.  is_entry_nonused(EntryType*)
+// 5.  is_entry_deleted(EntryType*)
+// 6.  is_entry_used(EntryType*)
+// 7.  mark_entry_used(EntryType*)
+// 8.  mark_entry_deleted(EntryType*)
+// 9.  mark_entry_nonused(EntryType*)
+// 10. The implementation must inherit privately from HashTableImplBase
+// 11. The implementation must mark HashTableImplBase as a friend
+// 12. EntryType must support being assigned to a value of type T
+
+// the following are callbacks on resize of tables
+// 13. begin_resize(u64 new_table_size)
+// 14. end_resize(u64 new_table_size)
+// 15. is_new_entry_used(EntryType* new_table, u64 new_table_size, EntryType* entry)
+// 16. is_new_entry_nonused(EntryType* new_table, u64 new_table_size, EntryType* entry)
+// 17. mark_new_entry_used(EntryType* new_table, u64 new_table_size, EntryType* entry)
+// 18. mark_new_entry_nonused(EntryType* new_table, u64 new_table_size, EntryType* entry)
+// 19. initialize_new_table(EntryType* new_table, u64 new_table_size)
+// 20. on_clear() for clearing all data structures
+// 21. set_size(u64) which sets the size to a particular value
+
+template <typename T, typename HashFunction, typename EqualsFunction,
+          template <typename, typename, typename> class HashTableImpl,
+          typename EntryType>
+class HashTableImplBase : private HashTableBase
+{
+protected:
+    typedef T ValueType;
+    typedef HashTableImpl<T, HashFunction, EqualsFunction> ImplType;
+
+    static constexpr u64 sc_fnv_prime = 0x100000001b3ul;
+
+    EntryType* m_table;
+    u64 m_table_size;
+    u64 m_table_used;
+    u64 m_table_deleted;
+    u64 m_first_used_index;
+
+    inline void deallocate_table()
+    {
+        if (m_table != nullptr) {
+            ka::deallocate_array_raw(m_table, m_table_size);
+            m_table = nullptr;
+            m_table_size = 0;
+            m_table_used = 0;
+            m_table_deleted = 0;
+            m_first_used_index = 0;
+        }
+    }
+
+    inline void get_hashes(const T& value, u64 table_size, u64& h1, u64& h2) const
+    {
+        HashFunction hash_fun;
+
+        h1 = hash_fun(value) % table_size;
+        h2 = 1 + ((h1 * sc_fnv_prime) % (table_size - 1));
+    }
+
+    inline ImplType* this_as_impl()
+    {
+        return static_cast<ImplType*>(this);
+    }
+
+    inline const ImplType* this_as_impl() const
+    {
+        return static_cast<const ImplType*>(this);
+    }
+
+    // expands to accommodate at least one more element
+    inline void expand_table()
+    {
+        expand_table(m_table_used + 1);
+    }
+
+    // moves one entry into the new table
+    inline u64 move_into_table(EntryType* entry, EntryType* new_table, u64 new_capacity)
+    {
+        auto as_impl = this_as_impl();
+
+        auto& value_ref = as_impl->get_value_ref(entry);
+
+        u64 h1, h2;
+        get_hashes(value_ref, new_capacity, h1, h2);
+
+        auto index = h1;
+        auto cur_entry = &(new_table[index]);
+
+        auto is_nonused = as_impl->is_new_entry_nonused(new_table, new_capacity, cur_entry);
+
+        while (!is_nonused) {
+            index = (index + h2) % new_capacity;
+            cur_entry = &(new_table[index]);
+
+            is_nonused = as_impl->is_new_entry_nonused(new_table, new_capacity, cur_entry);
+        }
+
+        *cur_entry = std::move(value_ref);
+        as_impl->mark_new_entry_used(new_table, new_capacity, cur_entry);
+
+        return index;
+    }
+
+    // rebuilds the table into new_table, destroys old table
+    // and deallocates its memory
+    inline void rebuild_table(EntryType* new_table, u64 new_capacity)
+    {
+        auto as_impl = this_as_impl();
+
+        as_impl->begin_resize(new_capacity);
+        as_impl->initialize_new_table(new_table, new_capacity);
+
+        bool first = true;
+
+        for (auto cur_entry = m_table, last_entry = m_table + m_table_size;
+             cur_entry != last_entry; ++cur_entry) {
+
+            if (as_impl->is_entry_used(cur_entry)) {
+                auto index = move_into_table(cur_entry, new_table, new_capacity);
+                if (first) {
+                    m_first_used_index = index;
+                    first = false;
+                }
+            }
+        }
+
+        // destroy the old table and update the books
+        if (m_table != nullptr) {
+            ka::deallocate_array_raw(m_table, m_table_size);
+        }
+
+        m_table_size = new_capacity;
+        m_table = new_table;
+        m_table_deleted = 0;
+
+        as_impl->end_resize(new_capacity);
+    }
+
+    // expands to accommodate at least new_capacity elements
+    inline void expand_table(u64 new_capacity)
+    {
+        auto required_capacity = (u64)((float)new_capacity / sc_max_load_factor);
+        if (required_capacity < m_table_size) {
+            return;
+        }
+        auto initial_table_size = sc_initial_table_size;
+        required_capacity = std::max(required_capacity, initial_table_size);
+        required_capacity = ku::PrimeGenerator::get_next_prime(required_capacity);
+
+        auto new_table = ka::allocate_array_raw<EntryType>(required_capacity);
+        rebuild_table(new_table, required_capacity);
+    }
+
+    inline void rehash_table()
+    {
+        u64 new_table_size = m_table_size;
+        auto initial_table_size = sc_initial_table_size;
+        if (((float)m_table_used / (float)m_table_size) < sc_min_load_factor) {
+            new_table_size = m_table_used * 2;
+            new_table_size = std::max(new_table_size, initial_table_size);
+            new_table_size = ku::PrimeGenerator::get_next_prime(new_table_size);
+        }
+
+        auto new_table = ka::allocate_array_raw<EntryType>(new_table_size);
+        rebuild_table(new_table, new_table_size);
+    }
+
+public:
+
+    // This iterator is mutable
+    // so that classes which actually implement
+    // hash tables can give sensible semantics
+    // even if a hash map is implemented
+    class Iterator : public std::iterator<std::bidirectional_iterator_tag,
+                                          T, i64, T*, T&>
+    {
+    private:
+        HashTableImplBase* m_hash_table;
+        EntryType* m_current;
+
+        inline ImplType* hash_table_as_impl() const
+        {
+            return static_cast<ImplType*>(m_hash_table);
+        }
+
+    public:
+        inline Iterator()
+            : m_hash_table(nullptr), m_current(nullptr)
+        {
+            // Nothing here
+        }
+
+        inline Iterator(HashTableImplBase* hash_table, EntryType* current)
+            : m_hash_table(hash_table), m_current(current)
+        {
+            // Nothing here
+        }
+
+        inline Iterator(const Iterator& other)
+            : m_hash_table(other.m_hash_table), m_current(other.m_current)
+        {
+            // Nothing here
+        }
+
+        inline Iterator& operator = (const Iterator& other)
+        {
+            if (&other == this) {
+                return *this;
+            }
+            m_hash_table = other.m_hash_table;
+            m_current = other.m_current;
+            return *this;
+        }
+
+        inline bool operator == (const Iterator& other) const
+        {
+            return (m_current == other.m_current);
+        }
+
+        inline bool operator != (const Iterator& other) const
+        {
+            return (m_current != other.m_current);
+        }
+
+        inline Iterator& operator ++ ()
+        {
+            auto as_impl = hash_table_as_impl();
+            auto last = m_hash_table->m_table + m_hash_table->m_table_size;
+            if (m_current == last) {
+                return *this;
+            }
+            do {
+                ++m_current;
+            } while (m_current != last && !(as_impl->is_entry_used(m_current)));
+            return *this;
+        }
+
+        inline Iterator& operator -- ()
+        {
+            auto first = m_hash_table->m_table + m_first_used_index;
+            auto as_impl = hash_table_as_impl();
+
+            if (m_current == first) {
+                return *this;
+            }
+            do {
+                --m_current;
+            } while (m_current != first && !(as_impl->is_entry_used(m_current)));
+            return *this;
+        }
+
+        inline Iterator operator ++ (int unused)
+        {
+            auto retval = *this;
+            ++(*this);
+            return retval;
+        }
+
+        inline Iterator operator -- (int unused)
+
+        {
+            auto retval = *this;
+            --(*this);
+            return retval;
+        }
+
+        inline T& operator * () const
+        {
+            return (hash_table_as_impl()->get_value_ref(m_current));
+        }
+
+        inline T* operator -> () const
+        {
+            return (hash_table_as_impl()->get_value_ptr(m_current));
+        }
+
+        inline T* get_current() const
+        {
+            return m_current;
+        }
+
+        inline HashTableImplBase* get_hash_table() const
+        {
+            return m_hash_table;
+        }
+    };
+
+    inline HashTableImplBase()
+        : m_table(nullptr), m_table_size(0), m_table_used(0),
+          m_table_deleted(0), m_first_used_index(0)
+    {
+        // Nothing here
+    }
+
+    inline HashTableImplBase(u64 initial_capacity)
+        : HashTableImplBase()
+    {
+        auto initial_table_size = sc_initial_table_size;
+        auto actual_capacity = std::max(initial_capacity, initial_table_size);
+        actual_capacity = ku::PrimeGenerator::get_next_prime(actual_capacity);
+        m_table = ka::allocate_array_raw<EntryType>(actual_capacity);
+        m_table_size = actual_capacity;
+        m_first_used_index = m_table_size;
+    }
+
+    inline HashTableImplBase(const HashTableImplBase& other)
+        : HashTableImplBase()
+    {
+        assign(other);
+    }
+
+    inline HashTableImplBase(HashTableImplBase&& other)
+        : HashTableImplBase()
+    {
+        assign(std::move(other));
+    }
+
+    inline ~HashTableImplBase()
+    {
+        clear();
+    }
+
+    inline void assign(const HashTableImplBase& other)
+    {
+        clear();
+
+        if (other.size() == 0) {
+            return;
+        }
+
+        auto initial_table_size = sc_initial_table_size;
+        u64 actual_capacity = (u64)ceil(other.m_table_used * sc_resize_factor);
+        actual_capacity = std::max(actual_capacity, initial_table_size);
+        actual_capacity = ku::PrimeGenerator::get_next_prime(actual_capacity);
+        m_table = ka::allocate_array_raw<EntryType>(actual_capacity);
+        m_table_size = actual_capacity;
+        m_first_used_index = m_table_size;
+
+        this_as_impl()->set_size(m_table_size);
+
+        bool dummy;
+        for (auto it = other.begin(), last = other.end(); it != last; ++it) {
+            this->insert(*it, dummy);
+        }
+    }
+
+    inline void assign(HashTableImplBase&& other)
+    {
+        if (other.size() == 0) {
+            return;
+        }
+
+        std::swap(m_table, other.m_table);
+        std::swap(m_table_used, other.m_table_used);
+        std::swap(m_table_size, other.m_table_size);
+        std::swap(m_table_deleted, other.m_table_deleted);
+        std::swap(m_first_used_index, other.m_first_used_index);
+    }
+
+    inline HashTableImplBase& operator = (const HashTableImplBase& other) = delete;
+    inline HashTableImplBase& operator = (HashTableImplBase&& other) = delete;
+
+    inline Iterator begin() const
+    {
+        return Iterator(const_cast<HashTableImplBase*>(this), m_table + m_first_used_index);
+    }
+
+    inline Iterator end() const
+    {
+        return Iterator(const_cast<HashTableImplBase*>(this), m_table + m_table_size);
+    }
+
+    inline u64 size() const
+    {
+        return m_table_used;
+    }
+
+    inline u64 capacity() const
+    {
+        return m_table_size;
+    }
+
+    inline Iterator find(const T& value) const
+    {
+        if (m_table == nullptr || m_table_size == 0 || m_table_used == 0) {
+            return end();
+        }
+
+        EqualsFunction equals_fun;
+        auto as_impl = this_as_impl();
+
+        u64 h1, h2;
+        get_hashes(value, m_table_size, h1, h2);
+        auto index = h1;
+
+        auto cur_entry = &(m_table[index]);
+        u64 num_probes = 0;
+
+        auto is_nonused = as_impl->is_entry_nonused(cur_entry);
+        while (!is_nonused && num_probes < m_table_size) {
+            ++num_probes;
+            auto const& value_ref = as_impl->get_value_ref(cur_entry);
+            auto is_deleted = as_impl->is_entry_deleted(cur_entry);
+
+            if (!is_deleted && (equals_fun(value_ref, value))) {
+                return Iterator(const_cast<HashTableImplBase*>(this), cur_entry);
+            }
+
+            index = (index + h2) % m_table_size;
+            cur_entry = &(m_table[index]);
+            is_nonused = as_impl->is_entry_nonused(cur_entry);
+        }
+
+        return end();
+    }
+
+    inline Iterator insert(const T& value, bool& already_present)
+    {
+        T copied_value(value);
+        return insert(std::move(copied_value), already_present);
+    }
+
+    inline Iterator insert(T&& value, bool& already_present)
+    {
+        auto it = find(value);
+        if (it != end()) {
+            already_present = true;
+            return it;
+        }
+
+        already_present = false;
+        auto as_impl = this_as_impl();
+
+        expand_table();
+
+        u64 h1, h2;
+        get_hashes(value, m_table_size, h1, h2);
+        auto index = h1;
+
+        auto cur_entry = &(m_table[index]);
+        auto is_nonused = as_impl->is_entry_nonused(cur_entry);
+        auto is_deleted = as_impl->is_entry_deleted(cur_entry);
+
+        while (!is_nonused && !is_deleted) {
+            index = (index + h2) % m_table_size;
+            cur_entry = &(m_table[index]);
+            is_nonused = as_impl->is_entry_nonused(cur_entry);
+            is_deleted = as_impl->is_entry_deleted(cur_entry);
+        }
+
+        *cur_entry = std::move(value);
+        if (index < m_first_used_index) {
+            m_first_used_index = index;
+        }
+
+        as_impl->mark_entry_used(cur_entry);
+        ++m_table_used;
+        return Iterator(this, cur_entry);
+    }
+
+    template <typename... ArgTypes>
+    inline Iterator emplace(bool& already_present, ArgTypes&&... args)
+    {
+        T constructed_value(std::forward<ArgTypes>(args)...);
+        return insert(constructed_value, already_present);
+    }
+
+    inline void erase(const Iterator& position)
+    {
+        auto as_impl = this_as_impl();
+
+        if (as_impl->is_entry_used(position.get_current())) {
+            as_impl->mark_entry_deleted(position.get_current());
+        } else {
+            return;
+        }
+
+        ++m_table_deleted;
+        --m_table_used;
+
+        auto deleted_nonused_ratio = (float)m_table_deleted / (float)(m_table_size - m_table_used);
+        if ((deleted_nonused_ratio >= sc_deleted_nonused_rehash_ratio) ||
+            (((float)m_table_used / (float)m_table_size) < sc_min_load_factor)) {
+            rehash_table();
+        } else if ((position.get_current() - m_table) == m_first_used_index) {
+            auto temp = position;
+            ++temp;
+            m_first_used_index = temp.get_current() - m_table;
+        }
+    }
+
+    inline void clear()
+    {
+        auto impl = this_as_impl();
+        deallocate_table();
+        impl->on_clear();
+    }
 };
 
 template <typename T>
@@ -198,397 +711,662 @@ public:
 
 // A hash table of unified hash entries
 template <typename T, typename HashFunction, typename EqualsFunction>
-class UnifiedHashTable final : private HashTableBase
+class UnifiedHashTable
+    : private HashTableImplBase<T, HashFunction, EqualsFunction,
+                                kc::hash_table_detail_::UnifiedHashTable,
+                                UnifiedHashTableEntry<T> >
 {
-    friend class Iterator;
+private:
+    typedef HashTableImplBase<T, HashFunction, EqualsFunction,
+                              kc::hash_table_detail_::UnifiedHashTable,
+                              UnifiedHashTableEntry<T> > BaseType;
+    friend BaseType;
 
 private:
     typedef UnifiedHashTableEntry<T> EntryType;
 
-    EntryType* m_table;
-    u64 m_table_size;
-    u64 m_table_used;
-    u64 m_table_deleted;
-    u64 m_first_used_index;
-
-    inline void deallocate_table()
+    inline T& get_value_ref(EntryType* entry) const
     {
-        if (m_table != nullptr) {
-            ka::deallocate_array_raw(m_table, m_table_size);
-            m_table = nullptr;
-            m_table_size = 0;
-            m_table_used = 0;
-            m_table_deleted = 0;
-            m_first_used_index = 0;
-        }
+        return entry->get_value_ref();
     }
 
-    // expands to accommodate at least one more element
-    inline void expand_table()
+    inline T* get_value_ptr(EntryType* entry) const
     {
-        expand_table(m_table_used + 1);
+        return entry->get_value_ptr();
     }
 
-    // moves one entry into the new table
-    inline u64 move_into_table(EntryType* entry, EntryType* new_table, u64 new_capacity)
+    inline bool is_entry_nonused(EntryType* entry) const
     {
-        HashFunction hash_fun;
-        auto h1 = hash_fun(entry->get_value_ref()) % new_capacity;
-        auto h2 = 1 + (h1 ^ (h1 << 23) ^ (h1 >> 19)) % (new_capacity - 1);
-
-        auto index = h1;
-        auto cur_entry = &(new_table[index]);
-
-        while (!(cur_entry->is_nonused()) && !(cur_entry->is_deleted())) {
-            index = (index + h2) % new_capacity;
-            cur_entry = &(new_table[index]);
-        }
-
-        *cur_entry = std::move(entry->get_value_ref());
-        cur_entry->mark_used();
-
-        return index;
+        return entry->is_nonused();
     }
 
-    // rebuilds the table into new_table, destroys old table
-    // and deallocates its memory
-    inline void rebuild_table(EntryType* new_table, u64 new_capacity)
+    inline bool is_entry_deleted(EntryType* entry) const
     {
-        bool first = true;
-        for (auto cur_entry = m_table, last_entry = m_table + m_table_size;
-             cur_entry != last_entry; ++cur_entry) {
-            if (cur_entry->is_used()) {
-                auto index = move_into_table(cur_entry, new_table, new_capacity);
-                if (first) {
-                    m_first_used_index = index;
-                    first = false;
-                }
-            }
-        }
-
-        // destroy the old table and update the books
-        ka::deallocate_array_raw(m_table, m_table_size);
-        m_table_size = new_capacity;
-        m_table = new_table;
-        m_table_deleted = 0;
+        return entry->is_deleted();
     }
 
-    // expands to accommodate at least new_capacity elements
-    inline void expand_table(u64 new_capacity)
+    inline bool is_entry_used(EntryType* entry) const
     {
-        auto required_capacity = (u64)((float)new_capacity / sc_max_load_factor);
-        if (required_capacity < m_table_size) {
-            return;
-        }
-        required_capacity = std::max(required_capacity, sc_initial_table_size);
-        required_capacity = ku::PrimeGenerator::get_next_prime(required_capacity);
-
-        auto new_table = ka::allocate_array_raw<EntryType>(required_capacity);
-        rebuild_table(new_table, required_capacity);
+        return entry->is_used();
     }
 
-    inline void rehash_table()
+    inline void mark_entry_used(EntryType* entry) const
     {
-        u64 new_table_size = m_table_size;
-        if (((float)m_table_used / (float)m_table_size) < sc_min_load_factor) {
-            new_table_size = m_table_used * 2;
-            new_table_size = std::max(new_table_size, sc_initial_table_size);
-            new_table_size = ku::PrimeGenerator::get_next_prime(new_table_size);
-        }
-
-        auto new_table = ka::allocate_array_raw<EntryType>(new_table_size);
-        rebuild_table(new_table, new_table_size);
+        entry->mark_used();
     }
 
-public:
-    // This iterator is mutable
-    // so that classes which actually implement
-    // hash tables can give sensible semantics
-    // even if a hash map is implemented
-    class Iterator : public std::iterator<std::bidirectional_iterator_tag,
-                                          T, i64, T*, T&>
+    inline void mark_entry_deleted(EntryType* entry) const
     {
-        friend class UnifiedHashTable<T, HashFunction, EqualsFunction>;
+        entry->mark_deleted();
+    }
 
-    private:
-        UnifiedHashTable* m_hash_table;
-        EntryType* m_current;
+    inline void mark_entry_nonused(EntryType* entry) const
+    {
+        entry->mark_nonused();
+    }
 
-    public:
-        inline Iterator()
-            : m_hash_table(nullptr), m_current(nullptr)
-        {
-            // Nothing here
-        }
-
-        inline Iterator(UnifiedHashTable* hash_table, EntryType* current)
-            : m_hash_table(hash_table), m_current(current)
-        {
-            // Nothing here
-        }
-
-        inline Iterator(const Iterator& other)
-            : m_hash_table(other.hash_table), m_current(other.current)
-        {
-            // Nothing here
-        }
-
-        inline Iterator& operator = (const Iterator& other)
-        {
-            if (&other == this) {
-                return *this;
-            }
-            m_hash_table = other.m_hash_table;
-            m_current = other.m_current;
-            return *this;
-        }
-
-        inline bool operator == (const Iterator& other) const
-        {
-            return (m_current == other.m_current);
-        }
-
-        inline bool operator != (const Iterator& other) const
-        {
-            return (m_current != other.m_current);
-        }
-
-        inline Iterator& operator ++ ()
-        {
-            auto last = m_hash_table->m_table + m_hash_table->m_table_size;
-            if (m_current == last) {
-                return *this;
-            }
-            do {
-                ++m_current;
-            } while (m_current != last && !(m_current->is_used()));
-            return *this;
-        }
-
-        inline Iterator& operator -- ()
-        {
-            auto first = m_hash_table->m_table + m_first_used_index;
-            if (m_current == first) {
-                return *this;
-            }
-            do {
-                --m_current;
-            } while (m_current != first && !(m_current->is_used()));
-            return *this;
-        }
-
-        inline Iterator operator ++ (int unused)
-        {
-            auto retval = *this;
-            ++(*this);
-            return retval;
-        }
-
-        inline Iterator operator -- (int unused)
-
-        {
-            auto retval = *this;
-            --(*this);
-            return retval;
-        }
-
-        inline T& operator * () const
-        {
-            return m_current->get_value_ref();
-        }
-
-        inline T* operator -> () const
-        {
-            return m_current->get_value_ptr();
-        }
-    };
-
-    inline UnifiedHashTable()
-        : m_table(nullptr), m_table_size(0), m_table_used(0),
-          m_table_deleted(0), m_first_used_index(0)
+    inline void begin_resize(u64 new_table_size) const
     {
         // Nothing here
     }
 
-    inline UnifiedHashTable(u64 initial_capacity)
-        : UnifiedHashTable()
+    inline void end_resize(u64 new_table_size) const
     {
-        auto actual_capacity = std::max(initial_capacity, sc_initial_table_size);
-        actual_capacity = ku::PrimeGenerator::get_next_prime(actual_capacity);
-        m_table = ka::allocate_array_raw<EntryType>(actual_capacity);
-        m_table_size = actual_capacity;
-        m_first_used_index = m_table_size;
+        // Nothing here
+    }
+
+    inline bool is_new_entry_used(EntryType* new_table,
+                                  u64 new_table_size,
+                                  EntryType* entry) const
+    {
+        return entry->is_used();
+    }
+
+    inline bool is_new_entry_nonused(EntryType* new_table,
+                                     u64 new_table_size,
+                                     EntryType* entry) const
+    {
+        return entry->is_nonused();
+    }
+
+    inline void mark_new_entry_used(EntryType* new_table,
+                                    u64 new_table_size,
+                                    EntryType* entry) const
+    {
+        entry->mark_used();
+    }
+
+    inline void mark_new_entry_nonused(EntryType* new_table,
+                                    u64 new_table_size,
+                                    EntryType* entry) const
+    {
+        entry->mark_nonused();
+    }
+
+    inline void initialize_new_table(EntryType* new_table, u64 new_table_size) const
+    {
+        // Nothing needs to be done, entries are marked nonused by default
+    }
+
+    inline void on_clear() const
+    {
+        // Nothing needs to be done
+    }
+
+    inline void set_size(u64 new_size) const
+    {
+        // Nothing needs to be done
+    }
+
+public:
+    typedef typename BaseType::Iterator Iterator;
+    typedef Iterator iterator;
+
+    // These accept deleted and nonused values for compatibility
+    inline UnifiedHashTable(const T& deleted_value = T(), const T& nonused_value = T())
+        : BaseType()
+    {
+        // Nothing here
+    }
+
+    inline UnifiedHashTable(u64 initial_capacity, const T& deleted_value = T(),
+                            const T& nonused_value = T())
+        : BaseType(initial_capacity)
+    {
+        // Nothing here
     }
 
     inline UnifiedHashTable(const UnifiedHashTable& other)
-        : UnifiedHashTable()
+        : BaseType(other)
     {
-        assign(other);
+        // Nothing here
     }
 
     inline UnifiedHashTable(UnifiedHashTable&& other)
-        : UnifiedHashTable()
+        : BaseType(std::move(other))
     {
-        assign(std::move(other));
+        // Nothing here
     }
 
-    inline void assign(const UnifiedHashTable& other)
+    inline ~UnifiedHashTable()
     {
-        deallocate_table();
-
-        u64 actual_capacity = (u64)ceil(other.m_table_used * sc_resize_factor);
-        actual_capacity = std::max(actual_capacity, sc_initial_table_size);
-        actual_capacity = ku::PrimeGenerator::get_next_prime(actual_capacity);
-        m_table = ka::allocate_array_raw<EntryType>(actual_capacity);
-        m_table_size = actual_capacity;
-        m_first_used_index = m_table_size;
+        // Nothing here
     }
 
-    inline void assign(UnifiedHashTable&& other)
+    inline UnifiedHashTable& operator = (const UnifiedHashTable& other)
     {
-        std::swap(m_table, other.m_table);
-        std::swap(m_table_used, other.m_table_used);
-        std::swap(m_table_size, other.m_table_size);
-        std::swap(m_table_deleted, other.m_table_deleted);
-        std::swap(m_first_used_index, other.m_first_used_index);
+        if (&other == this) {
+            return *this;
+        }
+        BaseType::assign(other);
+        return *this;
     }
 
-    inline UnifiedHashTable& operator = (const UnifiedHashTable& other) = delete;
-    inline UnifiedHashTable& operator = (UnifiedHashTable&& other) = delete;
-
-    inline Iterator begin() const
+    inline UnifiedHashTable& operator = (UnifiedHashTable&& other)
     {
-        return Iterator(this, m_table + m_first_used_index);
+        if (&other == this) {
+            return *this;
+        }
+        BaseType::assign(std::move(other));
+        return *this;
     }
 
-    inline Iterator end() const
+    using BaseType::assign;
+    using BaseType::begin;
+    using BaseType::end;
+    using BaseType::size;
+    using BaseType::capacity;
+    using BaseType::find;
+    using BaseType::insert;
+    using BaseType::erase;
+    using BaseType::clear;
+    using BaseType::emplace;
+
+    // for compatibility
+    inline T get_deleted_value() const
     {
-        return Iterator(this, m_table + m_table_size);
+        return T();
     }
 
-    inline u64 size() const
+    inline T get_nonused_value() const
     {
-        return m_table_used;
+        return T();
     }
 
-    inline u64 capacity() const
+    inline void set_deleted_value(const T& value) const
     {
-        return m_table_size;
+        // nothing
     }
 
-    inline Iterator find(const T& value) const
+    inline void set_nonused_value(const T& value) const
     {
-        if (m_table == nullptr || m_table_size == 0 || m_table_used == 0) {
-            return end();
+        // nothing
+    }
+};
+
+template <typename T, typename HashFunction, typename EqualsFunction>
+class SegregatedHashTable
+    : private HashTableImplBase<T, HashFunction, EqualsFunction,
+                                kc::hash_table_detail_::SegregatedHashTable, T>
+{
+private:
+    typedef HashTableImplBase<T, HashFunction, EqualsFunction,
+                              kc::hash_table_detail_::SegregatedHashTable, T> BaseType;
+    friend BaseType;
+    typedef T EntryType;
+
+    // additional structures to keep track of nonused and deleted entries
+    mutable BitSet m_deleted_entries;
+    mutable BitSet m_nonused_entries;
+
+    mutable BitSet m_new_deleted_entries;
+    mutable BitSet m_new_nonused_entries;
+
+    inline u64 get_index_for_entry(EntryType* entry) const
+    {
+        return (entry - this->m_table);
+    }
+
+    inline EntryType& get_value_ref(EntryType* entry) const
+    {
+        return *entry;
+    }
+
+    inline EntryType* get_value_ptr(EntryType* entry) const
+    {
+        return entry;
+    }
+
+    inline bool is_entry_nonused(EntryType* entry) const
+    {
+        auto index = get_index_for_entry(entry);
+        return m_nonused_entries.test(index);
+    }
+
+    inline bool is_entry_deleted(EntryType* entry) const
+    {
+        auto index = get_index_for_entry(entry);
+        return m_deleted_entries.test(index);
+    }
+
+    inline bool is_entry_used(EntryType* entry) const
+    {
+        auto index = get_index_for_entry(entry);
+        return (!m_nonused_entries.test(index) && !m_deleted_entries.test(index));
+    }
+
+    inline void mark_entry_nonused(EntryType* entry) const
+    {
+        auto index = get_index_for_entry(entry);
+        m_nonused_entries.set(index);
+        m_deleted_entries.clear(index);
+    }
+
+    inline void mark_entry_deleted(EntryType* entry) const
+    {
+        auto index = get_index_for_entry(entry);
+        m_nonused_entries.clear(index);
+        m_deleted_entries.set(index);
+    }
+
+    inline void mark_entry_used(EntryType* entry) const
+    {
+        auto index = get_index_for_entry(entry);
+        m_nonused_entries.clear(index);
+        m_deleted_entries.clear(index);
+    }
+
+    inline void begin_resize(u64 new_table_size) const
+    {
+        m_new_nonused_entries.resize_and_clear(new_table_size);
+        m_new_deleted_entries.resize_and_clear(new_table_size);
+    }
+
+    inline void end_resize(u64 new_table_size) const
+    {
+        m_deleted_entries.reset();
+        m_nonused_entries.reset();
+
+        m_deleted_entries = std::move(m_new_deleted_entries);
+        m_nonused_entries = std::move(m_new_nonused_entries);
+    }
+
+    inline bool is_new_entry_used(EntryType* new_table,
+                                  u64 new_table_size,
+                                  EntryType* entry) const
+    {
+        auto index = entry - new_table;
+        return (!m_new_nonused_entries.test(index) && !m_new_deleted_entries.test(index));
+    }
+
+    inline bool is_new_entry_nonused(EntryType* new_table,
+                                     u64 new_table_size,
+                                     EntryType* entry) const
+    {
+        auto index = entry - new_table;
+        return (m_new_nonused_entries.test(index));
+    }
+
+    inline void mark_new_entry_used(EntryType* new_table,
+                                    u64 new_table_size,
+                                    EntryType* entry) const
+    {
+        auto index = entry - new_table;
+        m_new_nonused_entries.clear(index);
+        m_new_deleted_entries.clear(index);
+    }
+
+    inline void mark_new_entry_nonused(EntryType* new_table,
+                                       u64 new_table_size,
+                                       EntryType* entry) const
+    {
+        auto index = entry - new_table;
+        m_new_nonused_entries.set(index);
+        m_new_deleted_entries.clear(index);
+    }
+
+    inline void initialize_new_table(EntryType* new_table, u64 new_table_size) const
+    {
+        // Nothing to be done
+    }
+
+    inline void on_clear() const
+    {
+        m_nonused_entries.reset();
+        m_deleted_entries.reset();
+        m_new_nonused_entries.reset();
+        m_new_deleted_entries.reset();
+    }
+
+    inline void set_size(u64 new_size) const
+    {
+        m_deleted_entries.resize_and_clear(new_size);
+        m_nonused_entries.resize_and_clear(new_size);
+    }
+
+public:
+    typedef typename BaseType::Iterator Iterator;
+    typedef Iterator iterator;
+
+    inline SegregatedHashTable(const T& deleted_value = T(), const T& nonused_value = T())
+        : BaseType(), m_deleted_entries(), m_nonused_entries(),
+          m_new_deleted_entries(), m_new_nonused_entries()
+    {
+        // Nothing here
+    }
+
+    inline SegregatedHashTable(u64 initial_capacity, const T& deleted_value = T(),
+                               const T& nonused_value = T())
+        : BaseType(), m_deleted_entries(), m_nonused_entries(),
+          m_new_deleted_entries(), m_new_nonused_entries()
+    {
+        this->expand_table(initial_capacity);
+        set_size(this->m_table_size);
+    }
+
+    inline SegregatedHashTable(const SegregatedHashTable& other)
+        : BaseType(), m_deleted_entries(), m_nonused_entries(),
+          m_new_deleted_entries(), m_new_nonused_entries()
+    {
+        BaseType::assign(other);
+    }
+
+    inline SegregatedHashTable(SegregatedHashTable&& other)
+        : BaseType(), m_deleted_entries(),
+          m_nonused_entries(), m_new_deleted_entries(),
+          m_new_nonused_entries()
+    {
+        BaseType::assign(std::move(other));
+        m_deleted_entries = std::move(other.m_deleted_entries);
+        m_nonused_entries = std::move(other.m_nonused_entries);
+    }
+
+    inline ~SegregatedHashTable()
+    {
+        // Nothing here
+    }
+
+    inline SegregatedHashTable& operator = (const SegregatedHashTable& other)
+    {
+        if (&other == this) {
+            return *this;
+        }
+        BaseType::assign(other);
+        return *this;
+    }
+
+    inline SegregatedHashTable& operator = (SegregatedHashTable&& other)
+    {
+        if (&other == this) {
+            return *this;
+        }
+        BaseType::assign(std::move(other));
+        m_deleted_entries = std::move(other.m_deleted_entries);
+        m_nonused_entries = std::move(other.m_nonused_entries);
+        return *this;
+    }
+
+    using BaseType::assign;
+    using BaseType::begin;
+    using BaseType::end;
+    using BaseType::size;
+    using BaseType::capacity;
+    using BaseType::find;
+    using BaseType::insert;
+    using BaseType::erase;
+    using BaseType::clear;
+    using BaseType::emplace;
+
+    // for compatibility
+    inline T get_deleted_value() const
+    {
+        return T();
+    }
+
+    inline T get_nonused_value() const
+    {
+        return T();
+    }
+
+    inline void set_deleted_value(const T& value) const
+    {
+        // nothing
+    }
+
+    inline void set_nonused_value(const T& value) const
+    {
+        // nothing
+    }
+};
+
+template <typename T, typename HashFunction, typename EqualsFunction>
+class RestrictedHashTable
+    : private HashTableImplBase<T, HashFunction, EqualsFunction,
+                                kc::hash_table_detail_::RestrictedHashTable, T>
+{
+private:
+    typedef HashTableImplBase<T, HashFunction, EqualsFunction,
+                              kc::hash_table_detail_::SegregatedHashTable, T> BaseType;
+    friend BaseType;
+    typedef T EntryType;
+
+    T m_deleted_value;
+    T m_nonused_value;
+
+    inline u64 get_index_for_entry(EntryType* entry) const
+    {
+        return (entry - this->m_table);
+    }
+
+    inline EntryType& get_value_ref(EntryType* entry) const
+    {
+        return *entry;
+    }
+
+    inline EntryType* get_value_ptr(EntryType* entry) const
+    {
+        return entry;
+    }
+
+    inline bool is_entry_nonused(EntryType* entry) const
+    {
+        return (entry == m_nonused_value);
+    }
+
+    inline bool is_entry_deleted(EntryType* entry) const
+    {
+        return (entry == m_deleted_value);
+    }
+
+    inline bool is_entry_used(EntryType* entry) const
+    {
+        return ((entry != m_nonused_value) && (entry != m_deleted_value));
+    }
+
+    inline void mark_entry_nonused(EntryType* entry) const
+    {
+        *entry = m_nonused_value;
+    }
+
+    inline void mark_entry_deleted(EntryType* entry) const
+    {
+        *entry = m_deleted_value;
+    }
+
+    inline void mark_entry_used(EntryType* entry) const
+    {
+        // do nothing
+        return;
+    }
+
+    inline void begin_resize(u64 new_table_size) const
+    {
+        // do nothing
+    }
+
+    inline void end_resize(u64 new_table_size) const
+    {
+        // do nothing
+    }
+
+    inline bool is_new_entry_used(EntryType* new_table,
+                                  u64 new_table_size,
+                                  EntryType* entry) const
+    {
+        return is_entry_used(entry);
+    }
+
+    inline bool is_new_entry_nonused(EntryType* new_table,
+                                     u64 new_table_size,
+                                     EntryType* entry) const
+    {
+        return is_entry_nonused(entry);
+    }
+
+    inline void mark_new_entry_used(EntryType* new_table,
+                                    u64 new_table_size,
+                                    EntryType* entry) const
+    {
+        mark_entry_used(entry);
+    }
+
+    inline void mark_new_entry_nonused(EntryType* new_table,
+                                       u64 new_table_size,
+                                       EntryType* entry) const
+    {
+        mark_entry_nonused(entry);
+    }
+
+    inline void initialize_new_table(EntryType* new_table, u64 new_table_size) const
+    {
+        for (auto cur_ptr = new_table, last_ptr = new_table + new_table_size;
+             cur_ptr != last_ptr; ++cur_ptr) {
+            *cur_ptr = m_nonused_value;
+        }
+    }
+
+    inline void on_clear() const
+    {
+        // do nothing
+    }
+
+    inline void set_size(u64 size) const
+    {
+        // do nothing
+    }
+
+public:
+    typedef typename BaseType::Iterator Iterator;
+    typedef Iterator iterator;
+
+    // We allow a default constructor, but the client
+    // needs to set nonused value before any inserts
+    // and deleted value before any erases
+    inline RestrictedHashTable()
+        : BaseType()
+    {
+        // Nothing here
+    }
+
+    inline RestrictedHashTable(const T& deleted_value, const T& nonused_value)
+        : BaseType(), m_deleted_value(deleted_value), m_nonused_value(nonused_value)
+    {
+        // Nothing here
+    }
+
+    inline RestrictedHashTable(u64 initial_capacity,
+                               const T& deleted_value,
+                               const T& nonused_value)
+        : BaseType(), m_deleted_value(deleted_value), m_nonused_value(nonused_value)
+    {
+        BaseType::expand_table(initial_capacity);
+    }
+
+    inline RestrictedHashTable(const RestrictedHashTable& other)
+        : BaseType(), m_deleted_value(other.m_deleted_value),
+          m_nonused_value(other.m_nonused_value)
+    {
+        BaseType::assign(other);
+    }
+
+    inline RestrictedHashTable(RestrictedHashTable&& other)
+        : BaseType(), m_deleted_value(other.m_deleted_value),
+          m_nonused_value(other.m_nonused_value)
+    {
+        BaseType::assign(std::move(other));
+    }
+
+    inline ~RestrictedHashTable()
+    {
+        // Nothing here
+    }
+
+    inline RestrictedHashTable& operator = (const RestrictedHashTable& other)
+    {
+        if (&other == this) {
+            return *this;
         }
 
-        HashFunction hash_fun;
-        EqualsFunction equals_fun;
+        m_deleted_value = other.m_deleted_value;
+        m_nonused_value = other.m_nonused_value;
 
-        auto h1 = hash_fun(value) % m_table_size;
-        auto h2 = 1 + (h1 ^ (h1 << 23) ^ (h1 >> 19)) % (m_table_size - 1);
-        auto index = h1;
+        BaseType::assign(other);
+        return *this;
+    }
 
-        auto cur_entry = &(m_table[index]);
-        u64 num_probes = 0;
+    inline RestrictedHashTable& operator = (RestrictedHashTable&& other)
+    {
+        if (&other == this) {
+            return *this;
+        }
+        std::swap(m_deleted_value, other.m_deleted_value);
+        std::swap(m_nonused_value, other.m_nonused_value);
+        BaseType::assign(std::move(other));
+        return *this;
+    }
 
-        while (!(cur_entry->is_nonused()) && num_probes < m_table_size) {
-            ++num_probes;
-            if (!(cur_entry->is_deleted()) && (equals_fun(cur_entry->get_value_ref(), value))) {
-                return Iterator(this, cur_entry);
+    inline const T& get_deleted_value() const
+    {
+        return m_deleted_value;
+    }
+
+    inline const T& get_nonused_value() const
+    {
+        return m_nonused_value;
+    }
+
+    inline void set_deleted_value(const T& deleted_value)
+    {
+        for (auto cur_ptr = this->m_table, last_ptr = this->m_table + this->m_table_size;
+             cur_ptr != last_ptr; ++cur_ptr) {
+            if (*cur_ptr == m_deleted_value) {
+                *cur_ptr = deleted_value;
             }
-
-            index = (index + h2) % m_table_size;
-            cur_entry = &(m_table[index]);
         }
-
-        return end();
+        m_deleted_value = deleted_value;
     }
 
-    inline Iterator insert(const T& value, bool& already_present)
+    inline void set_nonused_value(const T& nonused_value)
     {
-        T copied_value(value);
-        return insert(std::move(copied_value), already_present);
+        for (auto cur_ptr = this->m_table, last_ptr = this->m_table + this->m_table_size;
+             cur_ptr != last_ptr; ++cur_ptr) {
+            if (*cur_ptr == m_nonused_value) {
+                *cur_ptr = nonused_value;
+            }
+        }
+        m_nonused_value = nonused_value;
     }
 
-    inline Iterator insert(T&& value, bool& already_present)
-    {
-        auto it = find(value);
-        if (it != end()) {
-            already_present = true;
-            return it;
-        }
-
-        already_present = false;
-
-        expand_table();
-
-        HashFunction hash_fun;
-        auto h1 = hash_fun(value) % m_table_size;
-        auto h2 = 1 + (h1 ^ (h1 << 23) ^ (h1 >> 19)) % (m_table_size - 1);
-        auto index = h1;
-
-        auto cur_entry = &(m_table[index]);
-        while (!(cur_entry->is_nonused()) && !(cur_entry->is_deleted())) {
-            index = (index + h2) % m_table_size;
-            cur_entry = &(m_table[index]);
-        }
-
-        *cur_entry = std::move(value);
-        if (index < m_first_used_index) {
-            m_first_used_index = index;
-        }
-
-        cur_entry->mark_used();
-        ++m_table_used;
-        return Iterator(this, cur_entry);
-    }
-
-    template <typename... ArgTypes>
-    inline Iterator emplace(bool& already_present, ArgTypes&&... args)
-    {
-        T constructed_value(std::forward<ArgTypes>(args)...);
-        return insert(constructed_value, already_present);
-    }
-
-    inline void erase(const Iterator& position)
-    {
-        if (position.m_current->is_used()) {
-            position.m_current->mark_deleted();
-        } else {
-            return;
-        }
-
-        ++m_table_deleted;
-        --m_table_used;
-
-        auto deleted_nonused_ratio = (float)m_table_deleted / (float)(m_table_size - m_table_used);
-        if ((deleted_nonused_ratio >= sc_deleted_nonused_rehash_ratio) ||
-            (((float)m_table_used / (float)m_table_size) < sc_min_load_factor)) {
-            rehash_table();
-        } else if ((position.m_current - m_table) == m_first_used_index) {
-            auto temp = position;
-            ++temp;
-            m_first_used_index = temp.m_current - m_table;
-        }
-    }
-
-    inline void clear()
-    {
-        deallocate_table();
-    }
-};
-
-template <typename T, typename HashFunction, typename EqualsFunction>
-class SegregatedHashTable final : private HashTableBase
-{
-
-};
-
-template <typename T, typename HashFunction, typename EqualsFunction>
-class RestrictedHashTable final : private HashTableBase
-{
-
+    using BaseType::assign;
+    using BaseType::begin;
+    using BaseType::end;
+    using BaseType::size;
+    using BaseType::capacity;
+    using BaseType::find;
+    using BaseType::insert;
+    using BaseType::erase;
+    using BaseType::clear;
+    using BaseType::emplace;
 };
 
 } /* end namespace hash_table_detail_ */

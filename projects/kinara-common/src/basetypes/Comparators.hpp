@@ -53,7 +53,7 @@ private:
                         const std::true_type is_comparable) const
     {
         CompareFunction<i64> cmp_fun;
-        return (cmp_fun(object1.compare(other), 0));
+        return (cmp_fun(object1.compare(object2), 0));
     }
 
     inline bool compare(const T& object1, const T& object2,
@@ -72,14 +72,14 @@ public:
 };
 
 template <typename T, template <typename> class CompareFunction>
-class Comparer<T*>
+class Comparer<T*, CompareFunction>
 {
 private:
     inline bool compare(const T* object1, const T* object2,
                         const std::true_type is_comparable) const
     {
         CompareFunction<i64> cmp_fun;
-        return (cmp_fun(object1->compare(other), 0));
+        return (cmp_fun(object1->compare(object2), 0));
     }
 
     inline bool compare(const T* object1, const T* object2,
@@ -98,14 +98,14 @@ public:
 };
 
 template <typename T, template <typename> class CompareFunction>
-class Comparer<const T*>
+class Comparer<const T*, CompareFunction>
 {
 private:
     inline bool compare(const T* object1, const T* object2,
                         const std::true_type is_comparable) const
     {
         CompareFunction<i64> cmp_fun;
-        return (cmp_fun(object1->compare(other), 0));
+        return (cmp_fun(object1->compare(object2), 0));
     }
 
     inline bool compare(const T* object1, const T* object2,
