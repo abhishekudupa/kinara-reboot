@@ -600,7 +600,7 @@ public:
     }
 
     Iterator insert(const ConstIterator& position,
-                    const std::initializer_list<ValueType>& init_list)
+                    std::initializer_list<ValueType> init_list)
     {
         if (init_list.size() == 0) {
             return Iterator(position.get_node());

@@ -41,7 +41,7 @@
 #include <initializer_list>
 #include <iterator>
 
-#include "../basetypes/KinaraBase.hpp"
+#include "../basetypes/KinaraTypes.hpp"
 #include "../allocators/MemoryManager.hpp"
 #include "../primeutils/PrimeGenerator.hpp"
 
@@ -205,6 +205,8 @@ protected:
         // destroy the old table and update the books
         if (m_table != nullptr) {
             ka::deallocate_array_raw(m_table, m_table_size);
+        } else {
+            m_first_used_index = new_capacity;
         }
 
         m_table_size = new_capacity;
@@ -243,7 +245,7 @@ protected:
         rebuild_table(new_table, new_table_size);
     }
 
-public:
+protected:
 
     // This iterator is mutable
     // so that classes which actually implement
@@ -381,8 +383,9 @@ private:
     {
         auto num_elements = std::distance(first, last);
         expand_table(m_table_size + num_elements);
+        bool dummy;
         for (auto it = first; it != last; ++it) {
-            insert(*it);
+            insert(*it, dummy);
         }
     }
 
@@ -393,7 +396,7 @@ private:
         insert_range(first, last, IterCategory());
     }
 
-public:
+protected:
     inline HashTableImplBase()
         : m_table(nullptr), m_table_size(0), m_table_used(0),
           m_table_deleted(0), m_first_used_index(0)
@@ -401,7 +404,7 @@ public:
         // Nothing here
     }
 
-    inline HashTableImplBase(u64 initial_capacity)
+    inline explicit HashTableImplBase(u64 initial_capacity)
         : HashTableImplBase()
     {
         auto initial_table_size = sc_initial_table_size;
@@ -431,7 +434,7 @@ public:
         assign(first, last);
     }
 
-    inline HashTableImplBase(const std::initializer_list<T>& init_list)
+    inline HashTableImplBase(std::initializer_list<T> init_list)
         : HashTableImplBase()
     {
         assign(init_list);
@@ -439,7 +442,7 @@ public:
 
     inline ~HashTableImplBase()
     {
-        clear();
+        deallocate_table();
     }
 
     template <typename InputIterator>
@@ -455,7 +458,7 @@ public:
         insert_range(first, last, IterCategory());
     }
 
-    inline void assign(const std::initializer_list<T>& init_list)
+    inline void assign(std::initializer_list<T> init_list)
     {
         assign(init_list.begin(), init_list.end());
     }
@@ -502,7 +505,7 @@ public:
 
     inline bool empty() const
     {
-        return (m_table_used == 0);
+        return (this->m_table_used == 0);
     }
 
     inline Iterator begin() const
@@ -616,6 +619,7 @@ public:
         while (!is_nonused && !is_deleted) {
             index = (index + h2) % m_table_size;
             cur_entry = &(m_table[index]);
+
             is_nonused = as_impl->is_entry_nonused(cur_entry);
             is_deleted = as_impl->is_entry_deleted(cur_entry);
         }
@@ -631,14 +635,14 @@ public:
     }
 
     template <typename InputIterator>
-    inline Iterator insert(const InputIterator& first, const InputIterator& last)
+    inline void insert(const InputIterator& first, const InputIterator& last)
     {
-        return insert_range(first, last);
+        insert_range(first, last);
     }
 
-    inline Iterator insert(const std::initializer_list<T>& init_list)
+    inline void insert(std::initializer_list<T> init_list)
     {
-        return insert_range(init_list.begin(), init_list.end());
+        insert_range(init_list.begin(), init_list.end());
     }
 
     template <typename... ArgTypes>
@@ -669,6 +673,22 @@ public:
             auto temp = position;
             ++temp;
             m_first_used_index = temp.get_current() - m_table;
+        }
+    }
+
+    inline void erase(const ValueType& value)
+    {
+        auto position = find(value);
+        if (position == end()) {
+            return;
+        }
+        erase(position);
+    }
+
+    inline void erase(const Iterator& first, const Iterator& last)
+    {
+        for (auto it = first; it != last; ++it) {
+            erase(it);
         }
     }
 
@@ -820,9 +840,9 @@ public:
 // A hash table of unified hash entries
 template <typename T, typename HashFunction, typename EqualsFunction>
 class UnifiedHashTable
-    : private HashTableImplBase<T, HashFunction, EqualsFunction,
-                                kc::hash_table_detail_::UnifiedHashTable,
-                                UnifiedHashTableEntry<T> >
+    : protected HashTableImplBase<T, HashFunction, EqualsFunction,
+                                  kc::hash_table_detail_::UnifiedHashTable,
+                                  UnifiedHashTableEntry<T> >
 {
 private:
     typedef HashTableImplBase<T, HashFunction, EqualsFunction,
@@ -931,14 +951,27 @@ public:
     typedef Iterator iterator;
 
     // These accept deleted and nonused values for compatibility
-    inline UnifiedHashTable(const T& deleted_value = T(), const T& nonused_value = T())
+    inline UnifiedHashTable()
         : BaseType()
     {
         // Nothing here
     }
 
-    inline UnifiedHashTable(u64 initial_capacity, const T& deleted_value = T(),
-                            const T& nonused_value = T())
+    inline UnifiedHashTable(const T& deleted_value, const T& nonused_value)
+        : BaseType()
+    {
+        // Nothing here
+    }
+
+    inline explicit UnifiedHashTable(u64 initial_capacity)
+        : BaseType(initial_capacity)
+    {
+        // Nothing here
+    }
+
+    inline UnifiedHashTable(u64 initial_capacity,
+                            const T& deleted_value,
+                            const T& nonused_value)
         : BaseType(initial_capacity)
     {
         // Nothing here
@@ -952,6 +985,35 @@ public:
 
     inline UnifiedHashTable(UnifiedHashTable&& other)
         : BaseType(std::move(other))
+    {
+        // Nothing here
+    }
+
+    template <typename InputIterator>
+    inline UnifiedHashTable(const InputIterator& first, const InputIterator& last)
+        : BaseType(first, last)
+    {
+        // Nothing here
+    }
+
+    template <typename InputIterator>
+    inline UnifiedHashTable(const InputIterator& first, const InputIterator& last,
+                            const T& deleted_value, const T& nonused_value)
+        : BaseType(first, last)
+    {
+        // Nothing here
+    }
+
+    inline UnifiedHashTable(std::initializer_list<T> init_list)
+        : BaseType(init_list)
+    {
+        // Nothing here
+    }
+
+    inline UnifiedHashTable(std::initializer_list<T> init_list,
+                            const T& deleted_value,
+                            const T& nonused_value)
+        : BaseType(init_list)
     {
         // Nothing here
     }
@@ -979,16 +1041,11 @@ public:
         return *this;
     }
 
-    using BaseType::assign;
-    using BaseType::begin;
-    using BaseType::end;
-    using BaseType::size;
-    using BaseType::capacity;
-    using BaseType::find;
-    using BaseType::insert;
-    using BaseType::erase;
-    using BaseType::clear;
-    using BaseType::emplace;
+    inline UnifiedHashTable& operator = (std::initializer_list<T> init_list)
+    {
+        BaseType::assign(init_list);
+        return *this;
+    }
 
     // for compatibility
     inline T get_deleted_value() const
@@ -1014,8 +1071,8 @@ public:
 
 template <typename T, typename HashFunction, typename EqualsFunction>
 class SegregatedHashTable
-    : private HashTableImplBase<T, HashFunction, EqualsFunction,
-                                kc::hash_table_detail_::SegregatedHashTable, T>
+    : protected HashTableImplBase<T, HashFunction, EqualsFunction,
+                                  kc::hash_table_detail_::SegregatedHashTable, T>
 {
 private:
     typedef HashTableImplBase<T, HashFunction, EqualsFunction,
@@ -1087,6 +1144,7 @@ private:
     inline void begin_resize(u64 new_table_size) const
     {
         m_new_nonused_entries.resize_and_clear(new_table_size);
+        m_new_nonused_entries.set();
         m_new_deleted_entries.resize_and_clear(new_table_size);
     }
 
@@ -1150,21 +1208,37 @@ private:
     {
         m_deleted_entries.resize_and_clear(new_size);
         m_nonused_entries.resize_and_clear(new_size);
+        m_nonused_entries.set();
     }
 
 public:
     typedef typename BaseType::Iterator Iterator;
     typedef Iterator iterator;
 
-    inline SegregatedHashTable(const T& deleted_value = T(), const T& nonused_value = T())
+    inline SegregatedHashTable()
         : BaseType(), m_deleted_entries(), m_nonused_entries(),
           m_new_deleted_entries(), m_new_nonused_entries()
     {
         // Nothing here
     }
 
-    inline SegregatedHashTable(u64 initial_capacity, const T& deleted_value = T(),
-                               const T& nonused_value = T())
+    inline SegregatedHashTable(const T& deleted_value, const T& nonused_value)
+        : BaseType(), m_deleted_entries(), m_nonused_entries(),
+          m_new_deleted_entries(), m_new_nonused_entries()
+    {
+        // Nothing here
+    }
+
+    inline SegregatedHashTable(u64 initial_capacity)
+        : BaseType(), m_deleted_entries(), m_nonused_entries(),
+          m_new_deleted_entries(), m_new_nonused_entries()
+    {
+        this->expand_table(initial_capacity);
+        set_size(this->m_table_size);
+    }
+
+    inline SegregatedHashTable(u64 initial_capacity, const T& deleted_value,
+                               const T& nonused_value)
         : BaseType(), m_deleted_entries(), m_nonused_entries(),
           m_new_deleted_entries(), m_new_nonused_entries()
     {
@@ -1187,6 +1261,43 @@ public:
         BaseType::assign(std::move(other));
         m_deleted_entries = std::move(other.m_deleted_entries);
         m_nonused_entries = std::move(other.m_nonused_entries);
+    }
+
+    template <typename InputIterator>
+    inline SegregatedHashTable(const InputIterator& first, const InputIterator& last)
+        : BaseType(), m_deleted_entries(),
+          m_nonused_entries(), m_new_deleted_entries(),
+          m_new_nonused_entries()
+    {
+        BaseType::assign(first, last);
+    }
+
+    template <typename InputIterator>
+    inline SegregatedHashTable(const InputIterator& first, const InputIterator& last,
+                               const T& deleted_value, const T& nonused_value)
+        : BaseType(), m_deleted_entries(),
+          m_nonused_entries(), m_new_deleted_entries(),
+          m_new_nonused_entries()
+    {
+        BaseType::assign(first, last);
+    }
+
+    inline SegregatedHashTable(std::initializer_list<T> init_list)
+        : BaseType(), m_deleted_entries(),
+          m_nonused_entries(), m_new_deleted_entries(),
+          m_new_nonused_entries()
+    {
+        BaseType::assign(init_list);
+    }
+
+    inline SegregatedHashTable(std::initializer_list<T> init_list,
+                               const T& deleted_value,
+                               const T& nonused_value)
+        : BaseType(), m_deleted_entries(),
+          m_nonused_entries(), m_new_deleted_entries(),
+          m_new_nonused_entries()
+    {
+        BaseType::assign(init_list);
     }
 
     inline ~SegregatedHashTable()
@@ -1214,16 +1325,10 @@ public:
         return *this;
     }
 
-    using BaseType::assign;
-    using BaseType::begin;
-    using BaseType::end;
-    using BaseType::size;
-    using BaseType::capacity;
-    using BaseType::find;
-    using BaseType::insert;
-    using BaseType::erase;
-    using BaseType::clear;
-    using BaseType::emplace;
+    inline SegregatedHashTable& operator = (std::initializer_list<T> init_list)
+    {
+        BaseType::assign(init_list);
+    }
 
     // for compatibility
     inline T get_deleted_value() const
@@ -1249,8 +1354,8 @@ public:
 
 template <typename T, typename HashFunction, typename EqualsFunction>
 class RestrictedHashTable
-    : private HashTableImplBase<T, HashFunction, EqualsFunction,
-                                kc::hash_table_detail_::RestrictedHashTable, T>
+    : protected HashTableImplBase<T, HashFunction, EqualsFunction,
+                                  kc::hash_table_detail_::RestrictedHashTable, T>
 {
 private:
     typedef HashTableImplBase<T, HashFunction, EqualsFunction,
@@ -1382,6 +1487,12 @@ public:
         // Nothing here
     }
 
+    inline RestrictedHashTable(u64 initial_capacity)
+        : BaseType()
+    {
+        BaseType::expand_table(initial_capacity);
+    }
+
     inline RestrictedHashTable(u64 initial_capacity,
                                const T& deleted_value,
                                const T& nonused_value)
@@ -1402,6 +1513,39 @@ public:
           m_nonused_value(other.m_nonused_value)
     {
         BaseType::assign(std::move(other));
+    }
+
+    template <typename InputIterator>
+    inline RestrictedHashTable(const InputIterator& first,
+                               const InputIterator& last)
+    {
+        throw KinaraException("Restricted hash tables cannot be constructed merely from a range");
+    }
+
+    template <typename InputIterator>
+    inline RestrictedHashTable(const InputIterator& first,
+                               const InputIterator& last,
+                               const T& deleted_value,
+                               const T& nonused_value)
+        : BaseType(), m_deleted_value(deleted_value),
+          m_nonused_value(nonused_value)
+    {
+        BaseType::assign(first, last);
+    }
+
+    inline RestrictedHashTable(std::initializer_list<T> init_list,
+                               const T& deleted_value,
+                               const T& nonused_value)
+        : BaseType(), m_deleted_value(deleted_value),
+          m_nonused_value(nonused_value)
+    {
+        BaseType::assign(init_list);
+    }
+
+    inline RestrictedHashTable(std::initializer_list<T> init_list)
+    {
+        throw KinaraException((std::string)"Restricted hash tables cannot be constructed " +
+                              "merely from an initializer list");
     }
 
     inline ~RestrictedHashTable()
@@ -1430,6 +1574,12 @@ public:
         std::swap(m_deleted_value, other.m_deleted_value);
         std::swap(m_nonused_value, other.m_nonused_value);
         BaseType::assign(std::move(other));
+        return *this;
+    }
+
+    inline RestrictedHashTable& operator = (std::initializer_list<T> init_list)
+    {
+        BaseType::assign(init_list);
         return *this;
     }
 
@@ -1464,17 +1614,6 @@ public:
         }
         m_nonused_value = nonused_value;
     }
-
-    using BaseType::assign;
-    using BaseType::begin;
-    using BaseType::end;
-    using BaseType::size;
-    using BaseType::capacity;
-    using BaseType::find;
-    using BaseType::insert;
-    using BaseType::erase;
-    using BaseType::clear;
-    using BaseType::emplace;
 };
 
 } /* end namespace hash_table_detail_ */

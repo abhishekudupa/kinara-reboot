@@ -645,7 +645,7 @@ class SListBase final
     }
 
     Iterator insert_after(const ConstIterator& position,
-                          const std::initializer_list<ValueType>& init_list)
+                          std::initializer_list<ValueType> init_list)
     {
         return insert_after(position, init_list.begin(), init_list.end());
     }
@@ -693,7 +693,7 @@ class SListBase final
     }
 
     Iterator insert(const ConstIterator& position,
-                    const std::initializer_list<ValueType>& init_list)
+                    std::initializer_list<ValueType> init_list)
     {
         if (position == cbefore_begin()) {
             throw KinaraException("Cannot insert before the beginning of an SList");

@@ -79,11 +79,25 @@ public:
 
     public:
         using BaseType::BaseType;
+        inline Iterator(const BaseType& other)
+            : BaseType(other)
+        {
+            // Nothing here
+        }
+
         using BaseType::operator=;
-        using BaseType::operator==;
-        using BaseType::operator!=;
         using BaseType::operator++;
         using BaseType::operator--;
+
+        inline bool operator == (const Iterator& other) const
+        {
+            return BaseType::operator==(other);
+        }
+
+        inline bool operator != (const Iterator& other) const
+        {
+            return BaseType::operator!=(other);
+        }
 
         inline const T& operator * () const
         {
@@ -96,17 +110,202 @@ public:
         }
     };
 
-    using HashTableType::HashTableType;
-    using HashTableType::insert;
-    using HashTableType::find;
-    using HashTableType::erase;
+    typedef Iterator iterator;
+    typedef Iterator ConstIterator;
+    typedef ConstIterator const_iterator;
+
+    using HashTableType::empty;
     using HashTableType::size;
-    using HashTableType::begin;
-    using HashTableType::end;
+    using HashTableType::max_size;
     using HashTableType::clear;
+    using HashTableType::count;
+    using HashTableType::rehash;
+    using HashTableType::reserve;
+
+    inline UnorderedSetBase()
+        : HashTableType()
+    {
+        // Nothing here
+    }
+
+    inline UnorderedSetBase(const T& deleted_value, const T& nonused_value)
+        : HashTableType(deleted_value, nonused_value)
+    {
+        // Nothing here
+    }
+
+    inline UnorderedSetBase(const UnorderedSetBase& other)
+        : HashTableType(other)
+    {
+        // Nothing here
+    }
+
+    inline UnorderedSetBase(UnorderedSetBase&& other)
+        : HashTableType(std::move(other))
+    {
+        // Nothing here
+    }
+
+    inline UnorderedSetBase(u64 initial_capacity)
+        : HashTableType(initial_capacity)
+    {
+        // Nothing here
+    }
+
+    inline UnorderedSetBase(u64 initial_capacity, const T& deleted_value, const T& nonused_value)
+        : HashTableType(initial_capacity, deleted_value, nonused_value)
+    {
+        // Nothing here
+    }
+
+    template <typename InputIterator>
+    inline UnorderedSetBase(const InputIterator& first, const InputIterator& last)
+        : HashTableType(first, last)
+    {
+        // Nothing here
+    }
+
+    template <typename InputIterator>
+    inline UnorderedSetBase(const InputIterator& first, const InputIterator& last,
+                            const T& deleted_value, const T& nonused_value)
+        : HashTableType(first, last, deleted_value, nonused_value)
+    {
+        // Nothing here
+    }
+
+    inline UnorderedSetBase(std::initializer_list<T> init_list)
+        : HashTableType(init_list)
+    {
+        // Nothing here
+    }
+
+    inline UnorderedSetBase(std::initializer_list<T> init_list,
+                            const T& deleted_value, const T& nonused_value)
+        : HashTableType(init_list, deleted_value, nonused_value)
+    {
+        // Nothing here
+    }
+
+    inline ~UnorderedSetBase()
+    {
+        // Nothing here
+    }
+
+    inline UnorderedSetBase& operator = (const UnorderedSetBase& other)
+    {
+        if (&other == this) {
+            return *this;
+        }
+        HashTableType::assign(other);
+        return *this;
+    }
+
+    inline UnorderedSetBase& operator = (UnorderedSetBase&& other)
+    {
+        if (&other == this) {
+            return *this;
+        }
+        HashTableType::assign(std::move(other));
+        return *this;
+    }
+
+    inline UnorderedSetBase& operator = (std::initializer_list<T> init_list)
+    {
+        HashTableType::assign(init_list);
+        return *this;
+    }
+
+    inline Iterator begin() const
+    {
+        return Iterator(HashTableType::begin());
+    }
+
+    inline Iterator end() const
+    {
+        return Iterator(HashTableType::end());
+    }
+
+    inline Iterator cbegin() const
+    {
+        return begin();
+    }
+
+    inline Iterator cend() const
+    {
+        return end();
+    }
+
+    inline Iterator find(const T& value) const
+    {
+        return Iterator(HashTableType::find(value));
+    }
+
+    inline std::pair<Iterator, bool> insert(const T& value)
+    {
+        bool already_present;
+        auto it = HashTableType::insert(value);
+        return std::make_pair(Iterator(it), already_present);
+    }
+
+    inline std::pair<Iterator, bool> insert(T&& value)
+    {
+        bool already_present;
+        auto it = HashTableType::insert(std::move(value));
+        return std::make_pair(Iterator(it), already_present);
+    }
+
+    template <typename InputIterator>
+    inline void insert(const InputIterator& first, const InputIterator& last)
+    {
+        HashTableType::insert(first, last);
+    }
+
+    inline void insert(const std::initializer_list<T>& init_list)
+    {
+        HashTableType::insert(init_list);
+    }
+
+    inline void erase(const Iterator& position)
+    {
+        HashTableType::erase(position);
+    }
+
+    inline void erase(const T& value)
+    {
+        HashTableType::erase(value);
+    }
+
+    inline void erase(const Iterator& first, const Iterator& last)
+    {
+        HashTableType::erase(first, last);
+    }
+
+    inline bool operator == (const UnorderedSetBase& other) const
+    {
+        auto sz = size();
+        if (sz != other.size()) {
+            return false;
+        }
+
+        auto it1 = begin();
+        auto it2 = other.begin();
+
+        for (u64 i = 0; i < size; ++i) {
+            if (find(*it2) == end() || other.find(*it1) == other.end()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    inline bool operator != (const UnorderedSetBase& other) const
+    {
+        return (!((*this) == other));
+    }
 };
 
 } /* end namespace unordered_set_detail_ */
+
 
 // Some useful typedefs
 template <typename T, typename HashFunction = ku::Hasher<T>,

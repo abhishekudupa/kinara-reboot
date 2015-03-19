@@ -728,7 +728,7 @@ public:
         return actual_pos;
     }
 
-    Iterator insert(const ConstIterator& position, const std::initializer_list<ValueType>& il)
+    Iterator insert(const ConstIterator& position, std::initializer_list<ValueType> il)
     {
         auto num_elements = il.size();
         auto actual_pos = expand_with_hole(num_elements, position);
