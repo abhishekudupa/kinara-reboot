@@ -38,6 +38,9 @@
 #if !defined KINARA_KINARA_COMMON_CONTAINERS_HASH_TABLE_HPP_
 #define KINARA_KINARA_COMMON_CONTAINERS_HASH_TABLE_HPP_
 
+#include <initializer_list>
+#include <iterator>
+
 #include "../basetypes/KinaraBase.hpp"
 #include "../allocators/MemoryManager.hpp"
 #include "../primeutils/PrimeGenerator.hpp"
@@ -360,6 +363,37 @@ public:
         }
     };
 
+private:
+    template <typename InputIterator>
+    inline void insert_range(const InputIterator& first,
+                                 const InputIterator& last,
+                                 std::input_iterator_tag unused)
+    {
+        for (auto it = first; it != last; ++it) {
+            insert(*it);
+        }
+    }
+
+    template <typename ForwardIterator>
+    inline void insert_range(const ForwardIterator& first,
+                             const ForwardIterator& last,
+                             std::forward_iterator_tag unused)
+    {
+        auto num_elements = std::distance(first, last);
+        expand_table(m_table_size + num_elements);
+        for (auto it = first; it != last; ++it) {
+            insert(*it);
+        }
+    }
+
+    template <typename InputIterator>
+    inline void insert_range(const InputIterator& first, const InputIterator& last)
+    {
+        typedef typename std::iterator_traits<InputIterator>::iterator_category IterCategory;
+        insert_range(first, last, IterCategory());
+    }
+
+public:
     inline HashTableImplBase()
         : m_table(nullptr), m_table_size(0), m_table_used(0),
           m_table_deleted(0), m_first_used_index(0)
@@ -390,9 +424,40 @@ public:
         assign(std::move(other));
     }
 
+    template <typename InputIterator>
+    inline HashTableImplBase(const InputIterator& first, const InputIterator& last)
+        : HashTableImplBase()
+    {
+        assign(first, last);
+    }
+
+    inline HashTableImplBase(const std::initializer_list<T>& init_list)
+        : HashTableImplBase()
+    {
+        assign(init_list);
+    }
+
     inline ~HashTableImplBase()
     {
         clear();
+    }
+
+    template <typename InputIterator>
+    inline void assign(const InputIterator& first, const InputIterator& last)
+    {
+        clear();
+
+        if (first == last) {
+            return;
+        }
+
+        typedef typename std::iterator_traits<InputIterator>::iterator_category IterCategory;
+        insert_range(first, last, IterCategory());
+    }
+
+    inline void assign(const std::initializer_list<T>& init_list)
+    {
+        assign(init_list.begin(), init_list.end());
     }
 
     inline void assign(const HashTableImplBase& other)
@@ -435,6 +500,11 @@ public:
     inline HashTableImplBase& operator = (const HashTableImplBase& other) = delete;
     inline HashTableImplBase& operator = (HashTableImplBase&& other) = delete;
 
+    inline bool empty() const
+    {
+        return (m_table_used == 0);
+    }
+
     inline Iterator begin() const
     {
         return Iterator(const_cast<HashTableImplBase*>(this), m_table + m_first_used_index);
@@ -448,6 +518,33 @@ public:
     inline u64 size() const
     {
         return m_table_used;
+    }
+
+    inline u64 max_size() const
+    {
+        return UINT64_MAX;
+    }
+
+    inline u64 count(const ValueType& value) const
+    {
+        return (find(value) == end() ? 0 : 1);
+    }
+
+    inline void reserve(u64 new_capacity)
+    {
+        auto initial_table_size = sc_initial_table_size;
+        auto actual_capacity = std::max(initial_table_size, new_capacity);
+        actual_capacity = ku::PrimeGenerator::get_next_prime(actual_capacity);
+        expand_table(actual_capacity);
+    }
+
+    inline void rehash(u64 new_capacity)
+    {
+        if (new_capacity <= m_table_size) {
+            rehash_table();
+        } else {
+            expand_table(new_capacity);
+        }
     }
 
     inline u64 capacity() const
@@ -531,6 +628,17 @@ public:
         as_impl->mark_entry_used(cur_entry);
         ++m_table_used;
         return Iterator(this, cur_entry);
+    }
+
+    template <typename InputIterator>
+    inline Iterator insert(const InputIterator& first, const InputIterator& last)
+    {
+        return insert_range(first, last);
+    }
+
+    inline Iterator insert(const std::initializer_list<T>& init_list)
+    {
+        return insert_range(init_list.begin(), init_list.end());
     }
 
     template <typename... ArgTypes>
