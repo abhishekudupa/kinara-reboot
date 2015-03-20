@@ -39,26 +39,35 @@
 
 #include "../../projects/kinara-common/src/containers/UnorderedSet.hpp"
 #include "../../projects/kinara-common/src/containers/Vector.hpp"
+#include "../../projects/kinara-common/src/containers/BitSet.hpp"
 
 #include <utility>
 #include <random>
 #include <algorithm>
-
+#include <unordered_set>
 
 #include "RCClass.hpp"
 
 #include "../../thirdparty/gtest/include/gtest/gtest.h"
+
 
 using kinara::u32;
 using kinara::u64;
 using kinara::i32;
 using kinara::i64;
 
+const u64 gc_deleted_value = UINT64_MAX;
+const u64 gc_nonused_value = gc_deleted_value - 1;
+
+const u64 max_insertion_value = (1 << 16);
+const u64 max_test_iterations = (1 << 1);
+
 using kinara::containers::UnifiedUnorderedSet;
 using kinara::containers::RestrictedUnorderedSet;
 using kinara::containers::SegregatedUnorderedSet;
 using kinara::containers::Vector;
 using kinara::containers::u64Vector;
+using kinara::containers::BitSet;
 
 using testing::Types;
 
@@ -72,11 +81,42 @@ protected:
 
 TYPED_TEST_CASE_P(UnorderedSetTest);
 
+template<typename SetType>
+static inline bool test_equal(const SetType& kinara_set, const std::unordered_set<u64>& std_set)
+{
+    if (kinara_set.size() != std_set.size()) {
+        return false;
+    }
+
+    auto it1 = kinara_set.begin();
+    auto it2 = std_set.begin();
+
+    for (u64 i = 0; i < kinara_set.size(); ++i) {
+        if (kinara_set.find(*it2) == kinara_set.end() ||
+            std_set.find(*it1) == std_set.end()) {
+            return false;
+        }
+        ++it1;
+        ++it2;
+    }
+    return true;
+}
+
+static inline bool test_equal(const BitSet& bit_set, const std::unordered_set<u64> std_set)
+{
+    for (u64 i = 0; i < max_insertion_value; ++i) {
+        if (bit_set.test(i) != (std_set.find(i) != std_set.end())) {
+            return false;
+        }
+    }
+    return true;
+}
+
 TYPED_TEST_P(UnorderedSetTest, Constructor)
 {
     typedef TypeParam SetType;
 
-    SetType set1(UINT64_MAX, UINT64_MAX - 1);
+    SetType set1(gc_deleted_value, gc_nonused_value);
 
     EXPECT_EQ(0ul, set1.size());
 
@@ -87,7 +127,7 @@ TYPED_TEST_P(UnorderedSetTest, Constructor)
     EXPECT_TRUE(set1.begin() == set1.end());
     EXPECT_TRUE(set2.begin() == set2.end());
 
-    SetType set3({1ull, 2ull, 3ull, 4ull, 5ull});
+    SetType set3({1ull, 2ull, 3ull, 4ull, 5ull}, gc_deleted_value, gc_nonused_value);
     EXPECT_EQ(5ul, set3.size());
 
     auto it3 = set3.begin();
@@ -115,6 +155,9 @@ TYPED_TEST_P(UnorderedSetTest, Assignment)
     typedef TypeParam SetType;
 
     SetType set1;
+    set1.set_deleted_value(gc_deleted_value);
+    set1.set_nonused_value(gc_nonused_value);
+
     set1 = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
     EXPECT_EQ(10ull, set1.size());
     auto it1 = set1.begin();
@@ -150,12 +193,114 @@ TYPED_TEST_P(UnorderedSetTest, Assignment)
     EXPECT_TRUE(it3 == set3.end());
 }
 
+TYPED_TEST_P(UnorderedSetTest, Functional)
+{
+    typedef TypeParam SetType;
+
+    SetType kinara_set;
+
+    kinara_set.set_deleted_value(gc_deleted_value);
+    kinara_set.set_nonused_value(gc_nonused_value);
+
+    std::unordered_set<u64> std_set;
+    kinara::containers::BitSet bit_set(max_insertion_value);
+
+    std::default_random_engine generator;
+    std::uniform_int_distribution<u64> distribution(0, 1);
+
+    for (u64 i = 0; i < max_test_iterations; ++i) {
+        std_set.clear();
+        kinara_set.clear();
+        bit_set.clear();
+
+        for (u64 j = 0; j < max_insertion_value; ++j) {
+            auto flip = (distribution(generator) == 1);
+            if (flip) {
+                std_set.insert(j);
+                kinara_set.insert(j);
+                bit_set.set(j);
+
+                EXPECT_EQ(std_set.size(), kinara_set.size());
+            }
+        }
+
+        EXPECT_TRUE(test_equal(kinara_set, std_set));
+        EXPECT_TRUE(test_equal(bit_set, std_set));
+
+        // erase some random elements
+        for (u64 j = 0; j < max_insertion_value; ++j) {
+            auto flip = (distribution(generator) == 1);
+            if (flip) {
+                std_set.erase(j);
+                kinara_set.erase(j);
+                bit_set.clear(j);
+
+                EXPECT_EQ(std_set.size(), kinara_set.size());
+            }
+        }
+
+        EXPECT_TRUE(test_equal(kinara_set, std_set));
+        EXPECT_TRUE(test_equal(bit_set, std_set));
+
+        // repeat the above two steps
+        for (u64 j = 0; j < max_insertion_value; ++j) {
+            auto flip = (distribution(generator) == 1);
+            if (flip) {
+                std_set.insert(j);
+                kinara_set.insert(j);
+                bit_set.set(j);
+
+                EXPECT_EQ(std_set.size(), kinara_set.size());
+            }
+        }
+
+        EXPECT_TRUE(test_equal(kinara_set, std_set));
+        EXPECT_TRUE(test_equal(bit_set, std_set));
+
+        // erase some random elements
+        for (u64 j = 0; j < max_insertion_value; ++j) {
+            auto flip = (distribution(generator) == 1);
+            if (flip) {
+                std_set.erase(j);
+                kinara_set.erase(j);
+                bit_set.clear(j);
+
+                EXPECT_EQ(std_set.size(), kinara_set.size());
+            }
+        }
+
+        EXPECT_TRUE(test_equal(kinara_set, std_set));
+        EXPECT_TRUE(test_equal(bit_set, std_set));
+    }
+}
+
+TYPED_TEST_P(UnorderedSetTest, Performance)
+{
+    typedef TypeParam SetType;
+
+    SetType kinara_set;
+    for (u64 i = 0; i < max_insertion_value; ++i) {
+        kinara_set.insert(i);
+    }
+}
+
+TEST(StdUnorderedSetTest, Performance)
+{
+    std::unordered_set<u64> std_set;
+    for (u64 i = 0; i < max_insertion_value; ++i) {
+        std_set.insert(i);
+    }
+}
+
 REGISTER_TYPED_TEST_CASE_P(UnorderedSetTest,
                            Constructor,
-                           Assignment);
+                           Assignment,
+                           Functional,
+                           Performance);
 
-typedef Types<UnifiedUnorderedSet<u64>,
-              SegregatedUnorderedSet<u64> > UnorderedSetImplementations;
+typedef Types<//UnifiedUnorderedSet<u64>,
+              //SegregatedUnorderedSet<u64>,
+              RestrictedUnorderedSet<u64> > UnorderedSetImplementations;
 
 INSTANTIATE_TYPED_TEST_CASE_P(UnorderedSetTemplateTests,
                               UnorderedSetTest, UnorderedSetImplementations);

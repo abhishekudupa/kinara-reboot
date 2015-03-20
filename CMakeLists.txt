@@ -20,6 +20,9 @@ option(KINARA_CFG_ASSERTIONS_ENABLED_
 option(KINARA_CFG_SILENT_
   "Disable all forms of output from Kinara, disabling this option will allow Kinara to print minimal logging info."
   ON)
+option(KINARA_DEBUG_INFO
+  "Enable debug info on ALL builds"
+  OFF)
 
 set(KINARA_BIN_DIR "bin")
 set(KINARA_LIB_DIR "lib")
@@ -105,10 +108,19 @@ foreach(_KINARA_LIB_PROJECT ${KINARA_LIB_PROJECTS})
     endif()
 
     if(_TARGET_NAME MATCHES "\\.lto")
-      set_target_properties(${_TARGET_NAME} PROPERTIES COMPILE_OPTIONS "-O3;-flto")
-      set_target_properties(${_TARGET_NAME} PROPERTIES LINK_FLAGS "-O3 -flto")
+      if(KINARA_DEBUG_INFO)
+        set_target_properties(${_TARGET_NAME} PROPERTIES COMPILE_OPTIONS "-O3;-flto;-ggdb3")
+        set_target_properties(${_TARGET_NAME} PROPERTIES LINK_FLAGS "-O3 -flto -ggdb3")
+      else()
+        set_target_properties(${_TARGET_NAME} PROPERTIES COMPILE_OPTIONS "-O3;-flto")
+        set_target_properties(${_TARGET_NAME} PROPERTIES LINK_FLAGS "-O3 -flto")
+      endif()
     elseif(_TARGET_NAME MATCHES "\\.opt")
-      set_target_properties(${_TARGET_NAME} PROPERTIES COMPILE_OPTIONS "-O3")
+      if(KINARA_DEBUG_INFO)
+        set_target_properties(${_TARGET_NAME} PROPERTIES COMPILE_OPTIONS "-O3;-ggdb3")
+      else()
+        set_target_properties(${_TARGET_NAME} PROPERTIES COMPILE_OPTIONS "-O3")
+      endif()
     else()
       set_target_properties(${_TARGET_NAME} PROPERTIES COMPILE_OPTIONS
         "-ggdb3;-O0;-fno-inline;-DKINARA_CFG_DEBUG_MODE_BUILD_")

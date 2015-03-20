@@ -121,6 +121,10 @@ public:
     using HashTableType::count;
     using HashTableType::rehash;
     using HashTableType::reserve;
+    using HashTableType::get_nonused_value;
+    using HashTableType::set_nonused_value;
+    using HashTableType::get_deleted_value;
+    using HashTableType::set_deleted_value;
 
     inline UnorderedSetBase()
         : HashTableType()
@@ -243,7 +247,7 @@ public:
     inline std::pair<Iterator, bool> insert(const T& value)
     {
         bool already_present;
-        auto it = HashTableType::insert(value);
+        auto it = HashTableType::insert(value, already_present);
         return std::make_pair(Iterator(it), already_present);
     }
 

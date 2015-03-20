@@ -184,20 +184,19 @@ protected:
     inline void rebuild_table(EntryType* new_table, u64 new_capacity)
     {
         auto as_impl = this_as_impl();
-
+        fprintf(stderr, "Rebuilding table...\n");
         as_impl->begin_resize(new_capacity);
         as_impl->initialize_new_table(new_table, new_capacity);
 
-        bool first = true;
+        m_first_used_index = new_capacity;
 
         for (auto cur_entry = m_table, last_entry = m_table + m_table_size;
              cur_entry != last_entry; ++cur_entry) {
 
             if (as_impl->is_entry_used(cur_entry)) {
                 auto index = move_into_table(cur_entry, new_table, new_capacity);
-                if (first) {
+                if (index < m_first_used_index) {
                     m_first_used_index = index;
-                    first = false;
                 }
             }
         }
@@ -354,7 +353,7 @@ protected:
             return (hash_table_as_impl()->get_value_ptr(m_current));
         }
 
-        inline T* get_current() const
+        inline EntryType* get_current() const
         {
             return m_current;
         }
@@ -413,6 +412,7 @@ protected:
         m_table = ka::allocate_array_raw<EntryType>(actual_capacity);
         m_table_size = actual_capacity;
         m_first_used_index = m_table_size;
+        this_as_impl()->initialize_new_table(m_table, m_table_size);
     }
 
     inline HashTableImplBase(const HashTableImplBase& other)
@@ -471,6 +471,7 @@ protected:
             return;
         }
 
+        auto as_impl = this_as_impl();
         auto initial_table_size = sc_initial_table_size;
         u64 actual_capacity = (u64)ceil(other.m_table_used * sc_resize_factor);
         actual_capacity = std::max(actual_capacity, initial_table_size);
@@ -479,7 +480,8 @@ protected:
         m_table_size = actual_capacity;
         m_first_used_index = m_table_size;
 
-        this_as_impl()->set_size(m_table_size);
+        as_impl->initialize_new_table(m_table, m_table_size);
+        as_impl->set_size(m_table_size);
 
         bool dummy;
         for (auto it = other.begin(), last = other.end(); it != last; ++it) {
@@ -669,7 +671,7 @@ protected:
         if ((deleted_nonused_ratio >= sc_deleted_nonused_rehash_ratio) ||
             (((float)m_table_used / (float)m_table_size) < sc_min_load_factor)) {
             rehash_table();
-        } else if ((position.get_current() - m_table) == m_first_used_index) {
+        } else if ((u64)(position.get_current() - m_table) == m_first_used_index) {
             auto temp = position;
             ++temp;
             m_first_used_index = temp.get_current() - m_table;
@@ -1359,7 +1361,7 @@ class RestrictedHashTable
 {
 private:
     typedef HashTableImplBase<T, HashFunction, EqualsFunction,
-                              kc::hash_table_detail_::SegregatedHashTable, T> BaseType;
+                              kc::hash_table_detail_::RestrictedHashTable, T> BaseType;
     friend BaseType;
     typedef T EntryType;
 
@@ -1383,17 +1385,17 @@ private:
 
     inline bool is_entry_nonused(EntryType* entry) const
     {
-        return (entry == m_nonused_value);
+        return (*entry == m_nonused_value);
     }
 
     inline bool is_entry_deleted(EntryType* entry) const
     {
-        return (entry == m_deleted_value);
+        return (*entry == m_deleted_value);
     }
 
     inline bool is_entry_used(EntryType* entry) const
     {
-        return ((entry != m_nonused_value) && (entry != m_deleted_value));
+        return ((*entry != m_nonused_value) && (*entry != m_deleted_value));
     }
 
     inline void mark_entry_nonused(EntryType* entry) const
