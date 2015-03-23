@@ -1436,12 +1436,14 @@ protected:
 
     inline void mark_entry_nonused(EntryType* entry) const
     {
-        *entry = m_nonused_value;
+        entry->~EntryType();
+        new (entry) EntryType(m_nonused_value);
     }
 
     inline void mark_entry_deleted(EntryType* entry) const
     {
-        *entry = m_deleted_value;
+        entry->~EntryType();
+        new (entry) EntryType(m_deleted_value);
     }
 
     inline void mark_entry_used(EntryType* entry) const
@@ -1637,10 +1639,12 @@ public:
         for (auto cur_ptr = this->m_table, last_ptr = this->m_table + this->m_table_size;
              cur_ptr != last_ptr; ++cur_ptr) {
             if (*cur_ptr == m_deleted_value) {
-                *cur_ptr = deleted_value;
+                cur_ptr->~EntryType();
+                new (cur_ptr) EntryType(deleted_value);
             }
         }
-        m_deleted_value = deleted_value;
+        (&m_deleted_value)->~EntryType();
+        new (&m_deleted_value) EntryType(deleted_value);
     }
 
     inline void set_nonused_value(const T& nonused_value)
@@ -1648,10 +1652,12 @@ public:
         for (auto cur_ptr = this->m_table, last_ptr = this->m_table + this->m_table_size;
              cur_ptr != last_ptr; ++cur_ptr) {
             if (*cur_ptr == m_nonused_value) {
-                *cur_ptr = nonused_value;
+                cur_ptr->~EntryType();
+                new (cur_ptr) EntryType(nonused_value);
             }
         }
-        m_nonused_value = nonused_value;
+        (&m_nonused_value)->~EntryType();
+        new (&m_nonused_value) EntryType(nonused_value);
     }
 };
 

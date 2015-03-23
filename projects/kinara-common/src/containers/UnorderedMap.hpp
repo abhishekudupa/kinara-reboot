@@ -385,10 +385,11 @@ public:
     inline MappedValueType& operator [] (const MappedKeyType& key)
     {
         auto it = find(key);
+        bool already_present;
         if (it == end()) {
-            auto&& it_and_already_present =
-                HashTableType::insert(std::make_pair(key, MappedValueType()));
-            it = it_and_already_present.first;
+            it = HashTableType::insert(std::pair<const MappedKeyType,
+                                       MappedValueType>(key, MappedValueType()), already_present);
+            return it->second;
         }
         return it->second;
     }
@@ -396,10 +397,12 @@ public:
     inline MappedValueType& operator [] (MappedKeyType&& key)
     {
         auto it = find(key);
+        bool already_present;
         if (it == end()) {
-            auto&& it_and_already_present =
-                HashTableType::insert(std::make_pair(std::move(key), MappedValueType()));
-            it = it_and_already_present.first;
+            it = HashTableType::insert(std::pair<const MappedKeyType,
+                                       MappedValueType>(std::move(key), MappedValueType()),
+                                       already_present);
+            return it->second;
         }
         return it->second;
     }

@@ -151,178 +151,178 @@ TYPED_TEST_P(UnorderedMapTest, Constructor)
 
 }
 
-// TYPED_TEST_P(UnorderedSetTest, Assignment)
-// {
-//     typedef TypeParam SetType;
+TYPED_TEST_P(UnorderedMapTest, Assignment)
+{
+    typedef TypeParam MapType;
 
-//     SetType set1;
-//     set1.set_deleted_value(gc_deleted_value);
-//     set1.set_nonused_value(gc_nonused_value);
+    MapType map1;
+    map1.set_deleted_value(gc_deleted_value);
+    map1.set_nonused_value(gc_nonused_value);
 
-//     set1 = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
-//     EXPECT_EQ(10ull, set1.size());
-//     auto it1 = set1.begin();
-//     for (u64 i = 0; i < 10; ++i) {
-//         EXPECT_EQ(i+1, *it1);
-//         ++it1;
-//     }
-//     EXPECT_TRUE(it1 == set1.end());
+    map1 = { {1, 43}, {2, 44}, {3, 45}, {4, 46}, {5, 47},
+             {6, 48}, {7, 49}, {8, 50}, {9, 51}, {10, 52} };
 
-//     SetType set2 = set1;
-//     EXPECT_EQ(10ull, set2.size());
+    EXPECT_EQ(10ull, map1.size());
+    auto it1 = map1.begin();
+    for (u64 i = 0; i < 10; ++i) {
+        EXPECT_EQ(i+1, it1->first);
+        EXPECT_EQ(i+1+42, it1->second);
+        ++it1;
+    }
 
-//     it1 = set1.begin();
-//     auto it2 = set2.begin();
-//     for (u64 i = 0; i < 10; ++i) {
-//         EXPECT_EQ(i+1, *it1);
-//         EXPECT_EQ(i+1, *it2);
-//         ++it1;
-//         ++it2;
-//     }
-//     EXPECT_TRUE(it1 == set1.end());
-//     EXPECT_TRUE(it2 == set2.end());
+    EXPECT_TRUE(it1 == map1.end());
 
-//     SetType set3 = std::move(set2);
-//     EXPECT_EQ(0ull, set2.size());
-//     EXPECT_EQ(10ull, set3.size());
+    MapType map2 = map1;
+    EXPECT_EQ(10ull, map2.size());
 
-//     auto it3 = set3.begin();
-//     for (u64 i = 0; i < 10; ++i) {
-//         EXPECT_EQ(i+1, *it3);
-//         ++it3;
-//     }
-//     EXPECT_TRUE(it3 == set3.end());
-// }
+    it1 = map1.begin();
+    auto it2 = map2.begin();
+    for (u64 i = 0; i < 10; ++i) {
+        EXPECT_EQ(i+1, it1->first);
+        EXPECT_EQ(i+1+42, it1->second);
+        EXPECT_EQ(i+1, it2->first);
+        EXPECT_EQ(i+1+42, it2->second);
+        ++it1;
+        ++it2;
+    }
+    EXPECT_TRUE(it1 == map1.end());
+    EXPECT_TRUE(it2 == map2.end());
 
-// TYPED_TEST_P(UnorderedSetTest, Functional)
-// {
-//     typedef TypeParam SetType;
+    MapType map3 = std::move(map2);
+    EXPECT_EQ(0ull, map2.size());
+    EXPECT_EQ(10ull, map3.size());
 
-//     SetType kinara_set;
+    auto it3 = map3.begin();
+    for (u64 i = 0; i < 10; ++i) {
+        EXPECT_EQ(i+1, it3->first);
+        EXPECT_EQ(i+1+42, it3->second);
+        ++it3;
+    }
+    EXPECT_TRUE(it3 == map3.end());
+}
 
-//     kinara_set.set_deleted_value(gc_deleted_value);
-//     kinara_set.set_nonused_value(gc_nonused_value);
+TYPED_TEST_P(UnorderedMapTest, Functional)
+{
+    typedef TypeParam MapType;
 
-//     std::unordered_set<u64> std_set;
-//     kinara::containers::BitSet bit_set(max_insertion_value);
+    MapType kinara_map;
 
-//     std::default_random_engine generator;
-//     std::uniform_int_distribution<u64> distribution(0, 1);
+    kinara_map.set_deleted_value(gc_deleted_value);
+    kinara_map.set_nonused_value(gc_nonused_value);
 
-//     for (u64 i = 0; i < max_test_iterations; ++i) {
-//         std_set.clear();
-//         kinara_set.clear();
-//         bit_set.clear();
+    std::unordered_map<u64, u64> std_map;
 
-//         for (u64 j = 0; j < max_insertion_value; ++j) {
-//             auto flip = (distribution(generator) == 1);
-//             if (flip) {
-//                 std_set.insert(j);
-//                 kinara_set.insert(j);
-//                 bit_set.set(j);
+    std::default_random_engine generator;
+    std::uniform_int_distribution<u64> distribution(0, 1);
 
-//                 EXPECT_EQ(std_set.size(), kinara_set.size());
-//             }
-//         }
+    for (u64 i = 0; i < max_test_iterations; ++i) {
+        std_map.clear();
+        kinara_map.clear();
 
-//         EXPECT_TRUE(test_equal(kinara_set, std_set));
-//         EXPECT_TRUE(test_equal(bit_set, std_set));
+        for (u64 j = 0; j < max_insertion_value; ++j) {
+            auto flip = (distribution(generator) == 1);
+            if (flip) {
+                std_map[j] = j + 42;
+                kinara_map[j] = j + 42;
 
-//         // erase some random elements
-//         for (u64 j = 0; j < max_insertion_value; ++j) {
-//             auto flip = (distribution(generator) == 1);
-//             if (flip) {
-//                 std_set.erase(j);
-//                 kinara_set.erase(j);
-//                 bit_set.clear(j);
+                EXPECT_EQ(std_map.size(), kinara_map.size());
+            }
+        }
 
-//                 EXPECT_EQ(std_set.size(), kinara_set.size());
-//             }
-//         }
+        EXPECT_TRUE(test_equal(kinara_map, std_map));
 
-//         EXPECT_TRUE(test_equal(kinara_set, std_set));
-//         EXPECT_TRUE(test_equal(bit_set, std_set));
+        // erase some random elements
+        for (u64 j = 0; j < max_insertion_value; ++j) {
+            auto flip = (distribution(generator) == 1);
+            if (flip) {
+                std_map.erase(j);
+                kinara_map.erase(j);
 
-//         // repeat the above two steps
-//         for (u64 j = 0; j < max_insertion_value; ++j) {
-//             auto flip = (distribution(generator) == 1);
-//             if (flip) {
-//                 std_set.insert(j);
-//                 kinara_set.insert(j);
-//                 bit_set.set(j);
+                EXPECT_EQ(std_map.size(), kinara_map.size());
+            }
+        }
 
-//                 EXPECT_EQ(std_set.size(), kinara_set.size());
-//             }
-//         }
+        EXPECT_TRUE(test_equal(kinara_map, std_map));
 
-//         EXPECT_TRUE(test_equal(kinara_set, std_set));
-//         EXPECT_TRUE(test_equal(bit_set, std_set));
+        // repeat the above two steps
+        for (u64 j = 0; j < max_insertion_value; ++j) {
+            auto flip = (distribution(generator) == 1);
+            if (flip) {
+                std_map[j] = j + 42;
+                kinara_map[j] = j + 42;
 
-//         // erase some random elements
-//         for (u64 j = 0; j < max_insertion_value; ++j) {
-//             auto flip = (distribution(generator) == 1);
-//             if (flip) {
-//                 std_set.erase(j);
-//                 kinara_set.erase(j);
-//                 bit_set.clear(j);
+                EXPECT_EQ(std_map.size(), kinara_map.size());
+            }
+        }
 
-//                 EXPECT_EQ(std_set.size(), kinara_set.size());
-//             }
-//         }
+        EXPECT_TRUE(test_equal(kinara_map, std_map));
 
-//         EXPECT_TRUE(test_equal(kinara_set, std_set));
-//         EXPECT_TRUE(test_equal(bit_set, std_set));
-//     }
-// }
+        // erase some random elements
+        for (u64 j = 0; j < max_insertion_value; ++j) {
+            auto flip = (distribution(generator) == 1);
+            if (flip) {
+                std_map.erase(j);
+                kinara_map.erase(j);
 
-// TYPED_TEST_P(UnorderedSetTest, Performance)
-// {
-//     typedef TypeParam SetType;
+                EXPECT_EQ(std_map.size(), kinara_map.size());
+            }
+        }
 
-//     SetType kinara_set;
+        EXPECT_TRUE(test_equal(kinara_map, std_map));
+    }
+}
 
-//     std::default_random_engine generator;
-//     std::uniform_int_distribution<u64> distribution(0, 1);
+TYPED_TEST_P(UnorderedMapTest, Performance)
+{
+    typedef TypeParam MapType;
 
-//     for (u64 j = 0; j < (1 << 4); ++j) {
-//         kinara_set.clear();
+    MapType kinara_map;
 
-//         for (u64 i = 0; i < 64 * max_insertion_value; ++i) {
-//             kinara_set.insert(i);
-//         }
+    std::default_random_engine generator;
+    std::uniform_int_distribution<u64> distribution(0, 1);
 
-//         for (u64 i = 0; i < 64 * max_insertion_value; ++i) {
-//             if (distribution(generator) == 1) {
-//                 kinara_set.erase(i);
-//             }
-//         }
-//     }
-// }
+    for (u64 j = 0; j < (1 << 4); ++j) {
+        kinara_map.clear();
 
-// TEST(StdUnorderedSetTest, Performance)
-// {
-//     std::unordered_set<u64> std_set;
+        for (u64 i = 0; i < 64 * max_insertion_value; ++i) {
+            kinara_map[i] = i + 42;
+        }
 
-//     std::default_random_engine generator;
-//     std::uniform_int_distribution<u64> distribution(0, 1);
+        for (u64 i = 0; i < 64 * max_insertion_value; ++i) {
+            if (distribution(generator) == 1) {
+                kinara_map.erase(i);
+            }
+        }
+    }
+}
 
-//     for (u64 j = 0; j < (1 << 4); ++j) {
-//         std_set.clear();
+TEST(StdUnorderedMapTest, Performance)
+{
+    std::unordered_map<u64, u64> std_map;
 
-//         for (u64 i = 0; i < 64 * max_insertion_value; ++i) {
-//             std_set.insert(i);
-//         }
+    std::default_random_engine generator;
+    std::uniform_int_distribution<u64> distribution(0, 1);
 
-//         for (u64 i = 0; i < 64 * max_insertion_value; ++i) {
-//             if (distribution(generator) == 1) {
-//                 std_set.erase(i);
-//             }
-//         }
-//     }
-// }
+    for (u64 j = 0; j < (1 << 4); ++j) {
+        std_map.clear();
+
+        for (u64 i = 0; i < 64 * max_insertion_value; ++i) {
+            std_map[i] = i + 42;
+        }
+
+        for (u64 i = 0; i < 64 * max_insertion_value; ++i) {
+            if (distribution(generator) == 1) {
+                std_map.erase(i);
+            }
+        }
+    }
+}
 
 REGISTER_TYPED_TEST_CASE_P(UnorderedMapTest,
-                           Constructor);
+                           Constructor,
+                           Assignment,
+                           Functional,
+                           Performance);
 
 typedef Types<UnifiedUnorderedMap<u64, u64>,
               SegregatedUnorderedMap<u64, u64>,
