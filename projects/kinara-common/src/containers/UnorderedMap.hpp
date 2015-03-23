@@ -205,21 +205,33 @@ public:
     using HashTableType::rehash;
     using HashTableType::reserve;
 
-    inline void set_special_values_(const std::true_type& is_pointer_type)
+    inline void set_special_values_(const std::true_type& is_pointer_type,
+                                    const std::false_type& is_managed_pointer)
     {
-        set_deleted_value(std::make_pair((MappedKeyType)0x1, MappedValueType()));
-        set_nonused_value(std::make_pair((MappedKeyType)0x0, MappedValueType()));
+        set_deleted_value(std::make_pair((const MappedKeyType)0x1, MappedValueType()));
+        set_nonused_value(std::make_pair((const MappedKeyType)0x0, MappedValueType()));
     }
 
-    inline void set_special_values_(const std::false_type& is_pointer_type)
+    inline void set_special_values_(const std::false_type& is_pointer_type,
+                                    const std::false_type& is_managed_pointer)
     {
         return;
+    }
+
+    inline void set_special_values_(const std::false_type& is_pointer_type,
+                                    const std::true_type& is_managed_pointer)
+    {
+        MappedKeyType deleted_value((typename MappedKeyType::RawPointerType)0x1);
+        MappedKeyType nonused_value((typename MappedKeyType::RawPointerType)0x0);
+        set_deleted_value(std::make_pair((const MappedKeyType)deleted_value, MappedValueType()));
+        set_nonused_value(std::make_pair((const MappedKeyType)nonused_value, MappedValueType()));
     }
 
     inline void set_special_values_()
     {
         typename std::is_pointer<MappedKeyType>::type is_pointer_type;
-        set_special_values_(is_pointer_type);
+        typename std::is_base_of<memory::ManagedPointerEBC, MappedKeyType>::type is_managed_pointer;
+        set_special_values_(is_pointer_type, is_managed_pointer);
     }
 
     inline UnorderedMapBase()

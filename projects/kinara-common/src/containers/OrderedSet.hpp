@@ -35,6 +35,22 @@
 
 // Code:
 
+#if !defined KINARA_KINARA_COMMON_CONTAINERS_ORDERED_SET_HPP_
+#define KINARA_KINARA_COMMON_CONTAINERS_ORDERED_SET_HPP_
+
+#include "UnorderedSet.hpp"
+#include "Vector.hpp"
+#include "DList.hpp"
+
+namespace kinara {
+namespace containers {
+namespace ordered_set_detail_ {
+
+} /* end namespace ordered_set_detail_ */
+} /* end namespace containers */
+} /* end namespace kinara */
+
+#endif /* KINARA_KINARA_COMMON_CONTAINERS_ORDERED_SET_HPP_ */
 
 //
 // OrderedSet.hpp ends here

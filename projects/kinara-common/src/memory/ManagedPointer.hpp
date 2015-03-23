@@ -50,22 +50,31 @@
 namespace kinara {
 namespace memory {
 
+// base class for managed pointers (for type traits)
+class ManagedPointerEBC
+{
+    // Nothing here
+};
+
 namespace detail {
 
 namespace kmd = kinara::memory::detail;
 
 template <typename T, bool CONSTPOINTER>
-class ManagedPointerBase final
+class ManagedPointerBase : private ManagedPointerEBC
 {
-private:
     // We can only make managed pointers out of RefCountable objects
     static_assert(std::is_base_of<RefCountable, T>::value,
                   "ManagedPointers can only be instantiated with objects "
                   "of type RefCountable");
 
+public:
     typedef typename std::conditional<CONSTPOINTER, const T*, T*>::type RawPointerType;
     typedef typename std::conditional<CONSTPOINTER, const T&, T&>::type ReferenceType;
 
+    static const T* const pointer_sentinel;
+
+private:
     RawPointerType m_ptr;
 
     template <typename U, bool OTHERCONSTPOINTER>
@@ -167,6 +176,11 @@ public:
 template <typename T, bool CONSTPOINTER>
 const ManagedPointerBase<T, CONSTPOINTER> ManagedPointerBase<T, CONSTPOINTER>::null_pointer;
 
+// Anything below this address is considered not a valid pointer
+template <typename T, bool CONSTPOINTER>
+const T* const
+ManagedPointerBase<T, CONSTPOINTER>::pointer_sentinel = (T*)0x1000;
+
 template <typename T, bool CONSTPOINTER>
 template <typename U, bool OTHERCONSTPOINTER>
 inline i64
@@ -197,7 +211,7 @@ inline ManagedPointerBase<T, CONSTPOINTER>::ManagedPointerBase(const ManagedPoin
     : m_ptr(nullptr)
 {
     m_ptr = other_managed_ptr.m_ptr;
-    if (m_ptr != nullptr) {
+    if (m_ptr >= pointer_sentinel) {
         m_ptr->inc_ref_();
     }
 }
@@ -214,7 +228,7 @@ ManagedPointerBase<T, CONSTPOINTER>::ManagedPointerBase
                   "managed pointer");
 
     m_ptr = other_managed_ptr.m_ptr;
-    if (m_ptr != nullptr) {
+    if (m_ptr >= pointer_sentinel) {
         m_ptr->inc_ref_();
     }
 }
@@ -245,7 +259,7 @@ template <typename T, bool CONSTPOINTER>
 inline ManagedPointerBase<T, CONSTPOINTER>::ManagedPointerBase(RawPointerType raw_pointer)
     : m_ptr(raw_pointer)
 {
-    if (m_ptr != nullptr) {
+    if (m_ptr >= pointer_sentinel) {
         m_ptr->inc_ref_();
     }
 }
@@ -253,7 +267,7 @@ inline ManagedPointerBase<T, CONSTPOINTER>::ManagedPointerBase(RawPointerType ra
 template <typename T, bool CONSTPOINTER>
 inline ManagedPointerBase<T, CONSTPOINTER>::~ManagedPointerBase()
 {
-    if (m_ptr != nullptr) {
+    if (m_ptr >= pointer_sentinel) {
         m_ptr->dec_ref_();
     }
     m_ptr = nullptr;
@@ -279,7 +293,7 @@ ManagedPointerBase<T, CONSTPOINTER>::operator = (const ManagedPointerBase& other
     if (&other_managed_ptr == this) {
         return *this;
     }
-    if (m_ptr != nullptr) {
+    if (m_ptr >= pointer_sentinel) {
         m_ptr->dec_ref_();
         m_ptr = nullptr;
     }
@@ -302,7 +316,7 @@ ManagedPointerBase<T, CONSTPOINTER>::operator =
     if (&other_managed_ptr == this) {
         return *this;
     }
-    if (m_ptr != nullptr) {
+    if (m_ptr >= pointer_sentinel) {
         m_ptr->dec_ref_();
         m_ptr = nullptr;
     }
@@ -318,7 +332,7 @@ ManagedPointerBase<T, CONSTPOINTER>::operator = (ManagedPointerBase&& other_mana
     if (&other_managed_ptr == this) {
         return *this;
     }
-    if (m_ptr != nullptr) {
+    if (m_ptr >= pointer_sentinel) {
         m_ptr->dec_ref_();
         m_ptr = nullptr;
     }
@@ -349,11 +363,11 @@ inline ManagedPointerBase<T, CONSTPOINTER>&
 ManagedPointerBase<T, CONSTPOINTER>::operator =
 (RawPointerType raw_pointer)
 {
-    if (m_ptr != nullptr) {
+    if (m_ptr >= pointer_sentinel) {
         m_ptr->dec_ref_();
     }
     m_ptr = raw_pointer;
-    if (m_ptr != nullptr) {
+    if (m_ptr >= pointer_sentinel) {
         m_ptr->inc_ref_();
     }
     return (*this);
