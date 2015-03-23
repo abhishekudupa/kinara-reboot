@@ -251,9 +251,10 @@ public:
     }
 
     inline UnorderedMapBase(u64 initial_capacity)
-        : HashTableType(initial_capacity)
+        : HashTableType()
     {
         set_special_values_();
+        HashTableType::expand_table(initial_capacity);
     }
 
     inline UnorderedMapBase(u64 initial_capacity,
@@ -268,9 +269,10 @@ public:
 
     template <typename InputIterator>
     inline UnorderedMapBase(const InputIterator& first, const InputIterator& last)
-        : HashTableType(first, last)
+        : HashTableType()
     {
-        // Nothing here
+        set_special_values_();
+        HashTableType::insert_range(first, last);
     }
 
     template <typename InputIterator>
@@ -286,9 +288,10 @@ public:
     }
 
     inline UnorderedMapBase(std::initializer_list<ValueType> init_list)
-        : HashTableType(init_list)
+        : HashTableType()
     {
-        // Nothing here
+        set_special_values_();
+        HashTableType::assign(init_list);
     }
 
     inline UnorderedMapBase(std::initializer_list<ValueType> init_list,

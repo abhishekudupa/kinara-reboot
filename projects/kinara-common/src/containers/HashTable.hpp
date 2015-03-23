@@ -422,7 +422,8 @@ protected:
         : HashTableImplBase()
     {
         auto initial_table_size = sc_initial_table_size;
-        auto actual_capacity = std::max(initial_capacity, initial_table_size);
+        auto actual_capacity = std::max((u64)(initial_capacity * sc_resize_factor),
+                                        initial_table_size);
         actual_capacity = ku::PrimeGenerator::get_next_prime(actual_capacity);
         m_table = ka::allocate_array_raw<EntryType>(actual_capacity);
         m_table_size = actual_capacity;
