@@ -1189,12 +1189,6 @@ typedef DList<i16> i16DList;
 typedef DList<i32> i32DList;
 typedef DList<i64> i64DList;
 
-// forward declaration
-class String;
-
-typedef DList<String> StringDList;
-typedef PoolDList<String> StringPoolDList;
-
 } /* end namespace containers */
 } /* end namespace kinara */
 

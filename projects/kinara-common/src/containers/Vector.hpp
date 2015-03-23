@@ -975,9 +975,6 @@ using ConstMPtrVector =
                                          memory::ManagedConstPointer<T>,
                                          const T*>::type>;
 
-// forward declaration of string class
-class String;
-
 typedef Vector<u08> u08Vector;
 typedef Vector<i08> i08Vector;
 typedef Vector<u16> u16Vector;
@@ -986,8 +983,6 @@ typedef Vector<u32> u32Vector;
 typedef Vector<i32> i32Vector;
 typedef Vector<u64> u64Vector;
 typedef Vector<i64> i64Vector;
-
-typedef Vector<String> StringVector;
 
 } /* end namespace containers */
 } /* end namespace kinara */

@@ -244,6 +244,14 @@ public:
         return Iterator(HashTableType::find(value));
     }
 
+    template <typename... ArgTypes>
+    inline std::pair<Iterator, bool> emplace(ArgTypes&&... args)
+    {
+        bool already_present;
+        auto it = HashTableType::emplace(std::forward<ArgTypes>(args)...);
+        return std::make_pair(Iterator(it), already_present);
+    }
+
     inline std::pair<Iterator, bool> insert(const T& value)
     {
         bool already_present;
@@ -294,8 +302,11 @@ public:
         auto it1 = begin();
         auto it2 = other.begin();
 
-        for (u64 i = 0; i < size; ++i) {
-            if (find(*it2) == end() || other.find(*it1) == other.end()) {
+        auto end1 = end();
+        auto end2 = other.end();
+
+        for (u64 i = 0; i < sz; ++i) {
+            if (find(*it2) == end1 || other.find(*it1) == end2) {
                 return false;
             }
         }
@@ -329,6 +340,57 @@ template <typename T, typename HashFunction = ku::Hasher<T>,
 using RestrictedUnorderedSet =
     unordered_set_detail_::UnorderedSetBase<T, HashFunction, EqualsFunction,
                                             hash_table_detail_::RestrictedHashTable>;
+
+template <typename T>
+using PtrUnifiedUnorderedSet = UnifiedUnorderedSet<T*>;
+
+template <typename T>
+using CPtrUnifiedUnorderedSet = UnifiedUnorderedSet<const T*>;
+
+template <typename T>
+using PtrSegregatedUnorderedSet = SegregatedUnorderedSet<T*>;
+
+template <typename T>
+using CPtrSegregatedUnorderedSet = SegregatedUnorderedSet<const T*>;
+
+template <typename T>
+using PtrRestrictedUnorderedSet = RestrictedUnorderedSet<T*>;
+
+template <typename T>
+using CPtrRestrictedUnorderedSet = RestrictedUnorderedSet<const T*>;
+
+template <typename T>
+using MPtrUnifiedUnorderedSet =
+    UnifiedUnorderedSet<typename std::conditional<std::is_base_of<memory::RefCountable, T>::value,
+                                                  memory::ManagedPointer<T>, T*>::type>;
+
+template <typename T>
+using CMPtrUnifiedUnorderedSet =
+    UnifiedUnorderedSet<typename std::conditional<std::is_base_of<memory::RefCountable, T>::value,
+                                                  memory::ManagedConstPointer<T>,
+                                                  const T*>::type>;
+
+template <typename T>
+using MPtrSegregatedUnorderedSet =
+    SegregatedUnorderedSet<typename std::conditional<std::is_base_of<memory::RefCountable, T>::value,
+                                                     memory::ManagedPointer<T>, T*>::type>;
+
+template <typename T>
+using CMPtrSegregatedUnorderedSet =
+    SegregatedUnorderedSet<typename std::conditional<std::is_base_of<memory::RefCountable, T>::value,
+                                                     memory::ManagedConstPointer<T>,
+                                                     const T*>::type>;
+
+template <typename T>
+using MPtrRestrictedUnorderedSet =
+    RestrictedUnorderedSet<typename std::conditional<std::is_base_of<memory::RefCountable, T>::value,
+                                                     memory::ManagedPointer<T>, T*>::type>;
+
+template <typename T>
+using CMPtrRestrictedUnorderedSet =
+    RestrictedUnorderedSet<typename std::conditional<std::is_base_of<memory::RefCountable, T>::value,
+                                                     memory::ManagedConstPointer<T>,
+                                                     const T*>::type>;
 
 } /* end namespace containers */
 } /* end namespace kinara */

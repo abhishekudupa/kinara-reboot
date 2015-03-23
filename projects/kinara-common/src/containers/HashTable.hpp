@@ -57,7 +57,9 @@ namespace ku = kinara::utils;
 class HashTableBase
 {
 public:
-    static constexpr float sc_resize_factor = 1.618f;
+    // the silver ratio, because the golden one is
+    // too small!
+    static constexpr float sc_resize_factor = 2.414214f;
     static constexpr float sc_max_load_factor = 0.717f;
     static constexpr float sc_min_load_factor = 0.1f;
     static constexpr float sc_deleted_nonused_rehash_ratio = 0.5f;
@@ -173,7 +175,9 @@ protected:
             is_nonused = as_impl->is_new_entry_nonused(new_table, new_capacity, cur_entry);
         }
 
-        *cur_entry = std::move(value_ref);
+        cur_entry->~EntryType();
+        new (cur_entry) EntryType(std::move(value_ref));
+
         as_impl->mark_new_entry_used(new_table, new_capacity, cur_entry);
 
         return index;
@@ -184,7 +188,6 @@ protected:
     inline void rebuild_table(EntryType* new_table, u64 new_capacity)
     {
         auto as_impl = this_as_impl();
-        fprintf(stderr, "Rebuilding table...\n");
         as_impl->begin_resize(new_capacity);
         as_impl->initialize_new_table(new_table, new_capacity);
 
@@ -215,13 +218,18 @@ protected:
         as_impl->end_resize(new_capacity);
     }
 
-    // expands to accommodate at least new_capacity elements
-    inline void expand_table(u64 new_capacity)
+    // expands to accommodate at least new_size elements
+    inline void expand_table(u64 new_size)
     {
-        auto required_capacity = (u64)((float)new_capacity / sc_max_load_factor);
-        if (required_capacity < m_table_size) {
-            return;
+        if (m_table_size > 0) {
+            auto new_usage = (float)new_size / (float)m_table_size;
+
+            if (new_usage < sc_max_load_factor) {
+                return;
+            }
         }
+        // need to reallocate
+        auto required_capacity = (u64)(new_size * sc_resize_factor);
         auto initial_table_size = sc_initial_table_size;
         required_capacity = std::max(required_capacity, initial_table_size);
         required_capacity = ku::PrimeGenerator::get_next_prime(required_capacity);
@@ -234,8 +242,9 @@ protected:
     {
         u64 new_table_size = m_table_size;
         auto initial_table_size = sc_initial_table_size;
+
         if (((float)m_table_used / (float)m_table_size) < sc_min_load_factor) {
-            new_table_size = m_table_used * 2;
+            new_table_size = (u64)(m_table_used * sc_resize_factor);
             new_table_size = std::max(new_table_size, initial_table_size);
             new_table_size = ku::PrimeGenerator::get_next_prime(new_table_size);
         }
@@ -250,9 +259,15 @@ protected:
     // so that classes which actually implement
     // hash tables can give sensible semantics
     // even if a hash map is implemented
-    class Iterator : public std::iterator<std::bidirectional_iterator_tag,
-                                          T, i64, T*, T&>
+    class Iterator
     {
+    public:
+        typedef i64 difference_type;
+        typedef std::bidirectional_iterator_tag iterator_category;
+        typedef EntryType value_type;
+        typedef EntryType& reference;
+        typedef EntryType* pointer;
+
     private:
         HashTableImplBase* m_hash_table;
         EntryType* m_current;
@@ -626,7 +641,9 @@ protected:
             is_deleted = as_impl->is_entry_deleted(cur_entry);
         }
 
-        *cur_entry = std::move(value);
+        cur_entry->~EntryType();
+        new (cur_entry) EntryType(std::move(value));
+
         if (index < m_first_used_index) {
             m_first_used_index = index;
         }
@@ -699,6 +716,24 @@ protected:
         auto impl = this_as_impl();
         deallocate_table();
         impl->on_clear();
+    }
+
+    // Does not actually shrink to fit,
+    // but shrinks to ~ size / sc_max_load_factor
+    inline void shrink_to_fit()
+    {
+        auto new_size = (u64)(m_table_used / sc_max_load_factor);
+        new_size += 3;
+        auto initial_table_size = sc_initial_table_size;
+        new_size = std::max(new_size, initial_table_size);
+        new_size = ku::PrimeGenerator::get_next_prime(new_size);
+
+        if (new_size == m_table_size) {
+            return;
+        }
+
+        auto new_table = ka::allocate_array_raw<EntryType>(new_size);
+        rebuild_table(new_table, new_size);
     }
 };
 
@@ -1355,15 +1390,16 @@ public:
 };
 
 template <typename T, typename HashFunction, typename EqualsFunction>
-class RestrictedHashTable
+class RestrictedHashTableBase
     : protected HashTableImplBase<T, HashFunction, EqualsFunction,
-                                  kc::hash_table_detail_::RestrictedHashTable, T>
+                                  kc::hash_table_detail_::RestrictedHashTableBase, T>
 {
-private:
-    typedef HashTableImplBase<T, HashFunction, EqualsFunction,
-                              kc::hash_table_detail_::RestrictedHashTable, T> BaseType;
-    friend BaseType;
+protected:
     typedef T EntryType;
+    typedef HashTableImplBase<T, HashFunction, EqualsFunction,
+                              kc::hash_table_detail_::RestrictedHashTableBase, T> TableBaseType;
+    friend TableBaseType;
+
 
     T m_deleted_value;
     T m_nonused_value;
@@ -1456,7 +1492,8 @@ private:
     {
         for (auto cur_ptr = new_table, last_ptr = new_table + new_table_size;
              cur_ptr != last_ptr; ++cur_ptr) {
-            *cur_ptr = m_nonused_value;
+            cur_ptr->~EntryType();
+            new (cur_ptr) EntryType(m_nonused_value);
         }
     }
 
@@ -1471,91 +1508,91 @@ private:
     }
 
 public:
-    typedef typename BaseType::Iterator Iterator;
+    typedef typename TableBaseType::Iterator Iterator;
     typedef Iterator iterator;
 
     // We allow a default constructor, but the client
     // needs to set nonused value before any inserts
     // and deleted value before any erases
-    inline RestrictedHashTable()
-        : BaseType()
+    inline RestrictedHashTableBase()
+        : TableBaseType()
     {
         // Nothing here
     }
 
-    inline RestrictedHashTable(const T& deleted_value, const T& nonused_value)
-        : BaseType(), m_deleted_value(deleted_value), m_nonused_value(nonused_value)
+    inline RestrictedHashTableBase(const T& deleted_value, const T& nonused_value)
+        : TableBaseType(), m_deleted_value(deleted_value), m_nonused_value(nonused_value)
     {
         // Nothing here
     }
 
-    inline RestrictedHashTable(u64 initial_capacity)
-        : BaseType()
+    inline RestrictedHashTableBase(u64 initial_capacity)
+        : TableBaseType()
     {
-        BaseType::expand_table(initial_capacity);
+        TableBaseType::expand_table(initial_capacity);
     }
 
-    inline RestrictedHashTable(u64 initial_capacity,
-                               const T& deleted_value,
-                               const T& nonused_value)
-        : BaseType(), m_deleted_value(deleted_value), m_nonused_value(nonused_value)
+    inline RestrictedHashTableBase(u64 initial_capacity,
+                                   const T& deleted_value,
+                                   const T& nonused_value)
+        : TableBaseType(), m_deleted_value(deleted_value), m_nonused_value(nonused_value)
     {
-        BaseType::expand_table(initial_capacity);
+        TableBaseType::expand_table(initial_capacity);
     }
 
-    inline RestrictedHashTable(const RestrictedHashTable& other)
-        : BaseType(), m_deleted_value(other.m_deleted_value),
+    inline RestrictedHashTableBase(const RestrictedHashTableBase& other)
+        : TableBaseType(), m_deleted_value(other.m_deleted_value),
           m_nonused_value(other.m_nonused_value)
     {
-        BaseType::assign(other);
+        TableBaseType::assign(other);
     }
 
-    inline RestrictedHashTable(RestrictedHashTable&& other)
-        : BaseType(), m_deleted_value(other.m_deleted_value),
+    inline RestrictedHashTableBase(RestrictedHashTableBase&& other)
+        : TableBaseType(), m_deleted_value(other.m_deleted_value),
           m_nonused_value(other.m_nonused_value)
     {
-        BaseType::assign(std::move(other));
+        TableBaseType::assign(std::move(other));
     }
 
     template <typename InputIterator>
-    inline RestrictedHashTable(const InputIterator& first,
-                               const InputIterator& last)
+    inline RestrictedHashTableBase(const InputIterator& first,
+                                   const InputIterator& last)
     {
         throw KinaraException("Restricted hash tables cannot be constructed merely from a range");
     }
 
     template <typename InputIterator>
-    inline RestrictedHashTable(const InputIterator& first,
-                               const InputIterator& last,
-                               const T& deleted_value,
-                               const T& nonused_value)
-        : BaseType(), m_deleted_value(deleted_value),
+    inline RestrictedHashTableBase(const InputIterator& first,
+                                   const InputIterator& last,
+                                   const T& deleted_value,
+                                   const T& nonused_value)
+        : TableBaseType(), m_deleted_value(deleted_value),
           m_nonused_value(nonused_value)
     {
-        BaseType::assign(first, last);
+        TableBaseType::assign(first, last);
     }
 
-    inline RestrictedHashTable(std::initializer_list<T> init_list,
-                               const T& deleted_value,
-                               const T& nonused_value)
-        : BaseType(), m_deleted_value(deleted_value),
+    inline RestrictedHashTableBase(std::initializer_list<T> init_list,
+                                   const T& deleted_value,
+                                   const T& nonused_value)
+        : TableBaseType(), m_deleted_value(deleted_value),
           m_nonused_value(nonused_value)
     {
-        BaseType::assign(init_list);
+        TableBaseType::assign(init_list);
     }
 
-    inline RestrictedHashTable(std::initializer_list<T> init_list)
+    inline RestrictedHashTableBase(std::initializer_list<T> init_list)
     {
         throw KinaraException((std::string)"Restricted hash tables cannot be constructed " +
                               "merely from an initializer list");
     }
 
-    inline ~RestrictedHashTable()
+    inline ~RestrictedHashTableBase()
     {
         // Nothing here
     }
 
-    inline RestrictedHashTable& operator = (const RestrictedHashTable& other)
+    inline RestrictedHashTableBase& operator = (const RestrictedHashTableBase& other)
     {
         if (&other == this) {
             return *this;
@@ -1564,24 +1601,24 @@ public:
         m_deleted_value = other.m_deleted_value;
         m_nonused_value = other.m_nonused_value;
 
-        BaseType::assign(other);
+        TableBaseType::assign(other);
         return *this;
     }
 
-    inline RestrictedHashTable& operator = (RestrictedHashTable&& other)
+    inline RestrictedHashTableBase& operator = (RestrictedHashTableBase&& other)
     {
         if (&other == this) {
             return *this;
         }
         std::swap(m_deleted_value, other.m_deleted_value);
         std::swap(m_nonused_value, other.m_nonused_value);
-        BaseType::assign(std::move(other));
+        TableBaseType::assign(std::move(other));
         return *this;
     }
 
-    inline RestrictedHashTable& operator = (std::initializer_list<T> init_list)
+    inline RestrictedHashTableBase& operator = (std::initializer_list<T> init_list)
     {
-        BaseType::assign(init_list);
+        TableBaseType::assign(init_list);
         return *this;
     }
 
@@ -1615,6 +1652,305 @@ public:
             }
         }
         m_nonused_value = nonused_value;
+    }
+};
+
+template <typename T, typename HashFunction, typename EqualsFunction>
+class RestrictedHashTable : public RestrictedHashTableBase<T, HashFunction, EqualsFunction>
+{
+protected:
+    typedef HashTableImplBase<T, HashFunction, EqualsFunction,
+                              kc::hash_table_detail_::RestrictedHashTable, T> TableBaseType;
+    typedef RestrictedHashTableBase<T, HashFunction, EqualsFunction> BaseType;
+    friend TableBaseType;
+    typedef T EntryType;
+
+public:
+    inline RestrictedHashTable()
+        : BaseType()
+    {
+        // Nothing here
+    }
+
+    inline RestrictedHashTable(const T& deleted_value, const T& nonused_value)
+        : BaseType(deleted_value, nonused_value)
+    {
+        // Nothing here
+    }
+
+    inline RestrictedHashTable(const RestrictedHashTable& other)
+        : BaseType(other)
+    {
+        // Nothing here
+    }
+
+    inline RestrictedHashTable(RestrictedHashTable&& other)
+        : BaseType(std::move(other))
+    {
+        // Nothing here
+    }
+
+    template <typename InputIterator>
+    inline RestrictedHashTable(const InputIterator& first,
+                               const InputIterator& last)
+        : BaseType(first, last)
+    {
+        // Nothing here
+    }
+
+    template <typename InputIterator>
+    inline RestrictedHashTable(const InputIterator& first,
+                               const InputIterator& last,
+                               const T& deleted_value,
+                               const T& nonused_value)
+        : BaseType(first, last, deleted_value, nonused_value)
+    {
+        // Nothing here
+    }
+
+    inline RestrictedHashTable(std::initializer_list<T> init_list)
+        : BaseType(init_list)
+    {
+        // Nothing here
+    }
+
+    inline RestrictedHashTable(std::initializer_list<T> init_list,
+                               const T& deleted_value,
+                               const T& nonused_value)
+        : BaseType(init_list, deleted_value, nonused_value)
+    {
+        // Nothing here
+    }
+
+    inline RestrictedHashTable& operator = (const RestrictedHashTable& other)
+    {
+        if (&other == this) {
+            return *this;
+        }
+        BaseType::assign(other);
+        return *this;
+    }
+
+    inline RestrictedHashTable& operator = (RestrictedHashTable&& other)
+    {
+        if (&other == this) {
+            return *this;
+        }
+        BaseType::assign(std::move(other));
+        return *this;
+    }
+
+    inline RestrictedHashTable& operator = (std::initializer_list<T> init_list)
+    {
+        BaseType::assign(init_list);
+        return *this;
+    }
+};
+
+template <typename T, typename HashFunction, typename EqualsFunction>
+class RestrictedHashTable<T*, HashFunction, EqualsFunction>
+    : public RestrictedHashTableBase<T*, HashFunction, EqualsFunction>
+{
+protected:
+    typedef HashTableImplBase<T*, HashFunction, EqualsFunction,
+                              kc::hash_table_detail_::RestrictedHashTable, T*> TableBaseType;
+    typedef RestrictedHashTableBase<T*, HashFunction, EqualsFunction> BaseType;
+    friend TableBaseType;
+    typedef T* EntryType;
+
+public:
+    inline RestrictedHashTable()
+        : BaseType((T*)(0x1), (T*)(0x0))
+    {
+        // Nothing here
+    }
+
+    inline RestrictedHashTable(T* deleted_value, T* nonused_value)
+        : RestrictedHashTable()
+    {
+        // Nothing here
+    }
+
+    inline RestrictedHashTable(u64 initial_capacity)
+        : BaseType(initial_capacity, (T*)(0x1), (T*)(0x0))
+    {
+        // Nothing here
+    }
+
+    inline RestrictedHashTable(u64 initial_capacity,
+                               T* deleted_value,
+                               T* nonused_value)
+        : RestrictedHashTable(initial_capacity)
+    {
+        // Nothing here
+    }
+
+    inline RestrictedHashTable(const RestrictedHashTable& other)
+        : BaseType(other)
+    {
+        // Nothing here
+    }
+
+    inline RestrictedHashTable(RestrictedHashTable&& other)
+        : BaseType(std::move(other))
+    {
+        // Nothing here
+    }
+
+    template <typename InputIterator>
+    inline RestrictedHashTable(const InputIterator& first, const InputIterator& last)
+        : BaseType(first, last, (T*)0x1, (T*)0x0)
+    {
+        // Nothing here
+    }
+
+    template <typename InputIterator>
+    inline RestrictedHashTable(const InputIterator& first, const InputIterator& last,
+                               T* deleted_value, T* nonused_value)
+        : RestrictedHashTable(first, last)
+    {
+        // Nothing here
+    }
+
+    inline RestrictedHashTable(std::initializer_list<T*> init_list)
+        : RestrictedHashTable(init_list, (T*)0x1, (T*)0x0)
+    {
+        // Nothing here
+    }
+
+    inline RestrictedHashTable(std::initializer_list<T*> init_list,
+                               T* deleted_value, T* nonused_value)
+        : RestrictedHashTable(init_list)
+    {
+        // Nothing here
+    }
+
+    inline RestrictedHashTable& operator = (const RestrictedHashTable& other)
+    {
+        if (&other == this) {
+            return *this;
+        }
+        BaseType::assign(other);
+        return *this;
+    }
+
+    inline RestrictedHashTable& operator = (RestrictedHashTable&& other)
+    {
+        if (&other == this) {
+            return *this;
+        }
+        BaseType::assign(std::move(other));
+        return *this;
+    }
+
+    inline RestrictedHashTable& operator = (std::initializer_list<T*> init_list)
+    {
+        BaseType::assign(init_list);
+        return *this;
+    }
+};
+
+
+template <typename T, typename HashFunction, typename EqualsFunction>
+class RestrictedHashTable<const T*, HashFunction, EqualsFunction>
+    : public RestrictedHashTableBase<const T*, HashFunction, EqualsFunction>
+{
+protected:
+    typedef HashTableImplBase<const T*, HashFunction, EqualsFunction,
+                              kc::hash_table_detail_::RestrictedHashTable, const T*> TableBaseType;
+    typedef RestrictedHashTableBase<const T*, HashFunction, EqualsFunction> BaseType;
+    friend TableBaseType;
+    typedef T* EntryType;
+
+public:
+    inline RestrictedHashTable()
+        : BaseType((T*)(0x1), (T*)(0x0))
+    {
+        // Nothing here
+    }
+
+    inline RestrictedHashTable(const T* deleted_value, const T* nonused_value)
+        : RestrictedHashTable()
+    {
+        // Nothing here
+    }
+
+    inline RestrictedHashTable(u64 initial_capacity)
+        : BaseType(initial_capacity, (T*)(0x1), (T*)(0x0))
+    {
+        // Nothing here
+    }
+
+    inline RestrictedHashTable(u64 initial_capacity,
+                               const T* deleted_value,
+                               const T* nonused_value)
+        : RestrictedHashTable(initial_capacity)
+    {
+        // Nothing here
+    }
+
+    inline RestrictedHashTable(const RestrictedHashTable& other)
+        : BaseType(other)
+    {
+        // Nothing here
+    }
+
+    inline RestrictedHashTable(RestrictedHashTable&& other)
+        : BaseType(std::move(other))
+    {
+        // Nothing here
+    }
+
+    template <typename InputIterator>
+    inline RestrictedHashTable(const InputIterator& first, const InputIterator& last)
+        : BaseType(first, last, (T*)0x1, (T*)0x0)
+    {
+        // Nothing here
+    }
+
+    template <typename InputIterator>
+    inline RestrictedHashTable(const InputIterator& first, const InputIterator& last,
+                               const T* deleted_value, const T* nonused_value)
+        : RestrictedHashTable(first, last)
+    {
+        // Nothing here
+    }
+
+    inline RestrictedHashTable(std::initializer_list<const T*> init_list)
+        : RestrictedHashTable(init_list, (T*)0x1, (T*)0x0)
+    {
+        // Nothing here
+    }
+
+    inline RestrictedHashTable(std::initializer_list<T*> init_list,
+                               const T* deleted_value, const T* nonused_value)
+        : RestrictedHashTable(init_list)
+    {
+        // Nothing here
+    }
+
+    inline RestrictedHashTable& operator = (const RestrictedHashTable& other)
+    {
+        if (&other == this) {
+            return *this;
+        }
+        BaseType::assign(other);
+        return *this;
+    }
+
+    inline RestrictedHashTable& operator = (RestrictedHashTable&& other)
+    {
+        if (&other == this) {
+            return *this;
+        }
+        BaseType::assign(std::move(other));
+        return *this;
+    }
+
+    inline RestrictedHashTable& operator = (std::initializer_list<const T*> init_list)
+    {
+        BaseType::assign(init_list);
+        return *this;
     }
 };
 

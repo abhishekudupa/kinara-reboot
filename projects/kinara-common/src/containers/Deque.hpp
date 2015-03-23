@@ -680,11 +680,6 @@ typedef Deque<i16> i16Deque;
 typedef Deque<i32> i32Deque;
 typedef Deque<i64> i64Deque;
 
-// forward declaration
-class String;
-
-typedef Deque<String> StringDeque;
-
 } /* end namespace containers */
 } /* end namespace kinara */
 

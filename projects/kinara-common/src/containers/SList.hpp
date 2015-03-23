@@ -1521,12 +1521,6 @@ typedef SList<i16> i16SList;
 typedef SList<i32> i32SList;
 typedef SList<i64> i64SList;
 
-// forward declaration
-class String;
-
-typedef SList<String> StringSList;
-typedef PoolSList<String> StringPoolSList;
-
 } /* end namespace containers */
 } /* end namespace kinara */
 

@@ -60,7 +60,7 @@ const u64 gc_deleted_value = UINT64_MAX;
 const u64 gc_nonused_value = gc_deleted_value - 1;
 
 const u64 max_insertion_value = (1 << 16);
-const u64 max_test_iterations = (1 << 1);
+const u64 max_test_iterations = (1 << 4);
 
 using kinara::containers::UnifiedUnorderedSet;
 using kinara::containers::RestrictedUnorderedSet;
@@ -279,16 +279,44 @@ TYPED_TEST_P(UnorderedSetTest, Performance)
     typedef TypeParam SetType;
 
     SetType kinara_set;
-    for (u64 i = 0; i < max_insertion_value; ++i) {
-        kinara_set.insert(i);
+
+    std::default_random_engine generator;
+    std::uniform_int_distribution<u64> distribution(0, 1);
+
+    for (u64 j = 0; j < (1 << 4); ++j) {
+        kinara_set.clear();
+
+        for (u64 i = 0; i < 64 * max_insertion_value; ++i) {
+            kinara_set.insert(i);
+        }
+
+        for (u64 i = 0; i < 64 * max_insertion_value; ++i) {
+            if (distribution(generator) == 1) {
+                kinara_set.erase(i);
+            }
+        }
     }
 }
 
 TEST(StdUnorderedSetTest, Performance)
 {
     std::unordered_set<u64> std_set;
-    for (u64 i = 0; i < max_insertion_value; ++i) {
-        std_set.insert(i);
+
+    std::default_random_engine generator;
+    std::uniform_int_distribution<u64> distribution(0, 1);
+
+    for (u64 j = 0; j < (1 << 4); ++j) {
+        std_set.clear();
+
+        for (u64 i = 0; i < 64 * max_insertion_value; ++i) {
+            std_set.insert(i);
+        }
+
+        for (u64 i = 0; i < 64 * max_insertion_value; ++i) {
+            if (distribution(generator) == 1) {
+                std_set.erase(i);
+            }
+        }
     }
 }
 
@@ -298,8 +326,8 @@ REGISTER_TYPED_TEST_CASE_P(UnorderedSetTest,
                            Functional,
                            Performance);
 
-typedef Types<//UnifiedUnorderedSet<u64>,
-              //SegregatedUnorderedSet<u64>,
+typedef Types<UnifiedUnorderedSet<u64>,
+              SegregatedUnorderedSet<u64>,
               RestrictedUnorderedSet<u64> > UnorderedSetImplementations;
 
 INSTANTIATE_TYPED_TEST_CASE_P(UnorderedSetTemplateTests,

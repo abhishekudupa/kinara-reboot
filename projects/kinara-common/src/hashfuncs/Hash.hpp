@@ -48,10 +48,14 @@
 #include "../basetypes/KinaraBase.hpp"
 #include "../basetypes/KinaraTypes.hpp"
 
+#include "../memory/ManagedPointer.hpp"
+
 #include "HashFunctions.hpp"
 
 namespace kinara {
 namespace utils {
+
+namespace km = kinara::memory;
 
 template <typename T>
 class Hasher
@@ -126,6 +130,56 @@ public:
     {
         typename std::is_convertible<const T*, const Hashable*>::type is_hashable_object;
         return compute_hash(ptr, is_hashable_object);
+    }
+};
+
+template <typename T>
+class Hasher<km::ManagedPointer<T> >
+{
+private:
+    inline u64 compute_hash(const T* ptr,
+                            const std::true_type& is_hashable_object) const
+    {
+        return ptr->hash();
+    }
+
+    inline u64 compute_hash(const T* ptr,
+                            const std::false_type& is_hashable_object) const
+    {
+        std::hash<T*> hasher;
+        return hasher(ptr);
+    }
+
+public:
+    inline u64 operator () (const km::ManagedPointer<T>& managed_ptr) const
+    {
+        typename std::is_convertible<const T*, const Hashable*>::type is_hashable_object;
+        return compute_hash((const T*)managed_ptr, is_hashable_object);
+    }
+};
+
+template <typename T>
+class Hasher<km::ManagedConstPointer<T> >
+{
+private:
+    inline u64 compute_hash(const T* ptr,
+                            const std::true_type& is_hashable_object) const
+    {
+        return ptr->hash();
+    }
+
+    inline u64 compute_hash(const T* ptr,
+                            const std::false_type& is_hashable_object) const
+    {
+        std::hash<T*> hasher;
+        return hasher(ptr);
+    }
+
+public:
+    inline u64 operator () (const km::ManagedConstPointer<T>& managed_ptr) const
+    {
+        typename std::is_convertible<const T*, const Hashable*>::type is_hashable_object;
+        return compute_hash((const T*)managed_ptr, is_hashable_object);
     }
 };
 
