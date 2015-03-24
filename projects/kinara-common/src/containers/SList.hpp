@@ -1342,6 +1342,14 @@ class SListBase final
     }
 
     // Functions/methods not part of stl
+    inline void garbage_collect()
+    {
+        if (!USEPOOLS) {
+            return;
+        }
+        m_pool_or_size.m_pool_allocator->garbage_collect();
+    }
+
     Iterator find(const ValueType& value)
     {
         for (auto it = begin(), last = end(); it != last; ++it) {

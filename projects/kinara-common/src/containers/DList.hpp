@@ -76,6 +76,10 @@ private:
     typedef dlist_detail_::DListNodeBase NodeBaseType;
     typedef dlist_detail_::DListNode<T> NodeType;
 
+public:
+    static constexpr u64 sc_node_size = sizeof(NodeType);
+
+private:
     union PoolSizeUnionType
     {
         ka::PoolAllocator* m_pool_allocator;
@@ -95,6 +99,7 @@ private:
 
     PoolSizeUnionType m_pool_or_size;
     NodeBaseType m_root;
+    bool m_pool_owned;
 
     template <typename... ArgTypes>
     inline NodeType* allocate_block(ArgTypes&&... args)
@@ -231,9 +236,20 @@ private:
 
 public:
     explicit DListBase()
-        : m_root(&(this->m_root), &(this->m_root))
+        : m_root(&(this->m_root), &(this->m_root)), m_pool_owned(true)
     {
         // Nothing here
+    }
+
+    // the pool must not go away as long as the list is alive
+    explicit DListBase(ka::PoolAllocator* pool_allocator)
+        : DListBase()
+    {
+        static_assert(USEPOOLS,
+                      "Cannot construct non-pooled DList with a "
+                      "user provided pool allocator");
+        m_pool_or_size.m_pool_allocator = pool_allocator;
+        m_pool_owned = false;
     }
 
     explicit DListBase(u64 n)
@@ -242,7 +258,18 @@ public:
         // Nothing here
     }
 
-    explicit DListBase(u64 n, const ValueType& value)
+    inline DListBase(u64 n, ka::PoolAllocator* pool_allocator)
+        : DListBase()
+    {
+        static_assert(USEPOOLS,
+                      "Cannot construct non-pooled DList with a "
+                      "user provided pool allocator");
+        m_pool_or_size.m_pool_allocator = pool_allocator;
+        m_pool_owned = false;
+        construct_fill(&m_root, n, ValueType());
+    }
+
+    DListBase(u64 n, const ValueType& value)
         : DListBase()
     {
         if (n == 0) {
@@ -251,10 +278,37 @@ public:
         construct_fill(&m_root, n, value);
     }
 
+    inline DListBase(u64 n, const ValueType& value, ka::PoolAllocator* pool_allocator)
+        : DListBase()
+    {
+        static_assert(USEPOOLS,
+                      "Cannot construct non-pooled DList with a "
+                      "user provided pool allocator");
+        m_pool_or_size.m_pool_allocator = pool_allocator;
+        m_pool_owned = false;
+        construct_fill(&m_root, n, value);
+    }
+
     template <typename InputIterator>
     DListBase(const InputIterator& first, const InputIterator& last)
         : DListBase()
     {
+        if (first == last) {
+            return;
+        }
+        construct_range(&m_root, first, last);
+    }
+
+    template <typename InputIterator>
+    DListBase(const InputIterator& first, const InputIterator& last,
+              ka::PoolAllocator* pool_allocator)
+        : DListBase()
+    {
+        static_assert(USEPOOLS,
+                      "Cannot construct non-pooled DList with a "
+                      "user provided pool allocator");
+        m_pool_or_size.m_pool_allocator = pool_allocator;
+        m_pool_owned = false;
         if (first == last) {
             return;
         }
@@ -278,6 +332,7 @@ public:
         }
 
         std::swap(m_root, other.m_root);
+        std::swap(m_pool_owned, other.m_pool_owned);
 
         m_root.m_next->m_prev = &m_root;
         m_root.m_prev->m_next = &m_root;
@@ -306,6 +361,13 @@ public:
         // Nothing here
     }
 
+    DListBase(std::initializer_list<ValueType> init_list,
+              ka::PoolAllocator* pool_allocator)
+        : DListBase(init_list.begin(), init_list.end(), pool_allocator)
+    {
+        // Nothing here
+    }
+
     inline void reset()
     {
         for (auto node = m_root.m_next; node != &m_root; ) {
@@ -315,10 +377,12 @@ public:
         }
 
         if (USEPOOLS && m_pool_or_size.m_pool_allocator != nullptr) {
-            ka::deallocate_object_raw(m_pool_or_size.m_pool_allocator, sizeof(ka::PoolAllocator));
+            if (m_pool_owned) {
+                ka::deallocate_object_raw(m_pool_or_size.m_pool_allocator,
+                                          sizeof(ka::PoolAllocator));
+            }
             m_pool_or_size.m_pool_allocator = nullptr;
         }
-
         m_root.m_next = &m_root;
         m_root.m_prev = &m_root;
         set_size(0);
@@ -392,8 +456,7 @@ public:
         }
 
         std::swap(m_root, other.m_root);
-        std::swap(m_root, other.m_root);
-
+        std::swap(m_pool_owned, other.m_pool_owned);
 
         m_root.m_next->m_prev = &m_root;
         m_root.m_prev->m_next = &m_root;
@@ -406,7 +469,7 @@ public:
 
     inline DListBase& operator = (std::initializer_list<ValueType> init_list)
     {
-        assign(std::move(init_list));
+        assign(init_list);
         return *this;
     }
 
@@ -653,6 +716,7 @@ public:
             std::swap(m_pool_or_size.m_size, other.m_pool_or_size.m_size);
         }
 
+        std::swap(m_pool_owned, other.m_pool_owned);
         std::swap(m_root, other.m_root);
         std::swap(m_root, other.m_root);
     }
@@ -718,7 +782,8 @@ public:
 
         add_to_size(other.size());
 
-        if (USEPOOLS) {
+        if (USEPOOLS &&
+            m_pool_or_size.m_pool_allocator != other.m_pool_or_size.m_pool_allocator) {
             m_pool_or_size.m_pool_allocator->merge(other.m_pool_or_size.m_pool_allocator);
         }
 
@@ -886,7 +951,8 @@ public:
         add_to_size(other_size);
 
         // merge the pools
-        if (USEPOOLS) {
+        if (USEPOOLS &&
+            m_pool_or_size.m_pool_allocator != other.m_pool_or_size.m_pool_allocator) {
             m_pool_or_size.m_pool_allocator->merge(other.m_pool_or_size.m_pool_allocator);
         }
 
@@ -1009,6 +1075,24 @@ public:
     }
 
     // functions not part of stl
+    inline void garbage_collect()
+    {
+        if (!USEPOOLS) {
+            return;
+        }
+        m_pool_or_size.m_pool_allocator->garbage_collect();
+    }
+
+    // Use with caution. Mucking about with
+    // the pool can cause list corruption or worse!
+    inline ka::PoolAllocator* get_pool() const
+    {
+        if (!USEPOOLS) {
+            return nullptr;
+        }
+        return m_pool_or_size.m_pool_allocator;
+    }
+
     Iterator find(const ValueType& value)
     {
         for (auto it = begin(), last = end(); it != last; ++it) {
