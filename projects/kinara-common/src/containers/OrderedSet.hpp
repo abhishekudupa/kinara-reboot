@@ -38,13 +38,15 @@
 #if !defined KINARA_KINARA_COMMON_CONTAINERS_ORDERED_SET_HPP_
 #define KINARA_KINARA_COMMON_CONTAINERS_ORDERED_SET_HPP_
 
-#include "UnorderedSet.hpp"
-#include "Vector.hpp"
+#include "HashTable.hpp"
 #include "DList.hpp"
 
 namespace kinara {
 namespace containers {
 namespace ordered_set_detail_ {
+
+namespace kc = kinara::containers;
+
 
 } /* end namespace ordered_set_detail_ */
 } /* end namespace containers */
