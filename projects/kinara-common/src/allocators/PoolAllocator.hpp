@@ -104,6 +104,9 @@ private:
     inline u64 count_blocks_in_range(void* range_low, void* range_high) const;
     inline void remove_blocks_in_range(void* range_low, void* range_high);
 
+    // for debugging
+    inline void check_duplicates(Block* block_ptr);
+
 public:
     PoolAllocator(u32 object_size, u32 num_objects = sc_default_num_objects);
     ~PoolAllocator();

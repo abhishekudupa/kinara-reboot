@@ -77,27 +77,11 @@ private:
     typedef dlist_detail_::DListNode<T> NodeType;
 
 public:
-    static constexpr u64 sc_node_size = sizeof(NodeType);
+    static const u64 sc_node_size;
 
 private:
-    union PoolSizeUnionType
-    {
-        ka::PoolAllocator* m_pool_allocator;
-        u64 m_size;
-
-        PoolSizeUnionType()
-            : m_size(0)
-        {
-            // Nothing here
-        }
-
-        ~PoolSizeUnionType()
-        {
-            // Nothing here
-        }
-    };
-
-    PoolSizeUnionType m_pool_or_size;
+    ka::PoolAllocator* m_pool_allocator;
+    u64 m_size;
     NodeBaseType m_root;
     bool m_pool_owned;
 
@@ -105,11 +89,10 @@ private:
     inline NodeType* allocate_block(ArgTypes&&... args)
     {
         if (USEPOOLS) {
-            if (m_pool_or_size.m_pool_allocator == nullptr) {
-                m_pool_or_size.m_pool_allocator =
-                    ka::allocate_object_raw<ka::PoolAllocator>(sizeof(NodeType));
+            if (m_pool_allocator == nullptr) {
+                m_pool_allocator = ka::allocate_object_raw<ka::PoolAllocator>(sizeof(NodeType));
             }
-            auto ptr = m_pool_or_size.m_pool_allocator->allocate();
+            auto ptr = m_pool_allocator->allocate();
             return NodeType::construct(ptr, std::forward<ArgTypes>(args)...);
         } else {
             auto ptr = ka::allocate_raw(sizeof(NodeType));
@@ -120,7 +103,7 @@ private:
     inline void deallocate_block(NodeType* node)
     {
         if (USEPOOLS) {
-            ka::deallocate(*(m_pool_or_size.m_pool_allocator), node);
+            ka::deallocate(*(m_pool_allocator), node);
         } else {
             ka::deallocate_object_raw(node, sizeof(NodeType));
         }
@@ -128,30 +111,22 @@ private:
 
     inline void increment_size()
     {
-        if (!USEPOOLS) {
-            m_pool_or_size.m_size++;
-        }
+        m_size++;
     }
 
     inline void decrement_size()
     {
-        if (!USEPOOLS) {
-            m_pool_or_size.m_size--;
-        }
+        m_size--;
     }
 
     inline void add_to_size(u64 addend)
     {
-        if (!USEPOOLS) {
-            m_pool_or_size.m_size += addend;
-        }
+        m_size += addend;
     }
 
     inline void sub_from_size(u64 subend)
     {
-        if (!USEPOOLS) {
-            m_pool_or_size.m_size -= subend;
-        }
+        m_size -= subend;
     }
 
     inline u64 get_size() const
@@ -159,18 +134,12 @@ private:
         if (m_root.m_next == &m_root) {
             return 0;
         }
-        if (USEPOOLS) {
-            return m_pool_or_size.m_pool_allocator->get_objects_allocated();
-        } else {
-            return m_pool_or_size.m_size;
-        }
+        return m_size;
     }
 
     inline void set_size(u64 new_size)
     {
-        if (!USEPOOLS) {
-            m_pool_or_size.m_size = new_size;
-        }
+        m_size = new_size;
     }
 
     inline Iterator construct_fill(NodeBaseType* position, u64 n, const ValueType& value)
@@ -236,7 +205,8 @@ private:
 
 public:
     explicit DListBase()
-        : m_root(&(this->m_root), &(this->m_root)), m_pool_owned(true)
+        : m_pool_allocator(nullptr), m_size(0),
+          m_root(&(this->m_root), &(this->m_root)), m_pool_owned(true)
     {
         // Nothing here
     }
@@ -248,7 +218,7 @@ public:
         static_assert(USEPOOLS,
                       "Cannot construct non-pooled DList with a "
                       "user provided pool allocator");
-        m_pool_or_size.m_pool_allocator = pool_allocator;
+        m_pool_allocator = pool_allocator;
         m_pool_owned = false;
     }
 
@@ -264,7 +234,7 @@ public:
         static_assert(USEPOOLS,
                       "Cannot construct non-pooled DList with a "
                       "user provided pool allocator");
-        m_pool_or_size.m_pool_allocator = pool_allocator;
+        m_pool_allocator = pool_allocator;
         m_pool_owned = false;
         construct_fill(&m_root, n, ValueType());
     }
@@ -284,7 +254,7 @@ public:
         static_assert(USEPOOLS,
                       "Cannot construct non-pooled DList with a "
                       "user provided pool allocator");
-        m_pool_or_size.m_pool_allocator = pool_allocator;
+        m_pool_allocator = pool_allocator;
         m_pool_owned = false;
         construct_fill(&m_root, n, value);
     }
@@ -307,7 +277,7 @@ public:
         static_assert(USEPOOLS,
                       "Cannot construct non-pooled DList with a "
                       "user provided pool allocator");
-        m_pool_or_size.m_pool_allocator = pool_allocator;
+        m_pool_allocator = pool_allocator;
         m_pool_owned = false;
         if (first == last) {
             return;
@@ -324,13 +294,8 @@ public:
     DListBase(DListBase&& other)
         : DListBase()
     {
-        if (USEPOOLS) {
-            std::swap(m_pool_or_size.m_pool_allocator,
-                      other.m_pool_or_size.m_pool_allocator);
-        } else {
-            std::swap(m_pool_or_size.m_size, other.m_pool_or_size.m_size);
-        }
-
+        std::swap(m_pool_allocator, other.m_pool_allocator);
+        std::swap(m_size, other.m_size);
         std::swap(m_root, other.m_root);
         std::swap(m_pool_owned, other.m_pool_owned);
 
@@ -376,12 +341,12 @@ public:
             node = next_node;
         }
 
-        if (USEPOOLS && m_pool_or_size.m_pool_allocator != nullptr) {
+        if (USEPOOLS && m_pool_allocator != nullptr) {
             if (m_pool_owned) {
-                ka::deallocate_object_raw(m_pool_or_size.m_pool_allocator,
+                ka::deallocate_object_raw(m_pool_allocator,
                                           sizeof(ka::PoolAllocator));
+                m_pool_allocator = nullptr;
             }
-            m_pool_or_size.m_pool_allocator = nullptr;
         }
         m_root.m_next = &m_root;
         m_root.m_prev = &m_root;
@@ -449,11 +414,8 @@ public:
             return *this;
         }
 
-        if (USEPOOLS) {
-            std::swap(m_pool_or_size.m_pool_allocator, other.m_pool_or_size.m_pool_allocator);
-        } else {
-            std::swap(m_pool_or_size.m_size, other.m_pool_or_size.m_size);
-        }
+        std::swap(m_pool_allocator, other.m_pool_allocator);
+        std::swap(m_size, other.m_size);
 
         std::swap(m_root, other.m_root);
         std::swap(m_pool_owned, other.m_pool_owned);
@@ -710,12 +672,8 @@ public:
         auto const other_empty = other.empty();
         auto const this_empty = empty();
 
-        if (USEPOOLS) {
-            std::swap(m_pool_or_size.m_pool_allocator, other.m_pool_or_size.m_pool_allocator);
-        } else {
-            std::swap(m_pool_or_size.m_size, other.m_pool_or_size.m_size);
-        }
-
+        std::swap(m_pool_allocator, other.m_pool_allocator);
+        std::swap(m_size, other.m_size);
         std::swap(m_pool_owned, other.m_pool_owned);
         std::swap(m_root, other.m_root);
         std::swap(m_root, other.m_root);
@@ -783,8 +741,8 @@ public:
         add_to_size(other.size());
 
         if (USEPOOLS &&
-            m_pool_or_size.m_pool_allocator != other.m_pool_or_size.m_pool_allocator) {
-            m_pool_or_size.m_pool_allocator->merge(other.m_pool_or_size.m_pool_allocator);
+            m_pool_allocator != other.m_pool_allocator) {
+            m_pool_allocator->merge(other.m_pool_allocator);
         }
 
         other.m_root.m_next = &(other.m_root);
@@ -945,15 +903,15 @@ public:
             node_to_merge->m_prev = m_root.m_prev;
 
             m_root.m_prev = other.m_root.m_prev;
-            other.m_root.m_prev = &m_root;
+            other.m_root.m_prev->m_next = &m_root;
         }
 
         add_to_size(other_size);
 
         // merge the pools
         if (USEPOOLS &&
-            m_pool_or_size.m_pool_allocator != other.m_pool_or_size.m_pool_allocator) {
-            m_pool_or_size.m_pool_allocator->merge(other.m_pool_or_size.m_pool_allocator);
+            m_pool_allocator != other.m_pool_allocator) {
+            m_pool_allocator->merge(other.m_pool_allocator);
         }
 
         other.m_root.m_next = &(other.m_root);
@@ -1080,7 +1038,7 @@ public:
         if (!USEPOOLS) {
             return;
         }
-        m_pool_or_size.m_pool_allocator->garbage_collect();
+        m_pool_allocator->garbage_collect();
     }
 
     // Use with caution. Mucking about with
@@ -1090,7 +1048,7 @@ public:
         if (!USEPOOLS) {
             return nullptr;
         }
-        return m_pool_or_size.m_pool_allocator;
+        return m_pool_allocator;
     }
 
     Iterator find(const ValueType& value)
@@ -1170,6 +1128,9 @@ public:
         return 0;
     }
 };
+
+template <typename T, bool USEPOOLS>
+const u64 DListBase<T, USEPOOLS>::sc_node_size = sizeof(DListBase<T, USEPOOLS>::NodeType);
 
 // relational operators for dlist
 template <typename T, bool UP1, bool UP2>

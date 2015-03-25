@@ -130,11 +130,13 @@ protected:
         }
     }
 
-    inline void get_hashes(const T& value, u64 table_size, u64& h1, u64& h2) const
+    template <typename U>
+    inline void get_hashes(const U& value, u64 table_size, u64& h1, u64& h2) const
     {
         HashFunction hash_fun;
 
-        h1 = hash_fun(value) % table_size;
+        h1 = hash_fun(value);
+        h1 = h1 % table_size;
         h2 = 1 + ((h1 * sc_fnv_prime) % (table_size - 1));
     }
 
@@ -332,7 +334,7 @@ protected:
 
         inline Iterator& operator -- ()
         {
-            auto first = m_hash_table->m_table + m_first_used_index;
+            auto first = m_hash_table->m_table + m_hash_table->m_first_used_index;
             auto as_impl = hash_table_as_impl();
 
             if (m_current == first) {
@@ -574,7 +576,13 @@ protected:
         return m_table_size;
     }
 
-    inline Iterator find(const T& value) const
+    // we allow finds on any type
+    // as long as the type can be checked for
+    // equality with the valuetype
+    // and the hash function accepts values of
+    // type U as well
+    template <typename U>
+    inline Iterator find(const U& value) const
     {
         if (m_table == nullptr || m_table_size == 0 || m_table_used == 0) {
             return end();

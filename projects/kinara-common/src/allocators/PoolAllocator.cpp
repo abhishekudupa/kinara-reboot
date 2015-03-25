@@ -74,7 +74,7 @@ inline u08* PoolAllocator::get_data_ptr_from_chunk_ptr(Chunk* chunk_ptr) const
 
 void* PoolAllocator::allocate()
 {
-    std::less<void*> less_func;
+    std::less_equal<void*> less_func;
     if (m_free_list != nullptr) {
         auto block_ptr = m_free_list;
         void* retval = static_cast<void*>(block_ptr);
@@ -110,6 +110,17 @@ void* PoolAllocator::allocate()
     return retval;
 }
 
+inline void PoolAllocator::check_duplicates(Block *block_ptr)
+{
+    for (auto block1 = block_ptr; block1 != nullptr; block1 = block1->m_next_block) {
+        for (auto block2 = block1->m_next_block; block2 != nullptr; block2 = block2->m_next_block) {
+            if (block1 == block2) {
+                fprintf(stderr, "Error! Duplicate block found in free list!\n");
+            }
+        }
+    }
+}
+
 void PoolAllocator::deallocate(void *void_ptr)
 {
     if (void_ptr == nullptr) {
@@ -117,8 +128,10 @@ void PoolAllocator::deallocate(void *void_ptr)
     }
 
     auto block_ptr = static_cast<Block*>(void_ptr);
+
     block_ptr->m_next_block = m_free_list;
     m_free_list = block_ptr;
+
     m_bytes_allocated -= m_object_size;
 }
 
@@ -199,8 +212,7 @@ inline u64 PoolAllocator::count_blocks_in_range(void* range_low, void* range_hig
 
     u64 retval = 0;
     for (auto block = m_free_list; block != nullptr; block = block->m_next_block) {
-        if (less_equal_func(range_low, block) &&
-            less_func(block, range_high)) {
+        if (less_equal_func(range_low, block) && less_func(block, range_high)) {
             ++retval;
         }
     }
@@ -213,21 +225,20 @@ inline void PoolAllocator::remove_blocks_in_range(void* range_low, void* range_h
     std::less_equal<void*> less_equal_func;
 
     auto block_ptr = m_free_list;
-    auto head_ptr = m_free_list;
     auto prev_block_ptr = m_free_list;
 
     for (; block_ptr != nullptr; block_ptr = block_ptr->m_next_block) {
         if (less_equal_func(range_low, block_ptr) &&
             less_func(block_ptr, range_high)) {
-            if (block_ptr == head_ptr) {
+            if (block_ptr == m_free_list) {
                 m_free_list = block_ptr->m_next_block;
-                head_ptr = m_free_list;
             } else {
                 prev_block_ptr->m_next_block = block_ptr->m_next_block;
             }
             continue;
+        } else {
+            prev_block_ptr = block_ptr;
         }
-        prev_block_ptr = block_ptr;
     }
     return;
 }
@@ -236,30 +247,33 @@ inline void PoolAllocator::remove_blocks_in_range(void* range_low, void* range_h
 // NOT cheap!
 void PoolAllocator::garbage_collect()
 {
-    auto head_ptr = m_chunk_list;
     auto chunk_ptr = m_chunk_list;
     auto prev_chunk_ptr = m_chunk_list;
+    auto next_chunk_ptr = m_chunk_list;
 
-    for (; chunk_ptr != nullptr; chunk_ptr = chunk_ptr->m_next_chunk) {
+    for (; chunk_ptr != nullptr; chunk_ptr = next_chunk_ptr) {
+        next_chunk_ptr = chunk_ptr->m_next_chunk;
+
         auto chunk_data_low = get_data_ptr_from_chunk_ptr(chunk_ptr);
         auto chunk_data_high = chunk_data_low + (m_num_objects * m_object_size);
-
         auto free_blocks_in_chunk = count_blocks_in_range(chunk_data_low, chunk_data_high);
+
         if (free_blocks_in_chunk == m_num_objects) {
             remove_blocks_in_range(chunk_data_low, chunk_data_high);
+
+            if (chunk_ptr == m_chunk_list) {
+                m_chunk_list = next_chunk_ptr;
+            } else {
+                prev_chunk_ptr->m_next_chunk = next_chunk_ptr;
+            }
 
             deallocate_raw(chunk_ptr, m_page_size);
             m_bytes_claimed -= m_page_size;
 
-            if (chunk_ptr == head_ptr) {
-                head_ptr = chunk_ptr->m_next_chunk;
-                m_chunk_list = head_ptr;
-            } else {
-                prev_chunk_ptr->m_next_chunk = chunk_ptr->m_next_chunk;
-            }
             continue;
+        } else {
+            prev_chunk_ptr = chunk_ptr;
         }
-        prev_chunk_ptr = chunk_ptr;
     }
     return;
 }
