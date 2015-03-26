@@ -35,7 +35,21 @@
 
 // Code:
 
+#if !defined KINARA_KINARA_COMMON_CONTAINERS_ORDERED_MAP_HPP_
+#define KINARA_KINARA_COMMON_CONTAINERS_ORDERED_MAP_HPP_
 
+#include "OrderedSet.hpp"
+
+namespace kinara {
+namespace containers {
+namespace ordered_map_detail_ {
+
+
+} /* end namespace ordered_map_detail_ */
+} /* end namespace containers */
+} /* end namespace kinara */
+
+#endif /* KINARA_KINARA_COMMON_CONTAINERS_ORDERED_MAP_HPP_ */
 
 //
 // OrderedMap.hpp ends here
