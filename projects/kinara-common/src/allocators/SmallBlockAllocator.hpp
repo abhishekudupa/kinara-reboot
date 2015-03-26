@@ -82,12 +82,8 @@ private:
 
     inline void release_memory();
     inline u64 get_slot_index_for_size(u64 size) const;
-    inline u64 count_blocks_in_range(u64 slot_index,
-                                     void* range_low,
-                                     void* range_high) const;
-    inline void remove_blocks_in_range(u64 slot_index,
-                                       void* range_low,
-                                       void* range_high);
+    inline u64 count_blocks_in_range(u64 slot_index, void* range_low, void* range_high) const;
+    inline void remove_blocks_in_range(u64 slot_index, void* range_low, void* range_high);
 
 public:
     SmallBlockAllocator();

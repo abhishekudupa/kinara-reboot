@@ -49,23 +49,19 @@
 namespace kinara {
 namespace memory {
 
-class RefCountable;
-
-class RefCountableDeleterBase
+class RefCountableEBC
 {
-public:
-    virtual void delete_ptr(const RefCountable* ref_countable_ptr) const = 0;
+    // Nothing here
 };
 
 class RefCountable
 {
 private:
     mutable i64 m_ref_count_;
-    const RefCountableDeleterBase* m_the_deleter;
 
 public:
-    inline RefCountable(const RefCountableDeleterBase* the_deleter = nullptr)
-        : m_ref_count_((i64)0), m_the_deleter(the_deleter)
+    inline RefCountable()
+        : m_ref_count_((i64)0)
     {
         // Nothing here
     }
