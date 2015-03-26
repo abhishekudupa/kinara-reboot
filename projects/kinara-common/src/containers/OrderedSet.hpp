@@ -442,6 +442,14 @@ public:
         return (find(value) != end() ? 1 : 0);
     }
 
+    // not part of stl
+    inline void shrink_to_fit()
+    {
+        merge_newly_inserted_elements();
+        m_hash_table.shrink_to_fit();
+        m_pool_allocator->garbage_collect();
+    }
+
     inline Iterator lower_bound(const ValueType& value) const
     {
         LessFunction less_func;

@@ -165,6 +165,8 @@ void PoolAllocator::merge(PoolAllocator* other, bool collect_garbage)
         m_free_list = block_ptr;
         first_chunk_ptr += m_object_size;
     }
+
+    other->m_chunk_list->m_current_ptr = first_chunk_end;
     // Push these chunks after all of my chunks
     if (m_chunk_list == nullptr) {
         m_chunk_list = other->m_chunk_list;
@@ -244,9 +246,24 @@ inline void PoolAllocator::remove_blocks_in_range(void* range_low, void* range_h
 }
 
 // releases pages which are completely free.
-// NOT cheap!
+// NOT cheap, unless all objects have been deallocated
+// already
 void PoolAllocator::garbage_collect()
 {
+    // Optimize it the number of allocated
+    // objects is zero
+    if (get_objects_allocated() == 0) {
+        Chunk* next_ptr = nullptr;
+        for (auto chunk_ptr = m_chunk_list; chunk_ptr != nullptr; chunk_ptr = next_ptr) {
+            next_ptr = chunk_ptr->m_next_chunk;
+            deallocate_raw(chunk_ptr, m_page_size);
+        }
+        m_bytes_claimed = 0;
+        m_bytes_allocated = 0;
+        m_free_list = nullptr;
+        m_chunk_list = nullptr;
+    }
+
     auto chunk_ptr = m_chunk_list;
     auto prev_chunk_ptr = m_chunk_list;
     auto next_chunk_ptr = m_chunk_list;
@@ -257,8 +274,12 @@ void PoolAllocator::garbage_collect()
         auto chunk_data_low = get_data_ptr_from_chunk_ptr(chunk_ptr);
         auto chunk_data_high = chunk_data_low + (m_num_objects * m_object_size);
         auto free_blocks_in_chunk = count_blocks_in_range(chunk_data_low, chunk_data_high);
+        u64 objs_allocated_from_chunk =
+            (chunk_ptr->m_current_ptr -
+             ((static_cast<u08*>(static_cast<void*>(chunk_ptr))) +
+              sc_chunk_overhead)) / m_object_size;
 
-        if (free_blocks_in_chunk == m_num_objects) {
+        if (free_blocks_in_chunk == objs_allocated_from_chunk) {
             remove_blocks_in_range(chunk_data_low, chunk_data_high);
 
             if (chunk_ptr == m_chunk_list) {

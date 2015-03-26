@@ -53,7 +53,7 @@ using kinara::u64;
 using kinara::i32;
 using kinara::i64;
 
-const u64 max_insertion_value = (1 << 6);
+const u64 max_insertion_value = (1 << 18);
 const u64 max_test_iterations = (1 << 4);
 
 using kinara::containers::u64OrderedSet;
@@ -222,6 +222,64 @@ TEST(OrderedSetTest, Functional)
         }
 
         EXPECT_TRUE(test_equal(kinara_set, std_set));
+    }
+}
+
+TEST(OrderedSetTest, Performance)
+{
+    typedef u64OrderedSet SetType;
+
+    SetType kinara_set;
+    const u64 multiplier = 16;
+    const u64 divisor = 4;
+
+    std::default_random_engine generator;
+    std::uniform_int_distribution<u64> distribution(0, 1);
+    std::uniform_int_distribution<u64> elem_distribution(0, multiplier * max_insertion_value);
+    std::uniform_int_distribution<u64> delete_distribution(0, multiplier * max_insertion_value);
+
+    for (u64 j = 0; j < max_test_iterations / divisor; ++j) {
+        kinara_set.clear();
+
+        for (u64 i = 0; i < multiplier * max_insertion_value; ++i) {
+            kinara_set.insert(elem_distribution(generator));
+        }
+
+        kinara_set.shrink_to_fit();
+
+        for (u64 i = 0; i < multiplier * max_insertion_value; ++i) {
+            if (distribution(generator) == 1) {
+                kinara_set.erase(delete_distribution(generator));
+            }
+        }
+    }
+}
+
+TEST(OrderedVsStdSetTest, Performance)
+{
+    typedef std::set<u64> SetType;
+
+    SetType std_set;
+    const u64 multiplier = 16;
+    const u64 divisor = 4;
+
+    std::default_random_engine generator;
+    std::uniform_int_distribution<u64> distribution(0, 1);
+    std::uniform_int_distribution<u64> elem_distribution(0, multiplier * max_insertion_value);
+    std::uniform_int_distribution<u64> delete_distribution(0, multiplier * max_insertion_value);
+
+    for (u64 j = 0; j < max_test_iterations / divisor; ++j) {
+        std_set.clear();
+
+        for (u64 i = 0; i < multiplier * max_insertion_value; ++i) {
+            std_set.insert(elem_distribution(generator));
+        }
+
+        for (u64 i = 0; i < multiplier * max_insertion_value; ++i) {
+            if (distribution(generator) == 1) {
+                std_set.erase(delete_distribution(generator));
+            }
+        }
     }
 }
 

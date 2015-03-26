@@ -293,6 +293,12 @@ public:
         HashTableType::erase(first, last);
     }
 
+    // not part of stl
+    inline void shrink_to_fit()
+    {
+        HashTableType::shrink_to_fit();
+    }
+
     inline bool operator == (const UnorderedSetBase& other) const
     {
         auto sz = size();
