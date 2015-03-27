@@ -66,7 +66,7 @@ private:
 public:
     inline bool operator () (const T& object1, const T& object2) const
     {
-        typename std::is_base_of<Comparable, T>::type is_comparable;
+        typename std::is_base_of<ComparableEBC, T>::type is_comparable;
         return compare(object1, object2, is_comparable);
     }
 };
@@ -79,7 +79,7 @@ private:
                         const std::true_type is_comparable) const
     {
         CompareFunction<i64> cmp_fun;
-        return (cmp_fun(object1->compare(object2), 0));
+        return (cmp_fun(object1->compare(*object2), 0));
     }
 
     inline bool compare(const T* object1, const T* object2,
@@ -92,7 +92,7 @@ private:
 public:
     inline bool operator () (const T* object1, const T* object2) const
     {
-        typename std::is_base_of<Comparable, T>::type is_comparable;
+        typename std::is_base_of<ComparableEBC, T>::type is_comparable;
         return compare(object1, object2, is_comparable);
     }
 };
@@ -105,7 +105,7 @@ private:
                         const std::true_type is_comparable) const
     {
         CompareFunction<i64> cmp_fun;
-        return (cmp_fun(object1->compare(object2), 0));
+        return (cmp_fun(object1->compare(*object2), 0));
     }
 
     inline bool compare(const T* object1, const T* object2,
@@ -118,7 +118,61 @@ private:
 public:
     inline bool operator () (const T* object1, const T* object2) const
     {
-        typename std::is_base_of<Comparable, T>::type is_comparable;
+        typename std::is_base_of<ComparableEBC, T>::type is_comparable;
+        return compare(object1, object2, is_comparable);
+    }
+};
+
+template <typename T, template <typename> class CompareFunction>
+class Comparer<memory::ManagedPointer<T>, CompareFunction>
+{
+private:
+    inline bool compare(const T* object1, const T* object2,
+                        std::true_type is_comparable) const
+    {
+        CompareFunction<i64> cmp_fun;
+        return (cmp_fun(object1->compare(*object2)));
+    }
+
+    inline bool compare(const T* object1, const T* object2,
+                        std::false_type is_comparable) const
+    {
+        CompareFunction<T*> cmp_fun;
+        return (cmp_fun(object1->compare(&(*object2))));
+    }
+
+public:
+    inline bool operator () (const memory::ManagedPointer<T>& object1,
+                             const memory::ManagedPointer<T>& object2) const
+    {
+        typename std::is_base_of<ComparableEBC, T>::type is_comparable;
+        return compare(object1, object2, is_comparable);
+    }
+};
+
+template <typename T, template <typename> class CompareFunction>
+class Comparer<memory::ManagedConstPointer<T>, CompareFunction>
+{
+private:
+    inline bool compare(const T* object1, const T* object2,
+                        std::true_type is_comparable) const
+    {
+        CompareFunction<i64> cmp_fun;
+        return (cmp_fun(object1->compare(*object2)));
+    }
+
+    inline bool compare(const T* object1, const T* object2,
+                        std::false_type is_comparable) const
+    {
+        CompareFunction<T*> cmp_fun;
+        return (cmp_fun(object1->compare(&(*object2))));
+    }
+
+public:
+    inline bool operator () (const memory::ManagedConstPointer<T>& object1,
+                             const memory::ManagedConstPointer<T>& object2) const
+    {
+        typename std::is_base_of<ComparableEBC, T>::type is_comparable;
         return compare(object1, object2, is_comparable);
     }
 };
@@ -142,7 +196,7 @@ private:
 public:
     inline bool operator () (const T& object1, const T& object2) const
     {
-        typename std::is_base_of<Comparable, T>::type is_comparable;
+        typename std::is_base_of<ComparableEBC, T>::type is_comparable;
         return compare(object1, object2, is_comparable);
     }
 };
@@ -154,7 +208,7 @@ private:
     inline bool compare(const T* object1, const T* object2,
                         const std::true_type is_comparable) const
     {
-        return object1->equals(object2);
+        return object1->equals(*object2);
     }
 
     inline bool compare(const T* object1, const T* object2,
@@ -166,7 +220,7 @@ private:
 public:
     inline bool operator () (const T* object1, const T* object2) const
     {
-        typename std::is_base_of<Comparable, T>::type is_comparable;
+        typename std::is_base_of<ComparableEBC, T>::type is_comparable;
         return compare(object1, object2, is_comparable);
     }
 };
@@ -178,7 +232,7 @@ private:
     inline bool compare(const T* object1, const T* object2,
                         const std::true_type is_comparable) const
     {
-        return object1->equals(object2);
+        return object1->equals(*object2);
     }
 
     inline bool compare(const T* object1, const T* object2,
@@ -190,7 +244,57 @@ private:
 public:
     inline bool operator () (const T* object1, const T* object2) const
     {
-        typename std::is_base_of<Comparable, T>::type is_comparable;
+        typename std::is_base_of<ComparableEBC, T>::type is_comparable;
+        return compare(object1, object2, is_comparable);
+    }
+};
+
+template <typename T>
+class Equality<memory::ManagedPointer<T>>
+{
+private:
+    inline bool compare(const T* object1, const T* object2,
+                        const std::true_type is_comparable) const
+    {
+        return object1->equals(*object2);
+    }
+
+    inline bool compare(const T* object1, const T* object2,
+                        const std::false_type is_comparable) const
+    {
+        return (object1 == object2);
+    }
+
+public:
+    inline bool operator () (const memory::ManagedPointer<T>& object1,
+                             const memory::ManagedPointer<T>& object2) const
+    {
+        typename std::is_base_of<ComparableEBC, T>::type is_comparable;
+        return compare(object1, object2, is_comparable);
+    }
+};
+
+template <typename T>
+class Equality<memory::ManagedConstPointer<T>>
+{
+private:
+    inline bool compare(const T* object1, const T* object2,
+                        const std::true_type is_comparable) const
+    {
+        return object1->equals(*object2);
+    }
+
+    inline bool compare(const T* object1, const T* object2,
+                        const std::false_type is_comparable) const
+    {
+        return (object1 == object2);
+    }
+
+public:
+    inline bool operator () (const memory::ManagedConstPointer<T>& object1,
+                             const memory::ManagedConstPointer<T>& object2) const
+    {
+        typename std::is_base_of<ComparableEBC, T>::type is_comparable;
         return compare(object1, object2, is_comparable);
     }
 };
