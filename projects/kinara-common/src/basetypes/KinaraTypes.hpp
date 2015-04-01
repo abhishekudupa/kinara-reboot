@@ -57,6 +57,65 @@ class KinaraObject
     virtual ~KinaraObject();
 };
 
+template <typename DerivedClass>
+class Downcastable
+{
+public:
+    template <typename T>
+    T* as()
+    {
+        return dynamic_cast<T*>(static_cast<DerivedClass*>(this));
+    }
+
+    template <typename T>
+    const T* as() const
+    {
+        return dynamic_cast<const T*>(static_cast<const DerivedClass*>(this));
+    }
+
+    template <typename T>
+    T* sas()
+    {
+        return static_cast<T*>(static_cast<DerivedClass*>(this));
+    }
+
+    template <typename T>
+    const T* sas() const
+    {
+        return static_cast<const T*>(static_cast<const DerivedClass*>(this));
+    }
+
+    template <typename T>
+    T& as_ref()
+    {
+        return dynamic_cast<T&>(static_cast<DerivedClass&>(*this));
+    }
+
+    template <typename T>
+    const T& as_ref() const
+    {
+        return dynamic_cast<const T&>(static_cast<const DerivedClass&>(*this));
+    }
+
+    template <typename T>
+    T& sas_ref()
+    {
+        return static_cast<T&>(static_cast<DerivedClass&>(*this));
+    }
+
+    template <typename T>
+    const T& sas_ref() const
+    {
+        return static_cast<const T&>(static_cast<const DerivedClass&>(*this));
+    }
+
+    template <typename T>
+    bool is() const
+    {
+        return (dynamic_cast<const T*>(static_cast<const DerivedClass*>(this)) != nullptr);
+    }
+};
+
 class StringifiableEBC
 {
     // Nothing here
@@ -266,14 +325,6 @@ public:
     }
 };
 
-// Base class for "Constructible" objects
-// these are essentially objects which can
-// generate code that constructs a "semantically
-// "equivalent" copy of themselves
-class Constructible
-{
-
-};
 
 class KinaraException : public std::exception
 {
@@ -313,6 +364,7 @@ public:
     }
 };
 
+
 namespace stringification_detail_ {
 
 template <typename T>
@@ -335,7 +387,6 @@ inline std::string to_string_(const T& object)
     typename std::is_base_of<StringifiableEBC, T>::value is_stringifiable;
     return to_string_(object, is_stringifiable);
 }
-
 
 } /* end namespace stringification_detail_ */
 
