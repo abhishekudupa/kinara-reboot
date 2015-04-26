@@ -100,7 +100,7 @@ public:
 
     static inline DequeBlock* construct(void* mem_ptr)
     {
-        typename std::has_trivial_default_constructor<T>::type is_trivial_value;
+        typename std::is_trivially_default_constructible<T>::type is_trivial_value;
         return construct(mem_ptr, is_trivial_value);
     }
 

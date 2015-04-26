@@ -5,8 +5,8 @@ execute_process(COMMAND ${CMAKE_CXX_COMPILER} --version
 string(REGEX MATCH "[0-9]+(\\.[0-9]+)*" CXX_COMPILER_VERSION ${CXX_COMPILER_VERSION})
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
-  if(CXX_COMPILER_VERSION VERSION_LESS "4.8.1")
-    message(FATAL_ERROR "Kinara requires g++ 4.8.1 or later")
+  if(CXX_COMPILER_VERSION VERSION_LESS "5.1.0")
+    message(FATAL_ERROR "Kinara requires g++ 5.1.0 or later")
   else()
     message(STATUS "Kinara: Using g++ ${CXX_COMPILER_VERSION} as the c++ compiler in C++11 mode")
   endif()

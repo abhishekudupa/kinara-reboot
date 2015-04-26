@@ -165,7 +165,7 @@ private:
 
     inline T* allocate_data(u64 num_elements)
     {
-        typename std::has_trivial_default_constructor<T>::type is_trivial_value;
+        typename std::is_trivially_default_constructible<T>::type is_trivial_value;
         return allocate_data(num_elements, is_trivial_value);
     }
 
