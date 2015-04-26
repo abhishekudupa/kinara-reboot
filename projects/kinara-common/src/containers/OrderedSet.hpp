@@ -189,7 +189,7 @@ public:
 
         inline const T* operator -> () const
         {
-            return m_list_iterator->operator->();
+            return (&m_list_iterator)->operator->();
         }
     };
 
@@ -347,17 +347,18 @@ public:
 
     inline void merge_newly_inserted_elements() const
     {
-        m_insertion_list.sort(LessFunction());
-        m_sorted_list.merge(m_insertion_list, LessFunction());
+        LessFunction less_fun;
+        m_insertion_list.sort(less_fun);
+        m_sorted_list.merge(m_insertion_list, less_fun);
     }
 
-    inline Iterator find(const ValueType& value)
+    inline Iterator find(const ValueType& value) const
     {
         auto hash_iter = m_hash_table.find(value);
         if (hash_iter == m_hash_table.end()) {
             return end();
         } else {
-            return Iterator(this, *hash_iter);
+            return Iterator(const_cast<OrderedSetBase*>(this), *hash_iter);
         }
     }
 

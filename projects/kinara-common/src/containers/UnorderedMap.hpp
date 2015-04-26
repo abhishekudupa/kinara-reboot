@@ -74,6 +74,95 @@ public:
     }
 };
 
+template <typename BaseIteratorType, typename ValueType, bool ISCONST>
+class UMIterator
+    : private BaseIteratorType,
+      public std::iterator<std::bidirectional_iterator_tag, ValueType, i64,
+                           typename std::conditional<ISCONST,
+                                                     const ValueType*,
+                                                     ValueType*>::type,
+                           typename std::conditional<ISCONST,
+                                                     const ValueType&,
+                                                     ValueType&>::type>
+{
+    friend class UMIterator<BaseIteratorType, ValueType, true>;
+    friend class UMIterator<BaseIteratorType, ValueType, false>;
+    typedef typename std::conditional<ISCONST, const ValueType*, ValueType*>::type PtrType;
+    typedef typename std::conditional<ISCONST, const ValueType&, ValueType&>::type RefType;
+
+public:
+    using BaseIteratorType::BaseIteratorType;
+    inline UMIterator(const BaseIteratorType& other)
+        : BaseIteratorType(other)
+    {
+        // Nothing here
+    }
+
+    inline UMIterator(const UMIterator& other)
+        : BaseIteratorType(other)
+    {
+        // Nothing here
+    }
+
+    template <bool OISCONST>
+    inline UMIterator(const kc::unordered_map_detail_::UMIterator<BaseIteratorType,
+                                                                  ValueType, OISCONST>& other)
+    {
+        static_assert(!OISCONST || ISCONST,
+                      "Cannot construct non-const iterator from const iterator");
+    }
+
+    using BaseIteratorType::operator=;
+    using BaseIteratorType::operator++;
+    using BaseIteratorType::operator--;
+
+    inline UMIterator& operator = (const UMIterator& other)
+    {
+        if (&other == this) {
+            return *this;
+        }
+        BaseIteratorType::operator=(other);
+        return *this;
+    }
+
+    template <bool OISCONST>
+    inline UMIterator&
+    operator = (const kc::unordered_map_detail_::UMIterator<BaseIteratorType,
+                                                            ValueType, OISCONST>& other)
+    {
+        static_assert(!OISCONST || ISCONST,
+                      "Cannot assign const iterator to non-const iterator");
+        BaseIteratorType::operator=(other);
+        return *this;
+    }
+
+    template <bool OISCONST>
+    inline bool
+    operator == (const kc::unordered_map_detail_::UMIterator<BaseIteratorType,
+                                                             ValueType, OISCONST>& other) const
+    {
+        return BaseIteratorType::operator==(other);
+    }
+
+    template <bool OISCONST>
+    inline bool
+    operator != (const kc::unordered_map_detail_::UMIterator<BaseIteratorType,
+                                                             ValueType, OISCONST>& other) const
+    {
+        return BaseIteratorType::operator!=(other);
+    }
+
+    inline RefType operator * () const
+    {
+        return BaseIteratorType::operator*();
+    }
+
+    inline PtrType operator -> () const
+    {
+        return BaseIteratorType::operator->();
+    }
+};
+
 template <typename MappedKeyType, typename MappedValueType,
           typename HashFunction, typename EqualsFunction,
           template <typename, typename, typename> class HashTableTemplateType>
@@ -99,102 +188,9 @@ public:
     typedef std::pair<const MappedKeyType, MappedValueType> ValueType;
     typedef ValueType value_type;
 
-    class Iterator : private HashTableType::Iterator,
-                     public std::iterator<std::bidirectional_iterator_tag, ValueType,
-                                          i64, ValueType*, ValueType&>
-    {
-    private:
-        typedef typename HashTableType::Iterator BaseType;
-
-    public:
-        using BaseType::BaseType;
-        inline Iterator(const BaseType& other)
-            : BaseType(other)
-        {
-            // Nothing here
-        }
-
-        using BaseType::operator=;
-        using BaseType::operator++;
-        using BaseType::operator--;
-
-        inline bool operator == (const Iterator& other) const
-        {
-            return BaseType::operator==(other);
-        }
-
-        inline bool operator != (const Iterator& other) const
-        {
-            return BaseType::operator!=(other);
-        }
-
-        inline ValueType& operator * () const
-        {
-            return BaseType::operator*();
-        }
-
-        inline ValueType* operator -> () const
-        {
-            return BaseType::operator->();
-        }
-    };
-
-    class ConstIterator : private HashTableType::Iterator,
-                          public std::iterator<std::bidirectional_iterator_tag, ValueType,
-                                               i64, const ValueType*, const ValueType&>
-    {
-    private:
-        typedef typename HashTableType::Iterator BaseType;
-
-    public:
-        using BaseType::BaseType;
-        inline ConstIterator(const BaseType& other)
-            : BaseType(other)
-        {
-            // Nothing here
-        }
-
-        // A regular iterator can be converted into a const iterator
-        inline ConstIterator(const Iterator& other)
-            : BaseType(other)
-        {
-            // Nothing here
-        }
-
-        using BaseType::operator=;
-
-        // A regular iterator can be assigned to a const iterator
-        inline ConstIterator& operator = (const Iterator& other)
-        {
-            return BaseType::operator=(other);
-        }
-
-        using BaseType::operator++;
-        using BaseType::operator--;
-
-        inline bool operator == (const ConstIterator& other) const
-        {
-            return BaseType::operator==(other);
-        }
-
-        inline bool operator != (const ConstIterator& other) const
-        {
-            return BaseType::operator!=(other);
-        }
-
-        inline const ValueType& operator * () const
-        {
-            return BaseType::operator*();
-        }
-
-        inline const ValueType* operator -> () const
-        {
-            return BaseType::operator->();
-        }
-    };
-
-
+    typedef UMIterator<typename HashTableType::Iterator, ValueType, false> Iterator;
     typedef Iterator iterator;
+    typedef UMIterator<typename HashTableType::Iterator, ValueType, true> ConstIterator;
     typedef ConstIterator const_iterator;
 
     using HashTableType::empty;
@@ -463,6 +459,24 @@ public:
         bool already_present;
         auto it = HashTableType::insert(value, already_present);
         return std::make_pair(Iterator(it), already_present);
+    }
+
+    inline std::pair<Iterator, bool> insert(ValueType&& value)
+    {
+        bool already_present;
+        auto it = HashTableType::insert(std::move(value), already_present);
+        return std::make_pair(Iterator(it), already_present);
+    }
+
+    inline std::pair<Iterator, bool> insert(const std::pair<MappedKeyType, MappedValueType>& value)
+    {
+        return insert(std::pair<const MappedKeyType, MappedValueType>(value.first, value.second));
+    }
+
+    inline std::pair<Iterator, bool> insert(const MappedKeyType& key,
+                                            const MappedValueType& value)
+    {
+        return insert(std::pair<const MappedKeyType, MappedValueType>(key, value));
     }
 
     template <typename P,

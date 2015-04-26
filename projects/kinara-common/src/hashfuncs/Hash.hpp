@@ -77,7 +77,7 @@ private:
 public:
     inline u64 operator () (const T& object) const
     {
-        typename std::is_convertible<const T*, const Hashable*>::type is_hashable_object;
+        typename std::is_base_of<HashableEBC, T>::type is_hashable_object;
         return compute_hash(object, is_hashable_object);
     }
 };
@@ -103,7 +103,7 @@ private:
 public:
     inline u64 operator () (const T* ptr) const
     {
-        typename std::is_convertible<const T*, const Hashable*>::type is_hashable_object;
+        typename std::is_base_of<HashableEBC, T>::type is_hashable_object;
         return compute_hash(ptr, is_hashable_object);
     }
 };
@@ -128,7 +128,7 @@ private:
 public:
     inline u64 operator () (const T* ptr) const
     {
-        typename std::is_convertible<const T*, const Hashable*>::type is_hashable_object;
+        typename std::is_base_of<HashableEBC, T>::type is_hashable_object;
         return compute_hash(ptr, is_hashable_object);
     }
 };
@@ -153,7 +153,7 @@ private:
 public:
     inline u64 operator () (const km::ManagedPointer<T>& managed_ptr) const
     {
-        typename std::is_convertible<const T*, const Hashable*>::type is_hashable_object;
+        typename std::is_base_of<HashableEBC, T>::type is_hashable_object;
         return compute_hash((const T*)managed_ptr, is_hashable_object);
     }
 };
@@ -178,7 +178,7 @@ private:
 public:
     inline u64 operator () (const km::ManagedConstPointer<T>& managed_ptr) const
     {
-        typename std::is_convertible<const T*, const Hashable*>::type is_hashable_object;
+        typename std::is_base_of<HashableEBC, T>::type is_hashable_object;
         return compute_hash((const T*)managed_ptr, is_hashable_object);
     }
 };
@@ -192,7 +192,10 @@ public:
     {
         Hasher<T1> t1_hasher;
         Hasher<T2> t2_hasher;
-        return (t1_hasher(the_pair.first) ^ t2_hasher(the_pair.second));
+        auto h1 = t1_hasher(the_pair.first);
+        auto h2 = t2_hasher(the_pair.second);
+
+        return ((h1 * 0x100000001b3UL) ^ h2);
     }
 };
 
@@ -202,30 +205,28 @@ class Hasher<std::tuple<ArgTypes...>>
 {
 private:
     template <u64 INDEX, typename... TupleTypes>
-    inline typename std::enable_if<INDEX == sizeof...(TupleTypes), void>::type
+    inline typename std::enable_if<INDEX == sizeof...(TupleTypes), u64>::type
     compute_hash(const std::tuple<TupleTypes...>& the_tuple,
-                 std::array<u64, sizeof...(TupleTypes)>& the_array) const
+                 u64 accumulated_hash) const
     {
-     	// break recursion
+        return accumulated_hash;
     }
 
     template <u64 INDEX, typename... TupleTypes>
-    inline typename std::enable_if<INDEX < sizeof...(TupleTypes), void>::type
+    inline typename std::enable_if<INDEX < sizeof...(TupleTypes), u64>::type
     compute_hash(const std::tuple<TupleTypes...>& the_tuple,
-                 std::array<u64, sizeof...(TupleTypes)>& the_array) const
+                 u64 accumulated_hash) const
     {
         Hasher<typename std::tuple_element<INDEX, typename std::tuple<TupleTypes...> >::type> hasher;
-        the_array[INDEX] = hasher(std::get<INDEX>(the_tuple));
-        compute_hash<INDEX+1>(the_tuple, the_array);
+        auto h1 = hasher(std::get<INDEX>(the_tuple));
+        auto new_accumulated_hash = (accumulated_hash * 0x100000001b3UL) ^ h1;
+        return compute_hash<INDEX+1>(the_tuple, new_accumulated_hash);
     }
 
 public:
     inline u64 operator () (const std::tuple<ArgTypes...>& the_tuple) const
     {
-        std::array<u64, sizeof...(ArgTypes)> the_array;
-        memset(the_array.data(), 0, sizeof(u64) * sizeof...(ArgTypes));
-        compute_hash<0>(the_tuple, the_array);
-        return default_hash_function(the_array.data(), sizeof(u64) * sizeof...(ArgTypes));
+        return compute_hash<0>(the_tuple, 0xcbf29ce484222325UL);
     }
 };
 
@@ -260,31 +261,29 @@ class RawHasher<std::tuple<ArgTypes...>>
 {
 private:
     template <u64 INDEX, typename... TupleTypes>
-    inline typename std::enable_if<INDEX == sizeof...(TupleTypes), void>::type
+    inline typename std::enable_if<INDEX == sizeof...(TupleTypes), u64>::type
     compute_hash(const std::tuple<TupleTypes...>& the_tuple,
-                 std::array<u64, sizeof...(TupleTypes)>& the_array) const
+                 u64 accumulated_hash) const
     {
-     	// break recursion
+        return accumulated_hash;
     }
 
     template <u64 INDEX, typename... TupleTypes>
-    inline typename std::enable_if<INDEX < sizeof...(TupleTypes), void>::type
+    inline typename std::enable_if<INDEX < sizeof...(TupleTypes), u64>::type
     compute_hash(const std::tuple<TupleTypes...>& the_tuple,
-                 std::array<u64, sizeof...(TupleTypes)>& the_array) const
+                 u64 accumulated_hash) const
     {
         RawHasher<typename std::tuple_element<INDEX,
                                               typename std::tuple<TupleTypes...> >::type> hasher;
-        the_array[INDEX] = hasher(std::get<INDEX>(the_tuple));
-        compute_hash<INDEX+1>(the_tuple, the_array);
+        auto h1 = hasher(std::get<INDEX>(the_tuple));
+        auto new_accumulated_hash = (accumulated_hash * 0x100000001b3UL) ^ h1;
+        compute_hash<INDEX+1>(the_tuple, new_accumulated_hash);
     }
 
 public:
     inline u64 operator () (const std::tuple<ArgTypes...>& the_tuple) const
     {
-        std::array<u64, sizeof...(ArgTypes)> the_array;
-        memset(the_array.data(), 0, sizeof(u64) * sizeof...(ArgTypes));
-        compute_hash<0>(the_tuple, the_array);
-        return default_hash_function(the_array.data(), sizeof(u64) * sizeof...(ArgTypes));
+        return compute_hash<0>(the_tuple, 0xcbf29ce484222325UL);
     }
 };
 
@@ -296,10 +295,10 @@ public:
     inline u64 operator () (const T& iterable) const
     {
         ElemHasher elem_hasher;
-        u64 retval = 0;
+        u64 retval = 0xcbf29ce484222325UL;
         for (auto it = iterable.begin(), last = iterable.end(); it != last; ++it) {
             auto cur_hash = elem_hasher(*it);
-            retval = retval ^ ((cur_hash << 23) ^ (cur_hash >> 37));
+            retval = (retval * 0x100000001b3UL) ^ cur_hash;
         }
         return retval;
     }

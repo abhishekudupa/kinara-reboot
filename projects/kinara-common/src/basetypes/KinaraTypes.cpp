@@ -1,8 +1,8 @@
-// RefCountable.hpp ---
+// KinaraTypes.cpp ---
 //
-// Filename: RefCountable.hpp
+// Filename: KinaraTypes.cpp
 // Author: Abhishek Udupa
-// Created: Sun Jun 29 13:47:16 2014 (-0400)
+// Created: Fri Mar 27 12:20:33 2015 (-0400)
 //
 //
 // Copyright (c) 2015, Abhishek Udupa, University of Pennsylvania
@@ -37,58 +37,39 @@
 
 // Code:
 
-// Basic ref countable type
-
-#if !defined KINARA_MEMORY_REF_COUNTABLE_HPP_
-#define KINARA_MEMORY_REF_COUNTABLE_HPP_
-
-#include <type_traits>
-
-#include "../basetypes/KinaraBase.hpp"
+#include "../allocators/MemoryManager.hpp"
+#include "KinaraTypes.hpp"
 
 namespace kinara {
-namespace memory {
 
-class RefCountable
+namespace ka = kinara::allocators;
+
+void* KinaraObject::operator new (std::size_t sz)
 {
-private:
-    mutable i64 m_ref_count_;
+    return ka::allocate_raw(sz);
+}
 
-public:
-    inline RefCountable()
-        : m_ref_count_((i64)0)
-    {
-        // Nothing here
-    }
+void* KinaraObject::operator new[] (std::size_t sz)
+{
+    return ka::allocate_raw(sz);
+}
 
-    virtual ~RefCountable()
-    {
-        // Nothing here
-    }
+void KinaraObject::operator delete(void* ptr, std::size_t sz)
+{
+    ka::deallocate_raw(ptr, sz);
+}
 
-    inline void inc_ref_() const
-    {
-        m_ref_count_++;
-    }
+void KinaraObject::operator delete[] (void* ptr, std::size_t sz)
+{
+    ka::deallocate_raw(ptr, sz);
+}
 
-    inline void dec_ref_() const
-    {
-        m_ref_count_--;
-        if (m_ref_count_ <= 0) {
-            delete this;
-        }
-    }
+KinaraObject::~KinaraObject()
+{
+    // Nothing here
+}
 
-    inline i64 get_ref_count_() const
-    {
-        return m_ref_count_;
-    }
-};
-
-} /* end namespace memory */
 } /* end namespace kinara */
 
-#endif /* KINARA_MEMORY_REF_COUNTABLE_HPP_ */
-
 //
-// RefCountable.hpp ends here
+// KinaraTypes.cpp ends here

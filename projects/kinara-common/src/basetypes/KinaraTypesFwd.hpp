@@ -43,15 +43,13 @@
 namespace kinara {
 
 // forward declarations of various kinara types
-class Stringifiable;
-class Hashable;
-class Comparable;
+template <typename T> class Stringifiable;
+template <typename T> class Hashable;
+template <typename T> class Comparable;
 class Interruptible;
 class Constructible;
 class KinaraException;
-template <typename T> class ConstructFuncBase;
-template <typename T> class DestructFuncBase;
-template <typename T> class NullDestructFunc;
+class KinaraBase;
 
 } /* end namespace kinara */
 

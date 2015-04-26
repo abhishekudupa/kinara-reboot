@@ -47,22 +47,104 @@
 
 namespace kinara {
 
-// a base class for stringifiable objects
-class Stringifiable
+// A base class for objects
+class KinaraObject
+{
+    static void* operator new(std::size_t sz);
+    static void* operator new[](std::size_t count);
+    static void operator delete(void* ptr, std::size_t sz);
+    static void operator delete[](void* ptr, std::size_t sz);
+    virtual ~KinaraObject();
+};
+
+template <typename DerivedClass>
+class Downcastable
 {
 public:
-    Stringifiable();
-    virtual ~Stringifiable();
-
-    virtual std::string to_string(u32 verbosity) const = 0;
-    inline std::string to_string() const
+    template <typename T>
+    T* as()
     {
-        return to_string(0);
+        return dynamic_cast<T*>(static_cast<DerivedClass*>(this));
+    }
+
+    template <typename T>
+    const T* as() const
+    {
+        return dynamic_cast<const T*>(static_cast<const DerivedClass*>(this));
+    }
+
+    template <typename T>
+    T* sas()
+    {
+        return static_cast<T*>(static_cast<DerivedClass*>(this));
+    }
+
+    template <typename T>
+    const T* sas() const
+    {
+        return static_cast<const T*>(static_cast<const DerivedClass*>(this));
+    }
+
+    template <typename T>
+    T& as_ref()
+    {
+        return dynamic_cast<T&>(static_cast<DerivedClass&>(*this));
+    }
+
+    template <typename T>
+    const T& as_ref() const
+    {
+        return dynamic_cast<const T&>(static_cast<const DerivedClass&>(*this));
+    }
+
+    template <typename T>
+    T& sas_ref()
+    {
+        return static_cast<T&>(static_cast<DerivedClass&>(*this));
+    }
+
+    template <typename T>
+    const T& sas_ref() const
+    {
+        return static_cast<const T&>(static_cast<const DerivedClass&>(*this));
+    }
+
+    template <typename T>
+    bool is() const
+    {
+        return (dynamic_cast<const T*>(static_cast<const DerivedClass*>(this)) != nullptr);
     }
 };
 
+class StringifiableEBC
+{
+    // Nothing here
+};
+
+// a base class for stringifiable objects
+template <typename DerivedClass>
+class Stringifiable : public StringifiableEBC
+{
+public:
+    inline std::string to_string(u32 verbosity) const
+    {
+        return static_cast<const DerivedClass*>(this)->to_string(verbosity);
+    }
+
+    inline std::string to_string() const
+    {
+        return static_cast<const DerivedClass*>(this)->to_string();
+    }
+};
+
+class HashableEBC
+{
+    // Nothing here
+};
+
 // A base class for Hashable objects
-class Hashable
+template <typename DerivedClass>
+class Hashable : public HashableEBC
 {
 private:
     class HashValue
@@ -85,13 +167,23 @@ private:
             // Nothing here
         }
 
+        inline HashValue& operator = (const HashValue& other)
+        {
+            if (&other == this) {
+                return *this;
+            }
+            m_hash_valid = other.m_hash_valid;
+            m_hash_value = other.m_hash_value;
+            return *this;
+        }
+
         inline HashValue(u64 hash_value)
             : m_hash_valid(true), m_hash_value(hash_value)
         {
             // Nothing here
         }
 
-        inline bool is_valid() const
+        inline bool is_hash_valid() const
         {
             return m_hash_valid;
         }
@@ -129,42 +221,64 @@ public:
         // Nothing here
     }
 
-    virtual ~Hashable();
+    inline Hashable& operator = (const Hashable& other)
+    {
+        if (&other == this) {
+            return *this;
+        }
+        m_hash_value = other.m_hash_value;
+        return *this;
+    }
 
-    u64 hash() const
+    inline u64 hash() const
     {
         if (m_hash_value.is_valid()) {
             return m_hash_value.get_hash_value();
         } else {
-            m_hash_value.set_hash_value(compute_hash_value());
+            auto this_as_derived = static_cast<const DerivedClass*>(this);
+            m_hash_value.set_hash_value(this_as_derived->compute_hash_value());
             return m_hash_value.get_hash_value();
         }
     }
 
-    virtual u64 compute_hash_value() const = 0;
-    virtual u64 recompute_hash_value() const = 0;
+    inline void invalidate_hash_value() const
+    {
+        m_hash_value.clear_hash_value();
+    }
+};
 
-    virtual bool equals(const Hashable& other) const = 0;
+class ComparableEBC
+{
+    // Nothing here
 };
 
 // Base class for comparable objects
-class Comparable
+template <typename DerivedClass>
+class Comparable : public ComparableEBC
 {
 public:
-    Comparable();
-    virtual ~Comparable();
+    i64 compare(const Comparable& other) const
+    {
+        return static_cast<const DerivedClass*>(this)->compare_with(other);
+    }
 
-    virtual i64 compare(const Comparable& other) const = 0;
-    virtual bool equals(const Comparable& other) const = 0;
+    bool equals(const Comparable& other)
+    {
+        auto other_as_derived = dynamic_cast<const DerivedClass*>(&other);
+        if (other_as_derived == nullptr) {
+            return false;
+        }
+        return static_cast<const DerivedClass*>(this)->equal_to(*other_as_derived);
+    }
 
     inline bool operator == (const Comparable& other) const
     {
-        return (compare(other) == 0);
+        return (equals(other));
     }
 
     inline bool operator != (const Comparable& other) const
     {
-        return (compare(other) != 0);
+        return (!equals(other));
     }
 
     inline bool operator < (const Comparable& other) const
@@ -194,15 +308,8 @@ protected:
     mutable volatile bool m_interrupted;
 
 public:
-    // one shot interruptible or
-    // repeated interrupts?
     inline Interruptible()
         : m_interrupted(false)
-    {
-        // Nothing here
-    }
-
-    virtual ~Interruptible()
     {
         // Nothing here
     }
@@ -218,14 +325,6 @@ public:
     }
 };
 
-// Base class for "Constructible" objects
-// these are essentially objects which can
-// generate code that constructs a "semantically
-// "equivalent" copy of themselves
-class Constructible
-{
-
-};
 
 class KinaraException : public std::exception
 {
@@ -265,18 +364,36 @@ public:
     }
 };
 
-static inline std::ostream& operator << (std::ostream& out_stream,
-                                         const Stringifiable& object)
+
+namespace stringification_detail_ {
+
+template <typename T>
+inline std::string to_string_(const T& object,
+                              std::true_type is_stringifiable)
 {
-    out_stream << object.to_string();
-    return out_stream;
+    return object.to_string();
 }
 
-static inline std::ostream& operator << (std::ostream& out_stream,
-                                         const Stringifiable* object)
+template <typename T>
+inline std::string to_string_(const T& object,
+                              std::false_type is_stringifiable)
 {
-    out_stream << object->to_string();
-    return out_stream;
+    return std::to_string(object);
+}
+
+template <typename T>
+inline std::string to_string_(const T& object)
+{
+    typename std::is_base_of<StringifiableEBC, T>::value is_stringifiable;
+    return to_string_(object, is_stringifiable);
+}
+
+} /* end namespace stringification_detail_ */
+
+template <typename T>
+inline std::string to_string(const T& object)
+{
+    return stringification_detail_::to_string_(object);
 }
 
 } /* end namespace kinara */
