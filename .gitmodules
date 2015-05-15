@@ -1,0 +1,3 @@
+[submodule "projects/aurum"]
+	path = projects/aurum
+	url = acggrid25.seas.upenn.edu:/home1/a/audupa/work/gitroot/aurum.git
